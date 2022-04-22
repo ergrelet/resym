@@ -11,7 +11,7 @@ pub enum WorkerCommand {
     Initialize(epi::Frame),
     /// Load a PDB file given its path as a `String`.
     LoadPDB(String),
-    ReconstructType(pdb::TypeIndex),
+    ReconstructType(pdb::TypeIndex, bool, bool),
     UpdateSymbolFilter(String),
 }
 
@@ -54,28 +54,38 @@ impl<'p> WorkerThreadContext<'p> {
                     }
                 }
 
-                WorkerCommand::ReconstructType(type_index) => {
+                WorkerCommand::ReconstructType(
+                    type_index,
+                    print_header,
+                    reconstruct_dependencies,
+                ) => {
                     if let Some(pdb_file) = self.pdb_file.as_mut() {
-                        match pdb_file.reconstruct_type_by_type_index(type_index, true) {
+                        match pdb_file
+                            .reconstruct_type_by_type_index(type_index, reconstruct_dependencies)
+                        {
                             Ok(data) => {
-                                let reconstructed_type = format!(
-                                    concat!(
-                                        "//\n",
-                                        "// PDB file: {}\n",
-                                        "// Image architecture: {}\n",
-                                        "//\n",
-                                        "// Information extracted with {} v{}\n",
-                                        "//\n",
-                                        "\n",
-                                        "#include <cstdint>\n",
-                                        "{}"
-                                    ),
-                                    pdb_file.file_path,
-                                    pdb_file.machine_type,
-                                    PKG_NAME,
-                                    PKG_VERSION,
+                                let reconstructed_type = if print_header {
+                                    format!(
+                                        concat!(
+                                            "//\n",
+                                            "// PDB file: {}\n",
+                                            "// Image architecture: {}\n",
+                                            "//\n",
+                                            "// Information extracted with {} v{}\n",
+                                            "//\n",
+                                            "\n",
+                                            "#include <cstdint>\n",
+                                            "{}"
+                                        ),
+                                        pdb_file.file_path,
+                                        pdb_file.machine_type,
+                                        PKG_NAME,
+                                        PKG_VERSION,
+                                        data
+                                    )
+                                } else {
                                     data
-                                );
+                                };
 
                                 self.send_command_to_ui(
                                     &tx_ui,

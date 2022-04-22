@@ -6,6 +6,7 @@ use eframe::{
 use egui::{ScrollArea, TextStyle};
 use memory_logger::blocking::MemoryLogger;
 use rayon::ThreadPool;
+use serde::{Deserialize, Serialize};
 use tinyfiledialogs::open_file_dialog;
 
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -22,6 +23,23 @@ fn main() -> Result<()> {
     eframe::run_native(Box::new(app), native_options);
 }
 
+#[derive(Serialize, Deserialize)]
+struct ResymAppSettings {
+    use_light_theme: bool,
+    print_header: bool,
+    reconstruct_dependencies: bool,
+}
+
+impl Default for ResymAppSettings {
+    fn default() -> Self {
+        Self {
+            use_light_theme: false,
+            print_header: true,
+            reconstruct_dependencies: true,
+        }
+    }
+}
+
 struct ResymApp {
     logger: &'static MemoryLogger,
     tx_worker: Sender<WorkerCommand>,
@@ -31,6 +49,8 @@ struct ResymApp {
     search_filter: String,
     reconstructed_type_content: String,
     console_content: String,
+    settings_wnd_open: bool,
+    settings: ResymAppSettings,
     _thread_pool: ThreadPool,
 }
 
@@ -61,6 +81,8 @@ impl<'p> ResymApp {
             search_filter: String::default(),
             reconstructed_type_content: String::default(),
             console_content: String::default(),
+            settings_wnd_open: false,
+            settings: ResymAppSettings::default(),
             _thread_pool: thread_pool,
         })
     }
@@ -101,6 +123,9 @@ impl<'p> ResymApp {
                         }
                     }
                 }
+                if ui.button("Settings").clicked() {
+                    self.settings_wnd_open = true;
+                }
                 if ui.button("Exit").clicked() {
                     frame.quit();
                 }
@@ -126,9 +151,11 @@ impl<'p> ResymApp {
                                 .clicked()
                             {
                                 self.selected_row = row_index;
-                                let result = self
-                                    .tx_worker
-                                    .send(WorkerCommand::ReconstructType(*type_index));
+                                let result = self.tx_worker.send(WorkerCommand::ReconstructType(
+                                    *type_index,
+                                    self.settings.print_header,
+                                    self.settings.reconstruct_dependencies,
+                                ));
                                 if let Err(err) = result {
                                     log::error!("Failed to reconstruct type: {}", err);
                                 }
@@ -155,6 +182,26 @@ impl<'p> ResymApp {
                 );
             });
     }
+
+    fn draw_settings_window(&mut self, ctx: &egui::Context) {
+        egui::Window::new("Settings")
+            .anchor(egui::Align2::CENTER_CENTER, [0.0; 2])
+            .open(&mut self.settings_wnd_open)
+            .auto_sized()
+            .collapsible(false)
+            .show(ctx, |ui| {
+                ui.label("Theme");
+                ui.checkbox(&mut self.settings.use_light_theme, "Use light theme");
+                ui.add_space(5.0);
+
+                ui.label("Type reconstruction");
+                ui.checkbox(&mut self.settings.print_header, "Print header");
+                ui.checkbox(
+                    &mut self.settings.reconstruct_dependencies,
+                    "Print definitions of referenced types",
+                );
+            });
+    }
 }
 
 impl epi::App for ResymApp {
@@ -165,17 +212,25 @@ impl epi::App for ResymApp {
     /// Called once before the first frame.
     fn setup(
         &mut self,
-        ctx: &egui::Context,
+        _ctx: &egui::Context,
         frame: &epi::Frame,
-        _storage: Option<&dyn epi::Storage>,
+        storage: Option<&dyn epi::Storage>,
     ) {
-        // TODO: Theme setting to switch between dark and light themes
-        ctx.set_visuals(Visuals::dark());
         log::info!("{} {}", PKG_NAME, PKG_VERSION);
         // If this fails, let it burn
         self.tx_worker
             .send(WorkerCommand::Initialize(frame.clone()))
             .unwrap();
+
+        // Load settings on launch
+        if let Some(storage) = storage {
+            self.settings = epi::get_value(storage, epi::APP_KEY).unwrap_or_default()
+        }
+    }
+
+    fn save(&mut self, storage: &mut dyn epi::Storage) {
+        // Save settings on shutdown
+        epi::set_value(storage, epi::APP_KEY, &self.settings);
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.
@@ -183,6 +238,17 @@ impl epi::App for ResymApp {
     fn update(&mut self, ctx: &egui::Context, frame: &epi::Frame) {
         // Process incoming commands, if any
         self.process_ui_commands();
+
+        // Update theme
+        let theme = if self.settings.use_light_theme {
+            Visuals::light()
+        } else {
+            Visuals::dark()
+        };
+        ctx.set_visuals(theme);
+
+        // Draw "Settings" window if open
+        self.draw_settings_window(ctx);
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             // The top panel is often a good place for a menu bar
