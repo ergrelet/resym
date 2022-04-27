@@ -50,10 +50,8 @@ impl<'p> Enum<'p> {
             });
         }
     }
-}
 
-impl fmt::Display for Enum<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    pub fn reconstruct(&self, f: &mut impl std::fmt::Write) -> fmt::Result {
         writeln!(f, "enum {} : {} {{", self.name, self.underlying_type_name)?;
 
         for value in &self.values {

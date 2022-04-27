@@ -16,6 +16,8 @@ use field::Field;
 use method::Method;
 use union::Union;
 
+use self::field::FieldAccess;
+
 /// Set of `TypeIndex` objets
 pub type TypeSet = BTreeSet<pdb::TypeIndex>;
 
@@ -430,8 +432,8 @@ struct ForwardReference {
     name: String,
 }
 
-impl fmt::Display for ForwardReference {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl ForwardReference {
+    pub fn reconstruct(&self, f: &mut impl std::fmt::Write) -> fmt::Result {
         writeln!(
             f,
             "{} {};",
@@ -446,6 +448,19 @@ impl fmt::Display for ForwardReference {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DataFormatConfiguration {
+    pub print_access_specifiers: bool,
+}
+
+impl Default for DataFormatConfiguration {
+    fn default() -> Self {
+        Self {
+            print_access_specifiers: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Data<'p> {
     forward_references: Vec<ForwardReference>,
     classes: Vec<Class<'p>>,
@@ -453,32 +468,36 @@ pub struct Data<'p> {
     unions: Vec<Union<'p>>,
 }
 
-impl fmt::Display for Data<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Data<'_> {
+    pub fn reconstruct(
+        &self,
+        fmt_configuration: &DataFormatConfiguration,
+        f: &mut impl std::fmt::Write,
+    ) -> fmt::Result {
         // Types without definition
         if !self.forward_references.is_empty() {
             writeln!(f)?;
             for e in &self.forward_references {
-                e.fmt(f)?;
+                e.reconstruct(f)?;
             }
         }
 
         // Enum definitions
         for e in &self.enums {
             writeln!(f)?;
-            e.fmt(f)?;
+            e.reconstruct(f)?;
         }
 
         // Class/struct definitions
         for class in &self.classes {
             writeln!(f)?;
-            class.fmt(f)?;
+            class.reconstruct(fmt_configuration, f)?;
         }
 
         // Union definitions
         for u in &self.unions {
             writeln!(f)?;
-            u.fmt(f)?;
+            u.reconstruct(fmt_configuration, f)?;
         }
 
         Ok(())
@@ -623,9 +642,10 @@ pub fn resolve_complete_type_index(
 }
 
 fn fmt_struct_fields_recursive(
-    f: &mut fmt::Formatter<'_>,
+    fmt_configuration: &DataFormatConfiguration,
     fields: &[Field],
     depth: usize,
+    f: &mut impl std::fmt::Write,
 ) -> fmt::Result {
     if fields.is_empty() {
         return Ok(());
@@ -640,17 +660,21 @@ fn fmt_struct_fields_recursive(
             let field = &fields[union_range.start];
             writeln!(
                 f,
-                "{}/* {:#06x} */ {}: {} {}{};",
+                "{}/* {:#06x} */ {}{} {}{};",
                 &indentation,
                 field.offset,
-                field.access,
+                if fmt_configuration.print_access_specifiers {
+                    &field.access
+                } else {
+                    &FieldAccess::None
+                },
                 field.type_left,
                 field.name.to_string(),
                 field.type_right,
             )?;
         } else {
             writeln!(f, "{}union {{", &indentation)?;
-            fmt_union_fields_recursive(f, &fields[union_range], depth + 1)?;
+            fmt_union_fields_recursive(fmt_configuration, &fields[union_range], depth + 1, f)?;
             writeln!(f, "{}}};", &indentation)?;
         }
     }
@@ -730,9 +754,10 @@ fn find_unnamed_unions_in_struct(fields: &[Field]) -> Vec<Range<usize>> {
 }
 
 fn fmt_union_fields_recursive(
-    f: &mut fmt::Formatter<'_>,
+    fmt_configuration: &DataFormatConfiguration,
     fields: &[Field],
     depth: usize,
+    f: &mut impl std::fmt::Write,
 ) -> fmt::Result {
     if fields.is_empty() {
         return Ok(());
@@ -746,17 +771,21 @@ fn fmt_union_fields_recursive(
             let field = &fields[struct_range.start];
             writeln!(
                 f,
-                "{}/* {:#06x} */ {}: {} {}{};",
+                "{}/* {:#06x} */ {}{} {}{};",
                 &indentation,
                 field.offset,
-                field.access,
+                if fmt_configuration.print_access_specifiers {
+                    &field.access
+                } else {
+                    &FieldAccess::None
+                },
                 field.type_left,
                 field.name.to_string(),
                 field.type_right,
             )?;
         } else {
             writeln!(f, "{}struct {{", &indentation)?;
-            fmt_struct_fields_recursive(f, &fields[struct_range], depth + 1)?;
+            fmt_struct_fields_recursive(fmt_configuration, &fields[struct_range], depth + 1, f)?;
             writeln!(f, "{}}};", &indentation)?;
         }
     }

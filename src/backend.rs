@@ -11,7 +11,7 @@ pub enum WorkerCommand {
     Initialize(epi::Frame),
     /// Load a PDB file given its path as a `String`.
     LoadPDB(String),
-    ReconstructType(pdb::TypeIndex, bool, bool),
+    ReconstructType(pdb::TypeIndex, bool, bool, bool),
     UpdateSymbolFilter(String),
 }
 
@@ -58,11 +58,14 @@ impl<'p> WorkerThreadContext<'p> {
                     type_index,
                     print_header,
                     reconstruct_dependencies,
+                    print_access_specifiers,
                 ) => {
                     if let Some(pdb_file) = self.pdb_file.as_mut() {
-                        match pdb_file
-                            .reconstruct_type_by_type_index(type_index, reconstruct_dependencies)
-                        {
+                        match pdb_file.reconstruct_type_by_type_index(
+                            type_index,
+                            reconstruct_dependencies,
+                            print_access_specifiers,
+                        ) {
                             Ok(data) => {
                                 let reconstructed_type = if print_header {
                                     format!(

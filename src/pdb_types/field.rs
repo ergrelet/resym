@@ -43,9 +43,9 @@ impl fmt::Display for FieldAccess {
             "{}",
             match self {
                 FieldAccess::None => "",
-                FieldAccess::Private => "private",
-                FieldAccess::Protected => "protected",
-                FieldAccess::Public => "public",
+                FieldAccess::Private => "private: ",
+                FieldAccess::Protected => "protected: ",
+                FieldAccess::Public => "public: ",
             }
         )
     }

@@ -5,7 +5,7 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use std::{collections::BTreeSet, fs::File, sync::Arc};
 
-use crate::pdb_types::{self, is_unnamed_type};
+use crate::pdb_types::{self, is_unnamed_type, DataFormatConfiguration};
 
 pub struct PdbFile<'p> {
     pub complete_type_list: Vec<(String, pdb::TypeIndex)>,
@@ -127,6 +127,7 @@ impl<'p> PdbFile<'p> {
         &self,
         type_name: &str,
         reconstruct_dependencies: bool,
+        print_access_specifiers: bool,
     ) -> Result<String> {
         // Populate our `TypeFinder` and find the right type index
         let mut type_index = pdb::TypeIndex::default();
@@ -195,6 +196,7 @@ impl<'p> PdbFile<'p> {
                 &type_finder,
                 type_index,
                 reconstruct_dependencies,
+                print_access_specifiers,
             )
         }
     }
@@ -203,6 +205,7 @@ impl<'p> PdbFile<'p> {
         &self,
         type_index: pdb::TypeIndex,
         reconstruct_dependencies: bool,
+        print_access_specifiers: bool,
     ) -> Result<String> {
         // Populate our `TypeFinder`
         let mut type_finder = self.type_information.finder();
@@ -217,6 +220,7 @@ impl<'p> PdbFile<'p> {
             &type_finder,
             type_index,
             reconstruct_dependencies,
+            print_access_specifiers,
         )
     }
 
@@ -225,7 +229,11 @@ impl<'p> PdbFile<'p> {
         type_finder: &pdb::TypeFinder,
         type_index: pdb::TypeIndex,
         reconstruct_dependencies: bool,
+        print_access_specifiers: bool,
     ) -> Result<String> {
+        let fmt_configuration = DataFormatConfiguration {
+            print_access_specifiers,
+        };
         let mut type_data = pdb_types::Data::new();
         let mut needed_types = pdb_types::TypeSet::new();
 
@@ -239,7 +247,9 @@ impl<'p> PdbFile<'p> {
 
         // If dependencies aren't needed, we're done
         if !reconstruct_dependencies {
-            return Ok(format!("{}", type_data));
+            let mut reconstruction_output = String::new();
+            type_data.reconstruct(&fmt_configuration, &mut reconstruction_output)?;
+            return Ok(reconstruction_output);
         }
 
         // Add all the needed types iteratively until we're done
@@ -269,6 +279,9 @@ impl<'p> PdbFile<'p> {
             dep_start.elapsed().as_millis()
         );
 
-        Ok(format!("{}{}", dependencies_data, type_data))
+        let mut reconstruction_output = String::new();
+        dependencies_data.reconstruct(&fmt_configuration, &mut reconstruction_output)?;
+        type_data.reconstruct(&fmt_configuration, &mut reconstruction_output)?;
+        Ok(reconstruction_output)
     }
 }

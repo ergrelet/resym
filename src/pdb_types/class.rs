@@ -8,7 +8,7 @@ use super::{
     fmt_struct_fields_recursive, is_unnamed_type, resolve_complete_type_index, type_name,
     type_size,
     union::Union,
-    Field, Method, TypeForwarder, TypeSet,
+    DataFormatConfiguration, Field, Method, TypeForwarder, TypeSet,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -336,10 +336,12 @@ impl<'p> Class<'p> {
 
         Ok(())
     }
-}
 
-impl fmt::Display for Class<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    pub fn reconstruct(
+        &self,
+        fmt_configuration: &DataFormatConfiguration,
+        f: &mut impl std::fmt::Write,
+    ) -> fmt::Result {
         write!(
             f,
             "{} {}",
@@ -376,31 +378,38 @@ impl fmt::Display for Class<'_> {
         if !self.nested_classes.is_empty() {
             writeln!(f, "  ")?;
             for class in &self.nested_classes {
-                writeln!(f, "{}", class)?;
+                class.reconstruct(fmt_configuration, f)?;
             }
         }
         if !self.nested_unions.is_empty() {
             writeln!(f, "  ")?;
             for u in &self.nested_unions {
-                writeln!(f, "{}", u)?;
+                u.reconstruct(fmt_configuration, f)?;
             }
         }
         if !self.nested_enums.is_empty() {
             writeln!(f, "  ")?;
             for e in &self.nested_enums {
-                writeln!(f, "{}", e)?;
+                e.reconstruct(f)?;
             }
         }
 
         // Dump fields while detecting unnamed structs and unions
-        fmt_struct_fields_recursive(f, &self.fields, 1)?;
+        fmt_struct_fields_recursive(fmt_configuration, &self.fields, 1, f)?;
 
         // Static fields
         for field in &self.static_fields {
             writeln!(
                 f,
-                "  {}: static {} {}{};",
-                field.access, field.type_left, &field.name, field.type_right,
+                "  {}static {} {}{};",
+                if fmt_configuration.print_access_specifiers {
+                    &field.access
+                } else {
+                    &FieldAccess::None
+                },
+                field.type_left,
+                &field.name,
+                field.type_right,
             )?;
         }
 
@@ -409,13 +418,17 @@ impl fmt::Display for Class<'_> {
             for method in &self.instance_methods {
                 writeln!(
                     f,
-                    "  {}:{}{} {}({}){};",
-                    method.access,
-                    if method.is_virtual { " virtual" } else { "" },
+                    "  {}{}{}{}({}){};",
+                    if fmt_configuration.print_access_specifiers {
+                        &method.access
+                    } else {
+                        &FieldAccess::None
+                    },
+                    if method.is_virtual { "virtual " } else { "" },
                     if method.is_ctor {
                         String::default()
                     } else {
-                        format!(" {}", method.return_type_name)
+                        format!("{} ", method.return_type_name)
                     },
                     &method.name,
                     method.arguments.join(", "),
@@ -429,8 +442,12 @@ impl fmt::Display for Class<'_> {
             for method in &self.static_methods {
                 writeln!(
                     f,
-                    "  {}: static {} {}({});",
-                    method.access,
+                    "  {}static {} {}({});",
+                    if fmt_configuration.print_access_specifiers {
+                        &method.access
+                    } else {
+                        &FieldAccess::None
+                    },
                     method.return_type_name,
                     &method.name,
                     method.arguments.join(", ")

@@ -28,6 +28,7 @@ struct ResymAppSettings {
     use_light_theme: bool,
     print_header: bool,
     reconstruct_dependencies: bool,
+    print_access_specifiers: bool,
 }
 
 impl Default for ResymAppSettings {
@@ -36,6 +37,7 @@ impl Default for ResymAppSettings {
             use_light_theme: false,
             print_header: true,
             reconstruct_dependencies: true,
+            print_access_specifiers: true,
         }
     }
 }
@@ -155,6 +157,7 @@ impl<'p> ResymApp {
                                     *type_index,
                                     self.settings.print_header,
                                     self.settings.reconstruct_dependencies,
+                                    self.settings.print_access_specifiers,
                                 ));
                                 if let Err(err) = result {
                                     log::error!("Failed to reconstruct type: {}", err);
@@ -199,6 +202,10 @@ impl<'p> ResymApp {
                 ui.checkbox(
                     &mut self.settings.reconstruct_dependencies,
                     "Print definitions of referenced types",
+                );
+                ui.checkbox(
+                    &mut self.settings.print_access_specifiers,
+                    "Print access specifiers",
                 );
             });
     }
