@@ -1,0 +1,20 @@
+---
+source: tests/type_reconstruction.rs
+expression: reconstructed_type
+---
+
+union resym_test::UnionTest { // Size=0x8
+  /* 0x0000 */ public: unsigned char u1;
+  /* 0x0000 */ public: uint16_t u2;
+  /* 0x0000 */ public: uint32_t u3;
+  /* 0x0000 */ public: uint64_t u4;
+  public: static uint64_t su5;
+  
+  public: void* GetPtr();
+  public: UnionTest();
+  
+  public: static int32_t Magic();
+  public: static int32_t MagicVar1(...);
+  public: static int32_t MagicVar2(int32_t, ...);
+};
+

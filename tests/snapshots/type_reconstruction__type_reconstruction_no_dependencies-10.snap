@@ -1,0 +1,25 @@
+---
+source: tests/type_reconstruction.rs
+expression: reconstructed_type
+---
+
+struct resym_test::StructUnnamedUdtTest2 { // Size=0x30
+  /* 0x0000 */ public: uint64_t Before;
+  union {
+    struct {
+      /* 0x0008 */ public: uint64_t u1;
+      /* 0x0010 */ public: uint64_t u2;
+    };
+    struct {
+      /* 0x0008 */ public: uint64_t* p1;
+      /* 0x0010 */ public: uint64_t* p2;
+    };
+  };
+  /* 0x0018 */ public: uint64_t Middle;
+  union {
+    /* 0x0020 */ public: uint64_t u3;
+    /* 0x0020 */ public: uint64_t* p3;
+  };
+  /* 0x0028 */ public: uint64_t After;
+};
+

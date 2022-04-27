@@ -1,0 +1,13 @@
+---
+source: tests/type_reconstruction.rs
+expression: reconstructed_type
+---
+
+struct resym_test::BitFieldsTest1 { // Size=0x4
+  union {
+    /* 0x0000 */ public: uint32_t b1 : 1;
+    /* 0x0000 */ public: uint32_t b2 : 1;
+    /* 0x0000 */ public: uint32_t b3 : 30;
+  };
+};
+

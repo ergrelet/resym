@@ -1,0 +1,44 @@
+---
+source: tests/type_reconstruction.rs
+expression: reconstructed_type
+---
+
+struct resym_test::StructUnnamedUdtTest1 { // Size=0xa0
+  union {
+    struct {
+      /* 0x0000 */ public: uint32_t i1;
+      /* 0x0004 */ public: uint32_t i2;
+      union {
+        /* 0x0008 */ public: uint32_t i3;
+        /* 0x0008 */ public: uint32_t i4;
+      };
+    };
+    /* 0x0000 */ public: uint32_t i5;
+    struct {
+      /* 0x0000 */ public: uint32_t i21;
+      /* 0x0004 */ public: uint32_t i22;
+      /* 0x0008 */ public: uint32_t i23;
+    };
+    /* 0x0000 */ public: resym_test::PrimitiveTypesTest s1;
+    /* 0x0000 */ public: uint64_t QuadPart;
+  };
+  /* 0x0070 */ public: uint64_t QuadPart2;
+  /* 0x0078 */ public: uint64_t QuadPart3;
+  union {
+    /* 0x0080 */ public: uint32_t Reserved;
+    struct {
+      /* 0x0080 */ public: unsigned char Type;
+      /* 0x0081 */ public: unsigned char Reserved1;
+      /* 0x0082 */ public: uint16_t Reserved2;
+    };
+  };
+  /* 0x0084 */ public: int32_t i6;
+  /* 0x0088 */ public: int32_t i7;
+  union {
+    /* 0x0090 */ public: void* c1;
+    /* 0x0090 */ public: char c2;
+  };
+  /* 0x0098 */ public: int32_t i8;
+  /* 0x009c */ public: int32_t i9;
+};
+

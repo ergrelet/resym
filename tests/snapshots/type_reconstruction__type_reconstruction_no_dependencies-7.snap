@@ -1,0 +1,11 @@
+---
+source: tests/type_reconstruction.rs
+expression: reconstructed_type
+---
+
+enum resym_test::EnumTest1 : int32_t {
+  kEnumTest1Val1 = 0x0000,
+  kEnumTest1Val2 = 0x0001,
+  kEnumTest1Val3 = 0x0002,
+};
+
