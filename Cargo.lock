@@ -1768,6 +1768,7 @@ dependencies = [
  "num_cpus",
  "pdb",
  "rayon",
+ "regex",
  "serde",
  "tinyfiledialogs",
 ]

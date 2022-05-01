@@ -26,6 +26,8 @@ fn main() -> Result<()> {
 #[derive(Serialize, Deserialize)]
 struct ResymAppSettings {
     use_light_theme: bool,
+    search_case_insensitive: bool,
+    search_use_regex: bool,
     print_header: bool,
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
@@ -35,6 +37,8 @@ impl Default for ResymAppSettings {
     fn default() -> Self {
         Self {
             use_light_theme: false,
+            search_case_insensitive: true,
+            search_use_regex: false,
             print_header: true,
             reconstruct_dependencies: true,
             print_access_specifiers: true,
@@ -116,9 +120,11 @@ impl<'p> ResymApp {
                         if let Err(err) = self.tx_worker.send(WorkerCommand::LoadPDB(file_path)) {
                             log::error!("Failed to load the PDB file: {}", err);
                         } else {
-                            let result = self
-                                .tx_worker
-                                .send(WorkerCommand::UpdateSymbolFilter(String::default()));
+                            let result = self.tx_worker.send(WorkerCommand::UpdateSymbolFilter(
+                                String::default(),
+                                false,
+                                false,
+                            ));
                             if let Err(err) = result {
                                 log::error!("Failed to update type filter value: {}", err);
                             }
@@ -203,6 +209,17 @@ impl<'p> ResymApp {
                 ui.checkbox(&mut self.settings.use_light_theme, "Use light theme");
                 ui.add_space(5.0);
 
+                ui.label("Search");
+                ui.checkbox(
+                    &mut self.settings.search_case_insensitive,
+                    "Case insensitive",
+                );
+                ui.checkbox(
+                    &mut self.settings.search_use_regex,
+                    "Enable regular expressions",
+                );
+                ui.add_space(5.0);
+
                 ui.label("Type reconstruction");
                 ui.checkbox(&mut self.settings.print_header, "Print header");
                 ui.checkbox(
@@ -279,6 +296,8 @@ impl epi::App for ResymApp {
                     // Update filtered list if filter has changed
                     let result = self.tx_worker.send(WorkerCommand::UpdateSymbolFilter(
                         self.search_filter.clone(),
+                        self.settings.search_case_insensitive,
+                        self.settings.search_use_regex,
                     ));
                     if let Err(err) = result {
                         log::error!("Failed to update type filter value: {}", err);

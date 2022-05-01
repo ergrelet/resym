@@ -12,7 +12,7 @@ pub enum WorkerCommand {
     /// Load a PDB file given its path as a `String`.
     LoadPDB(String),
     ReconstructType(pdb::TypeIndex, bool, bool, bool),
-    UpdateSymbolFilter(String),
+    UpdateSymbolFilter(String, bool, bool),
 }
 
 pub struct WorkerThreadContext<'p> {
@@ -106,20 +106,29 @@ impl<'p> WorkerThreadContext<'p> {
                     }
                 }
 
-                WorkerCommand::UpdateSymbolFilter(search_filter) => {
+                WorkerCommand::UpdateSymbolFilter(
+                    search_filter,
+                    case_insensitive_search,
+                    use_regex,
+                ) => {
                     if let Some(pdb_file) = self.pdb_file.as_ref() {
                         let filter_start = std::time::Instant::now();
                         let mut filtered_symbol_list: Vec<(String, pdb::TypeIndex)> =
                             if search_filter.is_empty() {
                                 // No need to filter
                                 pdb_file.complete_type_list.clone()
+                            } else if use_regex {
+                                filter_symbol_regex(
+                                    &pdb_file.complete_type_list,
+                                    &search_filter,
+                                    case_insensitive_search,
+                                )
                             } else {
-                                pdb_file
-                                    .complete_type_list
-                                    .par_iter()
-                                    .filter(|r| r.0.contains(&search_filter))
-                                    .cloned()
-                                    .collect()
+                                filter_symbol_regular(
+                                    &pdb_file.complete_type_list,
+                                    &search_filter,
+                                    case_insensitive_search,
+                                )
                             };
                         // Order types by type index, so the order is deterministic
                         // (i.e., independent from DashMap's hash function)
@@ -152,5 +161,45 @@ impl<'p> WorkerThreadContext<'p> {
     fn load_pdb_file(&mut self, pdb_file_path: &str) -> Result<()> {
         self.pdb_file = Some(PdbFile::load_from_file(pdb_file_path)?);
         Ok(())
+    }
+}
+
+fn filter_symbol_regex(
+    symbol_list: &[(String, pdb::TypeIndex)],
+    search_filter: &str,
+    case_insensitive_search: bool,
+) -> Vec<(String, pdb::TypeIndex)> {
+    match regex::RegexBuilder::new(search_filter)
+        .case_insensitive(case_insensitive_search)
+        .build()
+    {
+        // In case of error, return an empty result
+        Err(_) => vec![],
+        Ok(regex) => symbol_list
+            .par_iter()
+            .filter(|r| regex.find(&r.0).is_some())
+            .cloned()
+            .collect(),
+    }
+}
+
+fn filter_symbol_regular(
+    symbol_list: &[(String, pdb::TypeIndex)],
+    search_filter: &str,
+    case_insensitive_search: bool,
+) -> Vec<(String, pdb::TypeIndex)> {
+    if case_insensitive_search {
+        let search_filter = search_filter.to_lowercase();
+        symbol_list
+            .par_iter()
+            .filter(|r| r.0.to_lowercase().contains(&search_filter))
+            .cloned()
+            .collect()
+    } else {
+        symbol_list
+            .par_iter()
+            .filter(|r| r.0.contains(search_filter))
+            .cloned()
+            .collect()
     }
 }
