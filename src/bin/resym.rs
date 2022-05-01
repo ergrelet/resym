@@ -50,7 +50,7 @@ struct ResymApp {
     selected_row: usize,
     search_filter: String,
     reconstructed_type_content: String,
-    console_content: String,
+    console_content: Vec<String>,
     settings_wnd_open: bool,
     settings: ResymAppSettings,
     _thread_pool: ThreadPool,
@@ -82,7 +82,7 @@ impl<'p> ResymApp {
             selected_row: usize::MAX,
             search_filter: String::default(),
             reconstructed_type_content: String::default(),
-            console_content: String::default(),
+            console_content: vec![],
             settings_wnd_open: false,
             settings: ResymAppSettings::default(),
             _thread_pool: thread_pool,
@@ -171,18 +171,24 @@ impl<'p> ResymApp {
 
     fn draw_console(&mut self, ui: &mut egui::Ui) {
         // Update console
-        self.console_content.push_str(&self.logger.read());
+        self.console_content
+            .extend(self.logger.read().lines().map(|s| s.to_string()));
         self.logger.clear();
 
+        const TEXT_STYLE: TextStyle = TextStyle::Monospace;
+        let row_height = ui.text_style_height(&TEXT_STYLE);
+        let num_rows = self.console_content.len();
         ScrollArea::vertical()
             .auto_shrink([false, false])
             .stick_to_bottom()
-            .show(ui, |ui| {
-                ui.add(
-                    egui::TextEdit::multiline(&mut self.console_content.as_str())
-                        .font(egui::TextStyle::Monospace)
-                        .desired_width(f32::INFINITY),
-                );
+            .show_rows(ui, row_height, num_rows, |ui, row_range| {
+                for row_index in row_range {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.console_content[row_index].as_str())
+                            .font(egui::TextStyle::Monospace)
+                            .desired_width(f32::INFINITY),
+                    );
+                }
             });
     }
 
