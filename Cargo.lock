@@ -1759,6 +1759,7 @@ name = "resym"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "crossbeam-channel",
  "dashmap",
  "eframe",
  "epi",

@@ -1,19 +1,20 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use crossbeam_channel::{Receiver, Sender};
 use eframe::{
     egui::{self, Visuals},
     epi,
 };
 use egui::{ScrollArea, TextStyle};
 use memory_logger::blocking::MemoryLogger;
-use rayon::ThreadPool;
 use serde::{Deserialize, Serialize};
 use tinyfiledialogs::open_file_dialog;
 
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc, RwLock};
 
 use resym::{
-    backend::{WorkerCommand, WorkerThreadContext},
-    UICommand, PKG_NAME, PKG_VERSION,
+    backend::{Backend, BackendCommand},
+    frontend::{FrontendCommand, FrontendController},
+    PKG_NAME, PKG_VERSION,
 };
 
 fn main() -> Result<()> {
@@ -46,10 +47,46 @@ impl Default for ResymAppSettings {
     }
 }
 
+struct EguiFrontendController {
+    tx_ui: Sender<FrontendCommand>,
+    ui_frame: RwLock<Option<epi::Frame>>,
+}
+
+impl EguiFrontendController {
+    pub fn new(tx_ui: Sender<FrontendCommand>) -> Self {
+        Self {
+            tx_ui,
+            ui_frame: RwLock::new(None),
+        }
+    }
+
+    fn set_ui_frame(&self, ui_frame: epi::Frame) -> Result<()> {
+        match self.ui_frame.write() {
+            Err(_) => Err(anyhow!("Failed to update `ui_frame`")),
+            Ok(mut ui_frame_opt) => {
+                *ui_frame_opt = Some(ui_frame);
+                Ok(())
+            }
+        }
+    }
+}
+
+impl FrontendController for EguiFrontendController {
+    /// Used by the backend to send us commands and trigger a UI update
+    fn send_command(&self, command: FrontendCommand) -> Result<()> {
+        self.tx_ui.send(command)?;
+        // Force the UI backend to call our app's update function on the other end
+        if let Ok(ui_frame_opt) = self.ui_frame.try_read() {
+            if let Some(ui_frame) = ui_frame_opt.as_ref() {
+                ui_frame.request_repaint();
+            }
+        }
+        Ok(())
+    }
+}
+
 struct ResymApp {
     logger: &'static MemoryLogger,
-    tx_worker: Sender<WorkerCommand>,
-    rx_ui: Receiver<UICommand>,
     filtered_type_list: Vec<(String, pdb::TypeIndex)>,
     selected_row: usize,
     search_filter: String,
@@ -57,31 +94,19 @@ struct ResymApp {
     console_content: Vec<String>,
     settings_wnd_open: bool,
     settings: ResymAppSettings,
-    _thread_pool: ThreadPool,
+    rx_ui: Receiver<FrontendCommand>,
+    frontend_controller: Arc<EguiFrontendController>,
+    backend: Backend,
 }
 
 impl<'p> ResymApp {
     fn new(logger: &'static MemoryLogger) -> Result<Self> {
-        let (tx_worker, rx_worker) = mpsc::channel::<WorkerCommand>();
-        let (tx_ui, rx_ui) = mpsc::channel::<UICommand>();
-
-        let cpu_count = num_cpus::get();
-        let thread_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(cpu_count - 1)
-            .build()?;
-        thread_pool.spawn(move || {
-            let mut ctx = WorkerThreadContext::new();
-            let worker_exit_result = ctx.run(rx_worker, tx_ui);
-            if let Err(err) = worker_exit_result {
-                log::error!("Background thread aborted: {}", err);
-            }
-        });
-        log::debug!("Background thread started");
+        let (tx_ui, rx_ui) = crossbeam_channel::unbounded::<FrontendCommand>();
+        let frontend_controller = Arc::new(EguiFrontendController::new(tx_ui));
+        let backend = Backend::new(frontend_controller.clone())?;
 
         Ok(Self {
             logger,
-            tx_worker,
-            rx_ui,
             filtered_type_list: vec![],
             selected_row: usize::MAX,
             search_filter: String::default(),
@@ -89,18 +114,20 @@ impl<'p> ResymApp {
             console_content: vec![],
             settings_wnd_open: false,
             settings: ResymAppSettings::default(),
-            _thread_pool: thread_pool,
+            rx_ui,
+            frontend_controller,
+            backend,
         })
     }
 
     fn process_ui_commands(&mut self) {
         while let Ok(cmd) = self.rx_ui.try_recv() {
             match cmd {
-                UICommand::UpdateReconstructedType(data) => {
+                FrontendCommand::UpdateReconstructedType(data) => {
                     self.reconstructed_type_content = data;
                 }
 
-                UICommand::UpdateFilteredSymbols(filtered_symbols) => {
+                FrontendCommand::UpdateFilteredSymbols(filtered_symbols) => {
                     self.filtered_type_list = filtered_symbols;
                     self.selected_row = usize::MAX;
                 }
@@ -117,14 +144,19 @@ impl<'p> ResymApp {
                         "",
                         Some((&["*.pdb"], "PDB files (*.pdb)")),
                     ) {
-                        if let Err(err) = self.tx_worker.send(WorkerCommand::LoadPDB(file_path)) {
+                        if let Err(err) = self
+                            .backend
+                            .send_command(BackendCommand::LoadPDB(file_path))
+                        {
                             log::error!("Failed to load the PDB file: {}", err);
                         } else {
-                            let result = self.tx_worker.send(WorkerCommand::UpdateSymbolFilter(
-                                String::default(),
-                                false,
-                                false,
-                            ));
+                            let result =
+                                self.backend
+                                    .send_command(BackendCommand::UpdateSymbolFilter(
+                                        String::default(),
+                                        false,
+                                        false,
+                                    ));
                             if let Err(err) = result {
                                 log::error!("Failed to update type filter value: {}", err);
                             }
@@ -159,12 +191,13 @@ impl<'p> ResymApp {
                                 .clicked()
                             {
                                 self.selected_row = row_index;
-                                let result = self.tx_worker.send(WorkerCommand::ReconstructType(
-                                    *type_index,
-                                    self.settings.print_header,
-                                    self.settings.reconstruct_dependencies,
-                                    self.settings.print_access_specifiers,
-                                ));
+                                let result =
+                                    self.backend.send_command(BackendCommand::ReconstructType(
+                                        *type_index,
+                                        self.settings.print_header,
+                                        self.settings.reconstruct_dependencies,
+                                        self.settings.print_access_specifiers,
+                                    ));
                                 if let Err(err) = result {
                                     log::error!("Failed to reconstruct type: {}", err);
                                 }
@@ -248,8 +281,8 @@ impl epi::App for ResymApp {
     ) {
         log::info!("{} {}", PKG_NAME, PKG_VERSION);
         // If this fails, let it burn
-        self.tx_worker
-            .send(WorkerCommand::Initialize(frame.clone()))
+        self.frontend_controller
+            .set_ui_frame(frame.clone())
             .unwrap();
 
         // Load settings on launch
@@ -294,11 +327,13 @@ impl epi::App for ResymApp {
 
                 if ui.text_edit_singleline(&mut self.search_filter).changed() {
                     // Update filtered list if filter has changed
-                    let result = self.tx_worker.send(WorkerCommand::UpdateSymbolFilter(
-                        self.search_filter.clone(),
-                        self.settings.search_case_insensitive,
-                        self.settings.search_use_regex,
-                    ));
+                    let result = self
+                        .backend
+                        .send_command(BackendCommand::UpdateSymbolFilter(
+                            self.search_filter.clone(),
+                            self.settings.search_case_insensitive,
+                            self.settings.search_use_regex,
+                        ));
                     if let Err(err) = result {
                         log::error!("Failed to update type filter value: {}", err);
                     }
