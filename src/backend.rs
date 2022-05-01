@@ -7,16 +7,22 @@ use rayon::{
 
 use std::sync::Arc;
 
-use super::{frontend::FrontendCommand, PKG_NAME, PKG_VERSION};
-use crate::{frontend::FrontendController, pdb_file::PdbFile};
+use crate::{
+    frontend::FrontendCommand, frontend::FrontendController, pdb_file::PdbFile, PKG_NAME,
+    PKG_VERSION,
+};
 
 pub enum BackendCommand {
     /// Load a PDB file given its path as a `String`.
     LoadPDB(String),
+    /// Reconstruct a type given its type index.
     ReconstructType(pdb::TypeIndex, bool, bool, bool),
-    UpdateSymbolFilter(String, bool, bool),
+    /// Retrieve a list of types that match the given filter.
+    UpdateTypeFilter(String, bool, bool),
 }
 
+/// Struct that represents the backend. The backend is responsible
+/// for the actual PDB processing (e.g., type listing and reconstruction).
 pub struct Backend {
     tx_worker: Sender<BackendCommand>,
     _thread_pool: ThreadPool,
@@ -28,6 +34,9 @@ impl Backend {
     ) -> Result<Self> {
         let (tx_worker, rx_worker) = crossbeam_channel::unbounded::<BackendCommand>();
 
+        // Start a thread pool with as many threads as there are CPUs on the machine,
+        // minus one (because we account for the GUI thread).
+        // Note: Calling `num_threads` with 0 is valid.
         let cpu_count = num_cpus::get();
         let thread_pool = rayon::ThreadPoolBuilder::new()
             .num_threads(cpu_count - 1)
@@ -51,6 +60,8 @@ impl Backend {
     }
 }
 
+/// Main backend routine. This processes commands sent by the frontend and sends
+/// the result back.
 fn worker_thread_routine(
     rx_worker: Receiver<BackendCommand>,
     frontend_controller: &impl FrontendController,
@@ -75,84 +86,30 @@ fn worker_thread_routine(
                 reconstruct_dependencies,
                 print_access_specifiers,
             ) => {
-                if let Some(pdb_file) = pdb_file.as_mut() {
-                    match pdb_file.reconstruct_type_by_type_index(
+                if let Some(pdb_file) = pdb_file.as_ref() {
+                    let reconstructed_type = reconstruct_type_command(
+                        pdb_file,
                         type_index,
+                        print_header,
                         reconstruct_dependencies,
                         print_access_specifiers,
-                    ) {
-                        Ok(data) => {
-                            let reconstructed_type = if print_header {
-                                format!(
-                                    concat!(
-                                        "//\n",
-                                        "// PDB file: {}\n",
-                                        "// Image architecture: {}\n",
-                                        "//\n",
-                                        "// Information extracted with {} v{}\n",
-                                        "//\n",
-                                        "\n",
-                                        "#include <cstdint>\n",
-                                        "{}"
-                                    ),
-                                    pdb_file.file_path,
-                                    pdb_file.machine_type,
-                                    PKG_NAME,
-                                    PKG_VERSION,
-                                    data
-                                )
-                            } else {
-                                data
-                            };
-
-                            frontend_controller.send_command(
-                                FrontendCommand::UpdateReconstructedType(reconstructed_type),
-                            )?;
-                        }
-                        Err(err) => {
-                            // Make it obvious an error occured
-                            frontend_controller.send_command(
-                                FrontendCommand::UpdateReconstructedType(format!("Error: {}", err)),
-                            )?;
-                        }
-                    }
+                    );
+                    frontend_controller.send_command(FrontendCommand::UpdateReconstructedType(
+                        reconstructed_type,
+                    ))?;
                 }
             }
 
-            BackendCommand::UpdateSymbolFilter(
-                search_filter,
-                case_insensitive_search,
-                use_regex,
-            ) => {
+            BackendCommand::UpdateTypeFilter(search_filter, case_insensitive_search, use_regex) => {
                 if let Some(pdb_file) = pdb_file.as_ref() {
-                    let filter_start = std::time::Instant::now();
-                    let mut filtered_symbol_list: Vec<(String, pdb::TypeIndex)> =
-                        if search_filter.is_empty() {
-                            // No need to filter
-                            pdb_file.complete_type_list.clone()
-                        } else if use_regex {
-                            filter_symbol_regex(
-                                &pdb_file.complete_type_list,
-                                &search_filter,
-                                case_insensitive_search,
-                            )
-                        } else {
-                            filter_symbol_regular(
-                                &pdb_file.complete_type_list,
-                                &search_filter,
-                                case_insensitive_search,
-                            )
-                        };
-                    // Order types by type index, so the order is deterministic
-                    // (i.e., independent from DashMap's hash function)
-                    filtered_symbol_list.sort_by(|lhs, rhs| lhs.1.cmp(&rhs.1));
-                    log::debug!(
-                        "Symbol filtering took {} ms",
-                        filter_start.elapsed().as_millis()
+                    let filtered_type_list = update_type_filter_command(
+                        pdb_file,
+                        &search_filter,
+                        case_insensitive_search,
+                        use_regex,
                     );
-                    frontend_controller.send_command(FrontendCommand::UpdateFilteredSymbols(
-                        filtered_symbol_list,
-                    ))?;
+                    frontend_controller
+                        .send_command(FrontendCommand::UpdateFilteredTypes(filtered_type_list))?;
                 }
             }
         }
@@ -161,8 +118,84 @@ fn worker_thread_routine(
     Ok(())
 }
 
-fn filter_symbol_regex(
-    symbol_list: &[(String, pdb::TypeIndex)],
+fn reconstruct_type_command(
+    pdb_file: &PdbFile,
+    type_index: pdb::TypeIndex,
+    print_header: bool,
+    reconstruct_dependencies: bool,
+    print_access_specifiers: bool,
+) -> String {
+    match pdb_file.reconstruct_type_by_type_index(
+        type_index,
+        reconstruct_dependencies,
+        print_access_specifiers,
+    ) {
+        Err(err) => {
+            // Make it obvious an error occured
+            format!("Error: {}", err)
+        }
+        Ok(data) => {
+            if print_header {
+                format!(
+                    concat!(
+                        "//\n",
+                        "// PDB file: {}\n",
+                        "// Image architecture: {}\n",
+                        "//\n",
+                        "// Information extracted with {} v{}\n",
+                        "//\n",
+                        "\n",
+                        "#include <cstdint>\n",
+                        "{}"
+                    ),
+                    pdb_file.file_path, pdb_file.machine_type, PKG_NAME, PKG_VERSION, data
+                )
+            } else {
+                data
+            }
+        }
+    }
+}
+
+fn update_type_filter_command(
+    pdb_file: &PdbFile,
+    search_filter: &str,
+    case_insensitive_search: bool,
+    use_regex: bool,
+) -> Vec<(String, pdb::TypeIndex)> {
+    let filter_start = std::time::Instant::now();
+
+    let mut filtered_type_list = if search_filter.is_empty() {
+        // No need to filter
+        pdb_file.complete_type_list.clone()
+    } else if use_regex {
+        filter_types_regex(
+            &pdb_file.complete_type_list,
+            search_filter,
+            case_insensitive_search,
+        )
+    } else {
+        filter_types_regular(
+            &pdb_file.complete_type_list,
+            search_filter,
+            case_insensitive_search,
+        )
+    };
+    // Order types by type index, so the order is deterministic
+    // (i.e., independent from DashMap's hash function)
+    filtered_type_list.sort_by(|lhs, rhs| lhs.1.cmp(&rhs.1));
+
+    log::debug!(
+        "Type filtering took {} ms",
+        filter_start.elapsed().as_millis()
+    );
+
+    filtered_type_list
+}
+
+/// Filter type list with a regular expression
+fn filter_types_regex(
+    type_list: &[(String, pdb::TypeIndex)],
     search_filter: &str,
     case_insensitive_search: bool,
 ) -> Vec<(String, pdb::TypeIndex)> {
@@ -172,7 +205,7 @@ fn filter_symbol_regex(
     {
         // In case of error, return an empty result
         Err(_) => vec![],
-        Ok(regex) => symbol_list
+        Ok(regex) => type_list
             .par_iter()
             .filter(|r| regex.find(&r.0).is_some())
             .cloned()
@@ -180,20 +213,21 @@ fn filter_symbol_regex(
     }
 }
 
-fn filter_symbol_regular(
-    symbol_list: &[(String, pdb::TypeIndex)],
+/// Filter type list with a plain (sub-)string
+fn filter_types_regular(
+    type_list: &[(String, pdb::TypeIndex)],
     search_filter: &str,
     case_insensitive_search: bool,
 ) -> Vec<(String, pdb::TypeIndex)> {
     if case_insensitive_search {
         let search_filter = search_filter.to_lowercase();
-        symbol_list
+        type_list
             .par_iter()
             .filter(|r| r.0.to_lowercase().contains(&search_filter))
             .cloned()
             .collect()
     } else {
-        symbol_list
+        type_list
             .par_iter()
             .filter(|r| r.0.contains(search_filter))
             .cloned()

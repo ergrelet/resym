@@ -23,6 +23,7 @@ pub type TypeSet = BTreeSet<pdb::TypeIndex>;
 
 pub type TypeForwarder = dashmap::DashMap<pdb::TypeIndex, pdb::TypeIndex>;
 
+/// Return a pair of strings representing the given `type_index`.
 pub fn type_name<'p>(
     type_finder: &pdb::TypeFinder<'p>,
     type_forwarder: &TypeForwarder,
@@ -336,7 +337,7 @@ pub fn argument_list<'p>(
     }
 }
 
-/// Returns the type's size in bytes
+/// Return the type's size in bytes.
 pub fn type_size(type_finder: &pdb::TypeFinder, type_index: pdb::TypeIndex) -> Result<usize> {
     let size = match type_finder.find(type_index)?.parse()? {
         pdb::TypeData::Primitive(data) => {
@@ -420,46 +421,15 @@ pub fn type_size(type_finder: &pdb::TypeFinder, type_index: pdb::TypeIndex) -> R
     Ok(size)
 }
 
+/// Indicate if the given `type_name` is the name of an anonymous type.
 pub fn is_unnamed_type(type_name: &str) -> bool {
     type_name.contains("<anonymous-")
         || type_name.contains("<unnamed-")
         || type_name.contains("__unnamed")
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ForwardReference {
-    kind: pdb::ClassKind,
-    name: String,
-}
-
-impl ForwardReference {
-    pub fn reconstruct(&self, f: &mut impl std::fmt::Write) -> fmt::Result {
-        writeln!(
-            f,
-            "{} {};",
-            match self.kind {
-                pdb::ClassKind::Class => "class",
-                pdb::ClassKind::Struct => "struct",
-                pdb::ClassKind::Interface => "interface", // when can this happen?
-            },
-            self.name
-        )
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DataFormatConfiguration {
-    pub print_access_specifiers: bool,
-}
-
-impl Default for DataFormatConfiguration {
-    fn default() -> Self {
-        Self {
-            print_access_specifiers: true,
-        }
-    }
-}
-
+/// Struct that represent a set of reconstructed types (forward declarations,
+/// classes/structs, enums and unions)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Data<'p> {
     forward_references: Vec<ForwardReference>,
@@ -836,4 +806,38 @@ fn find_unnamed_structs_in_unions(fields: &[Field]) -> Vec<Range<usize>> {
     }
 
     structs_found
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ForwardReference {
+    kind: pdb::ClassKind,
+    name: String,
+}
+
+impl ForwardReference {
+    pub fn reconstruct(&self, f: &mut impl std::fmt::Write) -> fmt::Result {
+        writeln!(
+            f,
+            "{} {};",
+            match self.kind {
+                pdb::ClassKind::Class => "class",
+                pdb::ClassKind::Struct => "struct",
+                pdb::ClassKind::Interface => "interface", // when can this happen?
+            },
+            self.name
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DataFormatConfiguration {
+    pub print_access_specifiers: bool,
+}
+
+impl Default for DataFormatConfiguration {
+    fn default() -> Self {
+        Self {
+            print_access_specifiers: true,
+        }
+    }
 }

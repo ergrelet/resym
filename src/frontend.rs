@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 pub enum FrontendCommand {
-    UpdateFilteredSymbols(Vec<(String, pdb::TypeIndex)>),
+    UpdateFilteredTypes(Vec<(String, pdb::TypeIndex)>),
     UpdateReconstructedType(String),
 }
 
