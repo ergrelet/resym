@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 use anyhow::{anyhow, Result};
 use crossbeam_channel::{Receiver, Sender};
 use eframe::{

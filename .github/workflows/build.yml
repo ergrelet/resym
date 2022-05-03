@@ -1,0 +1,27 @@
+name: Build
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+jobs:
+  build-latest-windows:
+    name: Build on Windows - Latest
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+      - name: Build
+        run: cargo build --release
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: resym-win64
+          path: target/release/*.exe
+          retention-days: 3

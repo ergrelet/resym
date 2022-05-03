@@ -1,4 +1,4 @@
-# resym
+# resym [![Build Status](https://github.com/ergrelet/resym/workflows/Tests/badge.svg?branch=master)](https://github.com/ergrelet/resym/actions?query=workflow%3ATests) [![License](https://img.shields.io/github/license/ergrelet/resym)](https://github.com/ergrelet/resym/blob/master/LICENSE) [![rustc 1.59.0](https://img.shields.io/badge/rust-1.59.0%2B-orange.svg)](https://img.shields.io/badge/rust-1.59.0%2B-orange.svg)
 
 `resym` is a utility that allows browsing and extracting types from PDB files.
 
@@ -20,6 +20,8 @@ the boxes for me so far, so this my shot at making that tool.
 So if you're in the same boat, this some tool might be of some use to you.
 
 ## How to Build
+
+On **Ubuntu**, you might need to install: `libxcb-shape0-dev` and `libxcb-xfixes0-dev`.
 
 ```
 # Optional: install rust

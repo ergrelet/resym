@@ -1,0 +1,54 @@
+name: Tests
+
+on: [push]
+
+jobs:
+  test-latest:
+    name: Test on Linux - Latest
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+      - name: Install libxcb
+        run: sudo apt-get update; sudo apt-get install --no-install-recommends libxcb-shape0-dev libxcb-xfixes0-dev
+        if: runner.os == 'linux'
+      - name: Test
+        run: make test
+
+  test-latest-windows:
+    name: Test on Windows - Latest
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+      - name: Test
+        run: |
+          cargo test &&
+          cargo test --all-features &&
+          cargo test --no-default-features
+
+  test-stable:
+    name: Test on Linux - 1.59.0
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.59.0
+          profile: minimal
+          override: true
+      - name: Install libxcb
+        run: sudo apt-get update; sudo apt-get install --no-install-recommends libxcb-shape0-dev libxcb-xfixes0-dev
+        if: runner.os == 'linux'
+      - name: Test
+        run: make test
