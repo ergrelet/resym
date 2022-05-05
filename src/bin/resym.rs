@@ -239,13 +239,14 @@ impl<'p> ResymApp {
                                 .clicked()
                             {
                                 self.selected_row = row_index;
-                                let result =
-                                    self.backend.send_command(BackendCommand::ReconstructType(
+                                let result = self.backend.send_command(
+                                    BackendCommand::ReconstructTypeByIndex(
                                         *type_index,
                                         self.settings.print_header,
                                         self.settings.reconstruct_dependencies,
                                         self.settings.print_access_specifiers,
-                                    ));
+                                    ),
+                                );
                                 if let Err(err) = result {
                                     log::error!("Failed to reconstruct type: {}", err);
                                 }
