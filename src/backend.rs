@@ -5,7 +5,7 @@ use rayon::{
     ThreadPool,
 };
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use crate::{
     frontend::FrontendCommand, frontend::FrontendController, pdb_file::PdbFile, PKG_NAME,
@@ -13,8 +13,8 @@ use crate::{
 };
 
 pub enum BackendCommand {
-    /// Load a PDB file given its path as a `String`.
-    LoadPDB(String),
+    /// Load a PDB file given its path as a `PathBuf`.
+    LoadPDB(PathBuf),
     /// Reconstruct a type given its type index.
     ReconstructType(pdb::TypeIndex, bool, bool, bool),
     /// Retrieve a list of types that match the given filter.
@@ -75,7 +75,10 @@ fn worker_thread_routine(
                     Err(err) => log::error!("Failed to load PDB file: {}", err),
                     Ok(loaded_pdb_file) => {
                         pdb_file = Some(loaded_pdb_file);
-                        log::info!("'{}' has been loaded successfully!", pdb_file_path);
+                        log::info!(
+                            "'{}' has been loaded successfully!",
+                            pdb_file_path.display()
+                        );
                     }
                 }
             }
@@ -148,7 +151,11 @@ fn reconstruct_type_command(
                         "#include <cstdint>\n",
                         "{}"
                     ),
-                    pdb_file.file_path, pdb_file.machine_type, PKG_NAME, PKG_VERSION, data
+                    pdb_file.file_path.display(),
+                    pdb_file.machine_type,
+                    PKG_NAME,
+                    PKG_VERSION,
+                    data
                 )
             } else {
                 data

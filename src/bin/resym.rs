@@ -198,7 +198,7 @@ impl<'p> ResymApp {
                     ) {
                         if let Err(err) = self
                             .backend
-                            .send_command(BackendCommand::LoadPDB(file_path))
+                            .send_command(BackendCommand::LoadPDB(file_path.into()))
                         {
                             log::error!("Failed to load the PDB file: {}", err);
                         } else {
