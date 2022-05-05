@@ -3,7 +3,12 @@ use dashmap::DashMap;
 use pdb::FallibleIterator;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
-use std::{collections::BTreeSet, fs::File, sync::Arc};
+use std::{
+    collections::BTreeSet,
+    fs::File,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use crate::pdb_types::{self, is_unnamed_type, DataFormatConfiguration};
 
@@ -12,12 +17,12 @@ pub struct PdbFile<'p> {
     pub forwarder_to_complete_type: Arc<DashMap<pdb::TypeIndex, pdb::TypeIndex>>,
     pub machine_type: pdb::MachineType,
     pub type_information: pdb::TypeInformation<'p>,
-    pub file_path: String,
+    pub file_path: PathBuf,
     _pdb: pdb::PDB<'p, File>,
 }
 
 impl<'p> PdbFile<'p> {
-    pub fn load_from_file(pdb_file_path: &str) -> Result<PdbFile<'p>> {
+    pub fn load_from_file(pdb_file_path: &Path) -> Result<PdbFile<'p>> {
         let file = File::open(pdb_file_path)?;
         let mut pdb = pdb::PDB::open(file)?;
         let type_information = pdb.type_information()?;

@@ -5,7 +5,7 @@ use rayon::{
     ThreadPool,
 };
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use crate::{
     frontend::FrontendCommand, frontend::FrontendController, pdb_file::PdbFile, PKG_NAME,
@@ -13,10 +13,12 @@ use crate::{
 };
 
 pub enum BackendCommand {
-    /// Load a PDB file given its path as a `String`.
-    LoadPDB(String),
+    /// Load a PDB file given its path as a `PathBuf`.
+    LoadPDB(PathBuf),
     /// Reconstruct a type given its type index.
-    ReconstructType(pdb::TypeIndex, bool, bool, bool),
+    ReconstructTypeByIndex(pdb::TypeIndex, bool, bool, bool),
+    /// Reconstruct a type given its name.
+    ReconstructTypeByName(String, bool, bool, bool),
     /// Retrieve a list of types that match the given filter.
     UpdateTypeFilter(String, bool, bool),
 }
@@ -75,21 +77,44 @@ fn worker_thread_routine(
                     Err(err) => log::error!("Failed to load PDB file: {}", err),
                     Ok(loaded_pdb_file) => {
                         pdb_file = Some(loaded_pdb_file);
-                        log::info!("'{}' has been loaded successfully!", pdb_file_path);
+                        log::info!(
+                            "'{}' has been loaded successfully!",
+                            pdb_file_path.display()
+                        );
                     }
                 }
             }
 
-            BackendCommand::ReconstructType(
+            BackendCommand::ReconstructTypeByIndex(
                 type_index,
                 print_header,
                 reconstruct_dependencies,
                 print_access_specifiers,
             ) => {
                 if let Some(pdb_file) = pdb_file.as_ref() {
-                    let reconstructed_type = reconstruct_type_command(
+                    let reconstructed_type = reconstruct_type_by_index_command(
                         pdb_file,
                         type_index,
+                        print_header,
+                        reconstruct_dependencies,
+                        print_access_specifiers,
+                    );
+                    frontend_controller.send_command(FrontendCommand::UpdateReconstructedType(
+                        reconstructed_type,
+                    ))?;
+                }
+            }
+
+            BackendCommand::ReconstructTypeByName(
+                type_name,
+                print_header,
+                reconstruct_dependencies,
+                print_access_specifiers,
+            ) => {
+                if let Some(pdb_file) = pdb_file.as_ref() {
+                    let reconstructed_type = reconstruct_type_by_name_command(
+                        pdb_file,
+                        &type_name,
                         print_header,
                         reconstruct_dependencies,
                         print_access_specifiers,
@@ -118,7 +143,7 @@ fn worker_thread_routine(
     Ok(())
 }
 
-fn reconstruct_type_command(
+fn reconstruct_type_by_index_command(
     pdb_file: &PdbFile,
     type_index: pdb::TypeIndex,
     print_header: bool,
@@ -136,25 +161,63 @@ fn reconstruct_type_command(
         }
         Ok(data) => {
             if print_header {
-                format!(
-                    concat!(
-                        "//\n",
-                        "// PDB file: {}\n",
-                        "// Image architecture: {}\n",
-                        "//\n",
-                        "// Information extracted with {} v{}\n",
-                        "//\n",
-                        "\n",
-                        "#include <cstdint>\n",
-                        "{}"
-                    ),
-                    pdb_file.file_path, pdb_file.machine_type, PKG_NAME, PKG_VERSION, data
-                )
+                let file_header = generate_file_header(pdb_file, true);
+                format!("{}{}", file_header, data)
             } else {
                 data
             }
         }
     }
+}
+
+fn reconstruct_type_by_name_command(
+    pdb_file: &PdbFile,
+    type_name: &str,
+    print_header: bool,
+    reconstruct_dependencies: bool,
+    print_access_specifiers: bool,
+) -> String {
+    match pdb_file.reconstruct_type_by_name(
+        type_name,
+        reconstruct_dependencies,
+        print_access_specifiers,
+    ) {
+        Err(err) => {
+            // Make it obvious an error occured
+            format!("Error: {}", err)
+        }
+        Ok(data) => {
+            if print_header {
+                let file_header = generate_file_header(pdb_file, true);
+                format!("{}{}", file_header, data)
+            } else {
+                data
+            }
+        }
+    }
+}
+
+fn generate_file_header(pdb_file: &PdbFile, include_stdint: bool) -> String {
+    format!(
+        concat!(
+            "//\n",
+            "// PDB file: {}\n",
+            "// Image architecture: {}\n",
+            "//\n",
+            "// Information extracted with {} v{}\n",
+            "//\n",
+            "{}"
+        ),
+        pdb_file.file_path.display(),
+        pdb_file.machine_type,
+        PKG_NAME,
+        PKG_VERSION,
+        if include_stdint {
+            "\n#include <cstdint>\n"
+        } else {
+            ""
+        }
+    )
 }
 
 fn update_type_filter_command(

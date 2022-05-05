@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use resym::pdb_file::PdbFile;
 
 const TEST_PDB_FILE_PATH: &str = "tests/data/test.pdb";
@@ -22,7 +24,7 @@ const TEST_CASES: &[&str] = &[
 
 #[test]
 fn test_type_reconstruction_no_dependencies() {
-    let pdb_file = PdbFile::load_from_file(TEST_PDB_FILE_PATH).expect("load test.pdb");
+    let pdb_file = PdbFile::load_from_file(Path::new(TEST_PDB_FILE_PATH)).expect("load test.pdb");
     for test_case_type_name in TEST_CASES {
         let reconstructed_type = pdb_file
             .reconstruct_type_by_name(test_case_type_name, false, true)

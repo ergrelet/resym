@@ -8,7 +8,7 @@ Inspired by [PDBRipper](https://github.com/horsicq/PDBRipper) and
 ## Key Features
 
 * Cross-platform
-* Graphical user interface
+* GUI and CLI versions available
 * C and C++ types reconstruction
 * Decent performance, even on huge PDB files
 
@@ -30,4 +30,26 @@ $ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 $ git clone https://github.com/ergrelet/resym.git
 $ cd resym; cargo build --release
 $ ./target/release/resym
+```
+
+## How to Use
+
+If you want to use the GUI version, simply run the `resym` executable.  
+A CLI version (named `resymc`) is also available:
+```
+$ ./target/release/resymc
+resymc 0.1.0
+resym is a utility that allows browsing and extracting types from PDB files.
+
+USAGE:
+    resymc.exe <SUBCOMMAND>
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+SUBCOMMANDS:
+    dump    Dump type from a given PDB file
+    help    Prints this message or the help of the given subcommand(s)
+    list    List types from a given PDB file
 ```

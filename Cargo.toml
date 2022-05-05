@@ -21,6 +21,7 @@ num_cpus = "1.13"
 dashmap = { version = "5.2", features = ["rayon"] }
 serde = "1.0"
 regex = "1.5"
+structopt = { version = "0.3", default-features = false }
 
 [dev-dependencies]
 insta = "1.14"
