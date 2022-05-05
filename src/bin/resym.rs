@@ -4,11 +4,13 @@ use anyhow::{anyhow, Result};
 use crossbeam_channel::{Receiver, Sender};
 use eframe::{
     egui::{self, Visuals},
+    epaint::text::LayoutJob,
     epi,
 };
 use egui::{ScrollArea, TextStyle};
 use memory_logger::blocking::MemoryLogger;
 use serde::{Deserialize, Serialize};
+use syntect::{easy::HighlightLines, highlighting::FontStyle, util::LinesWithEndings};
 use tinyfiledialogs::open_file_dialog;
 
 use std::sync::{Arc, RwLock};
@@ -16,6 +18,7 @@ use std::sync::{Arc, RwLock};
 use resym::{
     backend::{Backend, BackendCommand},
     frontend::{FrontendCommand, FrontendController},
+    syntax_highlighting::{self, CodeTheme},
     PKG_NAME, PKG_VERSION,
 };
 
@@ -37,7 +40,6 @@ struct ResymApp {
     console_content: Vec<String>,
     settings_wnd_open: bool,
     settings: ResymAppSettings,
-    rx_ui: Receiver<FrontendCommand>,
     frontend_controller: Arc<EguiFrontendController>,
     backend: Backend,
 }
@@ -136,16 +138,7 @@ impl epi::App for ResymApp {
             ui.label("Reconstructed type(s) - C++");
             ui.add_space(4.0);
 
-            // Type dump area
-            egui::ScrollArea::vertical()
-                .auto_shrink([false, false])
-                .show(ui, |ui| {
-                    ui.add(
-                        egui::TextEdit::multiline(&mut self.reconstructed_type_content.as_str())
-                            .code_editor()
-                            .desired_width(f32::INFINITY),
-                    );
-                });
+            self.update_code_view(ui);
         });
     }
 }
@@ -154,7 +147,7 @@ impl epi::App for ResymApp {
 impl<'p> ResymApp {
     fn new(logger: &'static MemoryLogger) -> Result<Self> {
         let (tx_ui, rx_ui) = crossbeam_channel::unbounded::<FrontendCommand>();
-        let frontend_controller = Arc::new(EguiFrontendController::new(tx_ui));
+        let frontend_controller = Arc::new(EguiFrontendController::new(tx_ui, rx_ui));
         let backend = Backend::new(frontend_controller.clone())?;
 
         Ok(Self {
@@ -166,14 +159,13 @@ impl<'p> ResymApp {
             console_content: vec![],
             settings_wnd_open: false,
             settings: ResymAppSettings::default(),
-            rx_ui,
             frontend_controller,
             backend,
         })
     }
 
     fn process_ui_commands(&mut self) {
-        while let Ok(cmd) = self.rx_ui.try_recv() {
+        while let Ok(cmd) = self.frontend_controller.rx_ui.try_recv() {
             match cmd {
                 FrontendCommand::UpdateReconstructedType(data) => {
                     self.reconstructed_type_content = data;
@@ -280,6 +272,37 @@ impl<'p> ResymApp {
             });
     }
 
+    fn update_code_view(&mut self, ui: &mut egui::Ui) {
+        const LANGUAGE_SYNTAX: &str = "cpp";
+        let theme = if self.settings.use_light_theme {
+            syntax_highlighting::CodeTheme::light()
+        } else {
+            syntax_highlighting::CodeTheme::dark()
+        };
+
+        // Layouter that'll apply syntax highlighting
+        let mut layouter = |ui: &egui::Ui, string: &str, wrap_width: f32| {
+            let mut layout_job = highlight_code(ui.ctx(), &theme, string, LANGUAGE_SYNTAX);
+            layout_job.wrap_width = wrap_width;
+            ui.fonts().layout_job(layout_job)
+        };
+
+        // Type dump area
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                let mut text_edit_content = self.reconstructed_type_content.as_str();
+                let mut text_edit = egui::TextEdit::multiline(&mut text_edit_content)
+                    .code_editor()
+                    .desired_width(f32::INFINITY);
+                // Override layouter only if needed
+                if self.settings.enable_syntax_hightlighting {
+                    text_edit = text_edit.layouter(&mut layouter);
+                }
+                ui.add(text_edit);
+            });
+    }
+
     fn update_settings_window(&mut self, ctx: &egui::Context) {
         egui::Window::new("Settings")
             .anchor(egui::Align2::CENTER_CENTER, [0.0; 2])
@@ -288,7 +311,11 @@ impl<'p> ResymApp {
             .collapsible(false)
             .show(ctx, |ui| {
                 ui.label("Theme");
-                ui.checkbox(&mut self.settings.use_light_theme, "Use light theme");
+                // Show radio-buttons to switch between light and dark mode.
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut self.settings.use_light_theme, true, "☀ Light");
+                    ui.selectable_value(&mut self.settings.use_light_theme, false, "🌙 Dark");
+                });
                 ui.add_space(5.0);
 
                 ui.label("Search");
@@ -303,6 +330,10 @@ impl<'p> ResymApp {
                 ui.add_space(5.0);
 
                 ui.label("Type reconstruction");
+                ui.checkbox(
+                    &mut self.settings.enable_syntax_hightlighting,
+                    "Enable C++ syntax highlighting",
+                );
                 ui.checkbox(&mut self.settings.print_header, "Print header");
                 ui.checkbox(
                     &mut self.settings.reconstruct_dependencies,
@@ -322,6 +353,7 @@ struct ResymAppSettings {
     use_light_theme: bool,
     search_case_insensitive: bool,
     search_use_regex: bool,
+    enable_syntax_hightlighting: bool,
     print_header: bool,
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
@@ -333,6 +365,7 @@ impl Default for ResymAppSettings {
             use_light_theme: false,
             search_case_insensitive: true,
             search_use_regex: false,
+            enable_syntax_hightlighting: true,
             print_header: true,
             reconstruct_dependencies: true,
             print_access_specifiers: true,
@@ -343,6 +376,7 @@ impl Default for ResymAppSettings {
 /// This struct enables the backend to communicate with us (the frontend)
 struct EguiFrontendController {
     tx_ui: Sender<FrontendCommand>,
+    rx_ui: Receiver<FrontendCommand>,
     ui_frame: RwLock<Option<epi::Frame>>,
 }
 
@@ -361,9 +395,10 @@ impl FrontendController for EguiFrontendController {
 }
 
 impl EguiFrontendController {
-    pub fn new(tx_ui: Sender<FrontendCommand>) -> Self {
+    pub fn new(tx_ui: Sender<FrontendCommand>, rx_ui: Receiver<FrontendCommand>) -> Self {
         Self {
             tx_ui,
+            rx_ui,
             ui_frame: RwLock::new(None),
         }
     }
@@ -377,4 +412,104 @@ impl EguiFrontendController {
             }
         }
     }
+}
+
+/// Memoized code highlighting
+fn highlight_code(ctx: &egui::Context, theme: &CodeTheme, code: &str, language: &str) -> LayoutJob {
+    impl egui::util::cache::ComputerMut<(&CodeTheme, &str, &str), LayoutJob> for CodeHighlighter {
+        fn compute(&mut self, (theme, code, lang): (&CodeTheme, &str, &str)) -> LayoutJob {
+            self.highlight(theme, code, lang)
+        }
+    }
+
+    type HighlightCache<'a> = egui::util::cache::FrameCache<LayoutJob, CodeHighlighter>;
+
+    let mut memory = ctx.memory();
+    let highlight_cache = memory.caches.cache::<HighlightCache<'_>>();
+    highlight_cache.get((theme, code, language))
+}
+
+struct CodeHighlighter {
+    ps: syntect::parsing::SyntaxSet,
+    ts: syntect::highlighting::ThemeSet,
+}
+
+impl Default for CodeHighlighter {
+    fn default() -> Self {
+        Self {
+            ps: syntect::parsing::SyntaxSet::load_defaults_newlines(),
+            ts: syntect::highlighting::ThemeSet::load_defaults(),
+        }
+    }
+}
+
+impl CodeHighlighter {
+    fn highlight(&self, theme: &CodeTheme, code: &str, lang: &str) -> LayoutJob {
+        self.highlight_impl(theme, code, lang).unwrap_or_else(|| {
+            // Fallback:
+            LayoutJob::simple(
+                code.into(),
+                egui::FontId::monospace(14.0),
+                if theme.dark_mode {
+                    egui::Color32::LIGHT_GRAY
+                } else {
+                    egui::Color32::DARK_GRAY
+                },
+                f32::INFINITY,
+            )
+        })
+    }
+
+    fn highlight_impl(&self, theme: &CodeTheme, text: &str, language: &str) -> Option<LayoutJob> {
+        let syntax = self
+            .ps
+            .find_syntax_by_name(language)
+            .or_else(|| self.ps.find_syntax_by_extension(language))?;
+
+        let theme = theme.syntect_theme.syntect_key_name();
+        let mut h = HighlightLines::new(syntax, &self.ts.themes[theme]);
+
+        use egui::text::{LayoutSection, TextFormat};
+
+        let mut job = LayoutJob {
+            text: text.into(),
+            ..Default::default()
+        };
+
+        for line in LinesWithEndings::from(text) {
+            for (style, range) in h.highlight(line, &self.ps) {
+                let fg = style.foreground;
+                let text_color = egui::Color32::from_rgb(fg.r, fg.g, fg.b);
+                let italics = style.font_style.contains(FontStyle::ITALIC);
+                let underline = style.font_style.contains(FontStyle::ITALIC);
+                let underline = if underline {
+                    egui::Stroke::new(1.0, text_color)
+                } else {
+                    egui::Stroke::none()
+                };
+                job.sections.push(LayoutSection {
+                    leading_space: 0.0,
+                    byte_range: as_byte_range(text, range),
+                    format: TextFormat {
+                        font_id: egui::FontId::monospace(14.0),
+                        color: text_color,
+                        italics,
+                        underline,
+                        ..Default::default()
+                    },
+                });
+            }
+        }
+
+        Some(job)
+    }
+}
+
+fn as_byte_range(whole: &str, range: &str) -> std::ops::Range<usize> {
+    let whole_start = whole.as_ptr() as usize;
+    let range_start = range.as_ptr() as usize;
+    assert!(whole_start <= range_start);
+    assert!(range_start + range.len() <= whole_start + whole.len());
+    let offset = range_start - whole_start;
+    offset..(offset + range.len())
 }
