@@ -1,0 +1,5 @@
+---
+source: tests/type_diffing.rs
+expression: diffed_type
+---
+Error: type not found

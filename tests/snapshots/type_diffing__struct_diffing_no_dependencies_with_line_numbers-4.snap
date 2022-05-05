@@ -1,0 +1,9 @@
+---
+source: tests/type_diffing.rs
+expression: diffed_type
+---
+1   |-
+2   |-struct RemovedStruct { // Size=0x4
+3   |-  /* 0x0000 */ int32_t field;
+4   |-};
+

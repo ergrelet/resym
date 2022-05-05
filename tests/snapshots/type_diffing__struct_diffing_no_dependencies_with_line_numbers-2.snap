@@ -1,0 +1,13 @@
+---
+source: tests/type_diffing.rs
+expression: diffed_type
+---
+1 1 | 
+2   |-struct UserStructRemove { // Size=0x18
+  2 |+struct UserStructRemove { // Size=0x10
+3 3 |   /* 0x0000 */ int32_t field1;
+4   |-  /* 0x0004 */ char field2;
+5 4 |   /* 0x0008 */ void* field3;
+6   |-  /* 0x0010 */ int32_t field4;
+7 5 | };
+

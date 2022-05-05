@@ -1,0 +1,19 @@
+---
+source: tests/type_diffing.rs
+expression: diffed_type
+---
+ 1  1 | 
+ 2    |-struct UserStructAddAndReplace { // Size=0x10
+ 3    |-  /* 0x0000 */ int32_t field1;
+ 4    |-  /* 0x0004 */ char field2;
+ 5    |-  /* 0x0008 */ void* field3;
+    2 |+struct UserStructAddAndReplace { // Size=0x28
+    3 |+  /* 0x0000 */ int32_t before1;
+    4 |+  /* 0x0004 */ int32_t field1;
+    5 |+  /* 0x0008 */ int32_t between12;
+    6 |+  /* 0x000c */ char field2;
+    7 |+  /* 0x0010 */ int32_t between23;
+    8 |+  /* 0x0018 */ void* field3;
+    9 |+  /* 0x0020 */ int32_t after3;
+ 6 10 | };
+
