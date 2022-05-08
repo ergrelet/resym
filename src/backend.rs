@@ -2,10 +2,15 @@ use anyhow::Result;
 use crossbeam_channel::{Receiver, Sender};
 use rayon::{
     iter::{IntoParallelRefIterator, ParallelIterator},
+    slice::ParallelSliceMut,
     ThreadPool,
 };
 
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::PathBuf,
+    sync::Arc,
+};
 
 use crate::{
     diffing::diff_type_by_name, frontend::FrontendCommand, frontend::FrontendController,
@@ -17,12 +22,17 @@ pub type PDBSlot = usize;
 pub enum BackendCommand {
     /// Load a PDB file given its path as a `PathBuf`.
     LoadPDB(PDBSlot, PathBuf),
-    /// Reconstruct a type given its type index.
+    /// Unload a PDB file given its slot.
+    UnloadPDB(PDBSlot),
+    /// Reconstruct a type given its type index for a given PDB.
     ReconstructTypeByIndex(PDBSlot, pdb::TypeIndex, bool, bool, bool),
-    /// Reconstruct a type given its name.
+    /// Reconstruct a type given its name for a given PDB.
     ReconstructTypeByName(PDBSlot, String, bool, bool, bool),
-    /// Retrieve a list of types that match the given filter.
+    /// Retrieve a list of types that match the given filter for a given PDB.
     UpdateTypeFilter(PDBSlot, String, bool, bool),
+    /// Retrieve a list of types that match the given filter for multiple PDBs
+    /// and merge the result.
+    UpdateTypeFilterMerged(Vec<PDBSlot>, String, bool, bool),
     /// Reconstruct a diff of a type given its name.
     DiffTypeByName(PDBSlot, PDBSlot, String, bool, bool, bool),
 }
@@ -78,8 +88,11 @@ fn worker_thread_routine(
             BackendCommand::LoadPDB(pdb_slot, pdb_file_path) => {
                 log::info!("Loading a new PDB file ...");
                 match PdbFile::load_from_file(&pdb_file_path) {
-                    Err(err) => log::error!("Failed to load PDB file: {}", err),
+                    Err(err) => frontend_controller
+                        .send_command(FrontendCommand::LoadPDBResult(Err(err)))?,
                     Ok(loaded_pdb_file) => {
+                        frontend_controller
+                            .send_command(FrontendCommand::LoadPDBResult(Ok(pdb_slot)))?;
                         pdb_files.insert(pdb_slot, loaded_pdb_file);
                         log::info!(
                             "'{}' has been loaded successfully!",
@@ -88,6 +101,15 @@ fn worker_thread_routine(
                     }
                 }
             }
+
+            BackendCommand::UnloadPDB(pdb_slot) => match pdb_files.remove(&pdb_slot) {
+                None => {
+                    log::error!("Trying to unload an inexistent PDB");
+                }
+                Some(pdb_file) => {
+                    log::info!("'{}' has been unloaded.", pdb_file.file_path.display());
+                }
+            },
 
             BackendCommand::ReconstructTypeByIndex(
                 pdb_slot,
@@ -143,10 +165,40 @@ fn worker_thread_routine(
                         &search_filter,
                         case_insensitive_search,
                         use_regex,
+                        true,
                     );
                     frontend_controller
                         .send_command(FrontendCommand::UpdateFilteredTypes(filtered_type_list))?;
                 }
+            }
+
+            BackendCommand::UpdateTypeFilterMerged(
+                pdb_slots,
+                search_filter,
+                case_insensitive_search,
+                use_regex,
+            ) => {
+                let mut filtered_type_set = BTreeSet::default();
+                for pdb_slot in pdb_slots {
+                    if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
+                        let filtered_type_list = update_type_filter_command(
+                            pdb_file,
+                            &search_filter,
+                            case_insensitive_search,
+                            use_regex,
+                            false,
+                        );
+                        filtered_type_set.extend(filtered_type_list.into_iter().map(|(s, _)| {
+                            // Collapse all type indices to `default`. When merging
+                            // type lists, we can only count on type names to
+                            // represent the types.
+                            (s, pdb::TypeIndex::default())
+                        }));
+                    }
+                }
+                frontend_controller.send_command(FrontendCommand::UpdateFilteredTypes(
+                    filtered_type_set.into_iter().collect(),
+                ))?;
             }
 
             BackendCommand::DiffTypeByName(
@@ -260,6 +312,7 @@ fn update_type_filter_command(
     search_filter: &str,
     case_insensitive_search: bool,
     use_regex: bool,
+    sort_by_index: bool,
 ) -> Vec<(String, pdb::TypeIndex)> {
     let filter_start = std::time::Instant::now();
 
@@ -279,9 +332,11 @@ fn update_type_filter_command(
             case_insensitive_search,
         )
     };
-    // Order types by type index, so the order is deterministic
-    // (i.e., independent from DashMap's hash function)
-    filtered_type_list.sort_by(|lhs, rhs| lhs.1.cmp(&rhs.1));
+    if sort_by_index {
+        // Order types by type index, so the order is deterministic
+        // (i.e., independent from DashMap's hash function)
+        filtered_type_list.par_sort_by(|lhs, rhs| lhs.1.cmp(&rhs.1));
+    }
 
     log::debug!(
         "Type filtering took {} ms",

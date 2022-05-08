@@ -1,6 +1,9 @@
 use anyhow::Result;
 
+use crate::backend::PDBSlot;
+
 pub enum FrontendCommand {
+    LoadPDBResult(Result<PDBSlot>),
     UpdateFilteredTypes(Vec<(String, pdb::TypeIndex)>),
     UpdateReconstructedType(String),
 }

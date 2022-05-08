@@ -12,6 +12,7 @@ pub fn diff_type_by_name(
     print_access_specifiers: bool,
     show_line_numbers: bool,
 ) -> String {
+    let diff_start = std::time::Instant::now();
     let reconstructed_type_from = pdb_file_from
         .reconstruct_type_by_name(type_name, reconstruct_dependencies, print_access_specifiers)
         .unwrap_or_default();
@@ -57,6 +58,7 @@ pub fn diff_type_by_name(
             ChangeTag::Insert => "+",
             ChangeTag::Equal => " ",
         };
+        // FIXME: Handle error properly
         let _r = write!(
             &mut output,
             "{}{}{}",
@@ -69,6 +71,7 @@ pub fn diff_type_by_name(
             change
         );
     }
+    log::debug!("Type diffing took {} ms", diff_start.elapsed().as_millis());
 
     output
 }
