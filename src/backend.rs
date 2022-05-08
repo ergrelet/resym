@@ -5,22 +5,26 @@ use rayon::{
     ThreadPool,
 };
 
-use std::{path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
 use crate::{
-    frontend::FrontendCommand, frontend::FrontendController, pdb_file::PdbFile, PKG_NAME,
-    PKG_VERSION,
+    diffing::diff_type_by_name, frontend::FrontendCommand, frontend::FrontendController,
+    pdb_file::PdbFile, PKG_NAME, PKG_VERSION,
 };
+
+pub type PDBSlot = usize;
 
 pub enum BackendCommand {
     /// Load a PDB file given its path as a `PathBuf`.
-    LoadPDB(PathBuf),
+    LoadPDB(PDBSlot, PathBuf),
     /// Reconstruct a type given its type index.
-    ReconstructTypeByIndex(pdb::TypeIndex, bool, bool, bool),
+    ReconstructTypeByIndex(PDBSlot, pdb::TypeIndex, bool, bool, bool),
     /// Reconstruct a type given its name.
-    ReconstructTypeByName(String, bool, bool, bool),
+    ReconstructTypeByName(PDBSlot, String, bool, bool, bool),
     /// Retrieve a list of types that match the given filter.
-    UpdateTypeFilter(String, bool, bool),
+    UpdateTypeFilter(PDBSlot, String, bool, bool),
+    /// Reconstruct a diff of a type given its name.
+    DiffTypeByName(PDBSlot, PDBSlot, String, bool, bool, bool),
 }
 
 /// Struct that represents the backend. The backend is responsible
@@ -68,15 +72,15 @@ fn worker_thread_routine(
     rx_worker: Receiver<BackendCommand>,
     frontend_controller: &impl FrontendController,
 ) -> Result<()> {
-    let mut pdb_file: Option<PdbFile> = None;
+    let mut pdb_files: BTreeMap<PDBSlot, PdbFile> = BTreeMap::new();
     while let Ok(command) = rx_worker.recv() {
         match command {
-            BackendCommand::LoadPDB(pdb_file_path) => {
+            BackendCommand::LoadPDB(pdb_slot, pdb_file_path) => {
                 log::info!("Loading a new PDB file ...");
                 match PdbFile::load_from_file(&pdb_file_path) {
                     Err(err) => log::error!("Failed to load PDB file: {}", err),
                     Ok(loaded_pdb_file) => {
-                        pdb_file = Some(loaded_pdb_file);
+                        pdb_files.insert(pdb_slot, loaded_pdb_file);
                         log::info!(
                             "'{}' has been loaded successfully!",
                             pdb_file_path.display()
@@ -86,12 +90,13 @@ fn worker_thread_routine(
             }
 
             BackendCommand::ReconstructTypeByIndex(
+                pdb_slot,
                 type_index,
                 print_header,
                 reconstruct_dependencies,
                 print_access_specifiers,
             ) => {
-                if let Some(pdb_file) = pdb_file.as_ref() {
+                if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
                     let reconstructed_type = reconstruct_type_by_index_command(
                         pdb_file,
                         type_index,
@@ -106,12 +111,13 @@ fn worker_thread_routine(
             }
 
             BackendCommand::ReconstructTypeByName(
+                pdb_slot,
                 type_name,
                 print_header,
                 reconstruct_dependencies,
                 print_access_specifiers,
             ) => {
-                if let Some(pdb_file) = pdb_file.as_ref() {
+                if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
                     let reconstructed_type = reconstruct_type_by_name_command(
                         pdb_file,
                         &type_name,
@@ -125,8 +131,13 @@ fn worker_thread_routine(
                 }
             }
 
-            BackendCommand::UpdateTypeFilter(search_filter, case_insensitive_search, use_regex) => {
-                if let Some(pdb_file) = pdb_file.as_ref() {
+            BackendCommand::UpdateTypeFilter(
+                pdb_slot,
+                search_filter,
+                case_insensitive_search,
+                use_regex,
+            ) => {
+                if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
                     let filtered_type_list = update_type_filter_command(
                         pdb_file,
                         &search_filter,
@@ -135,6 +146,30 @@ fn worker_thread_routine(
                     );
                     frontend_controller
                         .send_command(FrontendCommand::UpdateFilteredTypes(filtered_type_list))?;
+                }
+            }
+
+            BackendCommand::DiffTypeByName(
+                pdb_from_slot,
+                pdb_to_slot,
+                type_name,
+                reconstruct_dependencies,
+                print_access_specifiers,
+                print_line_numbers,
+            ) => {
+                if let Some(pdb_file_from) = pdb_files.get(&pdb_from_slot) {
+                    if let Some(pdb_file_to) = pdb_files.get(&pdb_to_slot) {
+                        let diffed_type = diff_type_by_name(
+                            pdb_file_from,
+                            pdb_file_to,
+                            &type_name,
+                            reconstruct_dependencies,
+                            print_access_specifiers,
+                            print_line_numbers,
+                        );
+                        frontend_controller
+                            .send_command(FrontendCommand::UpdateReconstructedType(diffed_type))?;
+                    }
                 }
             }
         }

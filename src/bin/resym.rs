@@ -16,11 +16,14 @@ use tinyfiledialogs::open_file_dialog;
 use std::sync::{Arc, RwLock};
 
 use resym::{
-    backend::{Backend, BackendCommand},
+    backend::{Backend, BackendCommand, PDBSlot},
     frontend::{FrontendCommand, FrontendController},
     syntax_highlighting::{self, CodeTheme},
     PKG_NAME, PKG_VERSION,
 };
+
+/// Slot for the single PDB or for the PDB we're diffing from
+const PDB_MAIN_SLOT: PDBSlot = 0;
 
 fn main() -> Result<()> {
     let logger = MemoryLogger::setup(log::Level::Info)?;
@@ -106,6 +109,7 @@ impl epi::App for ResymApp {
                 if ui.text_edit_singleline(&mut self.search_filter).changed() {
                     // Update filtered list if filter has changed
                     let result = self.backend.send_command(BackendCommand::UpdateTypeFilter(
+                        PDB_MAIN_SLOT,
                         self.search_filter.clone(),
                         self.settings.search_case_insensitive,
                         self.settings.search_use_regex,
@@ -190,13 +194,17 @@ impl<'p> ResymApp {
                     ) {
                         if let Err(err) = self
                             .backend
-                            .send_command(BackendCommand::LoadPDB(file_path.into()))
+                            .send_command(BackendCommand::LoadPDB(PDB_MAIN_SLOT, file_path.into()))
                         {
                             log::error!("Failed to load the PDB file: {}", err);
                         } else {
-                            let result = self.backend.send_command(
-                                BackendCommand::UpdateTypeFilter(String::default(), false, false),
-                            );
+                            let result =
+                                self.backend.send_command(BackendCommand::UpdateTypeFilter(
+                                    PDB_MAIN_SLOT,
+                                    String::default(),
+                                    false,
+                                    false,
+                                ));
                             if let Err(err) = result {
                                 log::error!("Failed to update type filter value: {}", err);
                             }
@@ -233,6 +241,7 @@ impl<'p> ResymApp {
                                 self.selected_row = row_index;
                                 let result = self.backend.send_command(
                                     BackendCommand::ReconstructTypeByIndex(
+                                        PDB_MAIN_SLOT,
                                         *type_index,
                                         self.settings.print_header,
                                         self.settings.reconstruct_dependencies,
