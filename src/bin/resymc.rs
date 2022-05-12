@@ -5,14 +5,20 @@ use crossbeam_channel::{Receiver, Sender};
 use structopt::StructOpt;
 use syntect::{
     easy::HighlightLines,
+    highlighting::{Color, Style},
     util::{as_24_bit_terminal_escaped, LinesWithEndings},
 };
 
 use resym::{
-    backend::{Backend, BackendCommand},
+    backend::{Backend, BackendCommand, PDBSlot},
     frontend::{FrontendCommand, FrontendController},
     syntax_highlighting::{self, CodeTheme},
 };
+
+/// Slot for the single PDB or for the PDB we're diffing from
+const PDB_MAIN_SLOT: PDBSlot = 0;
+/// Slot used for the PDB we're diffing to
+const PDB_DIFF_TO_SLOT: PDBSlot = 1;
 
 fn main() -> Result<()> {
     let app = ResymcApp::new()?;
@@ -48,6 +54,27 @@ fn main() -> Result<()> {
             print_dependencies,
             print_access_specifiers,
             highlight_syntax,
+            output_file_path,
+        ),
+        ResymOptions::Diff {
+            from_pdb_path,
+            to_pdb_path,
+            type_name,
+            output_file_path,
+            print_header,
+            print_dependencies,
+            print_access_specifiers,
+            highlight_syntax,
+            print_line_numbers,
+        } => app.diff_type_command(
+            from_pdb_path,
+            to_pdb_path,
+            type_name,
+            print_header,
+            print_dependencies,
+            print_access_specifiers,
+            highlight_syntax,
+            print_line_numbers,
             output_file_path,
         ),
     }
@@ -95,6 +122,32 @@ enum ResymOptions {
         #[structopt(short = "H", long)]
         highlight_syntax: bool,
     },
+    /// Compute diff for a type between two given PDB files
+    Diff {
+        /// Path of the PDB file to compute the diff from
+        from_pdb_path: PathBuf,
+        /// Path of the PDB file to compute the diff to
+        to_pdb_path: PathBuf,
+        /// Name of the type to diff
+        type_name: String,
+        /// Path of the output file
+        output_file_path: Option<PathBuf>,
+        /// Print header
+        #[structopt(short = "h", long)]
+        print_header: bool,
+        /// Print declarations of referenced types
+        #[structopt(short = "d", long)]
+        print_dependencies: bool,
+        /// Print C++ access specifiers
+        #[structopt(short = "a", long)]
+        print_access_specifiers: bool,
+        /// Highlight C++ output and add/deleted lines
+        #[structopt(short = "H", long)]
+        highlight_syntax: bool,
+        /// Print line numbers
+        #[structopt(short = "l", long)]
+        print_line_numbers: bool,
+    },
 }
 
 /// Struct that represents our CLI application.
@@ -127,16 +180,25 @@ impl ResymcApp {
     ) -> Result<()> {
         // Request the backend to load the PDB
         self.backend
-            .send_command(BackendCommand::LoadPDB(pdb_path))?;
+            .send_command(BackendCommand::LoadPDB(PDB_MAIN_SLOT, pdb_path))?;
+        // Wait for the backend to finish loading the PDB
+        if let FrontendCommand::LoadPDBResult(result) = self.frontend_controller.rx_ui.recv()? {
+            if let Err(err) = result {
+                return Err(anyhow!("Failed to load PDB: {}", err));
+            }
+        } else {
+            return Err(anyhow!("Invalid response received from the backend?"));
+        }
+
         // Queue a request for the backend to return the list of types that
         // match the given filter
         self.backend.send_command(BackendCommand::UpdateTypeFilter(
+            PDB_MAIN_SLOT,
             type_name_filter,
             case_insensitive,
             use_regex,
         ))?;
-
-        // Wait for the backend to finish
+        // Wait for the backend to finish filtering types
         if let FrontendCommand::UpdateFilteredTypes(type_list) =
             self.frontend_controller.rx_ui.recv()?
         {
@@ -170,16 +232,109 @@ impl ResymcApp {
     ) -> Result<()> {
         // Request the backend to load the PDB
         self.backend
-            .send_command(BackendCommand::LoadPDB(pdb_path))?;
+            .send_command(BackendCommand::LoadPDB(PDB_MAIN_SLOT, pdb_path))?;
+        // Wait for the backend to finish loading the PDB
+        if let FrontendCommand::LoadPDBResult(result) = self.frontend_controller.rx_ui.recv()? {
+            if let Err(err) = result {
+                return Err(anyhow!("Failed to load PDB: {}", err));
+            }
+        } else {
+            return Err(anyhow!("Invalid response received from the backend?"));
+        }
+
         // Queue a request for the backend to reconstruct the given type
         self.backend
             .send_command(BackendCommand::ReconstructTypeByName(
+                PDB_MAIN_SLOT,
                 type_name,
                 print_header,
                 print_dependencies,
                 print_access_specifiers,
             ))?;
+        // Wait for the backend to finish filtering types
+        if let FrontendCommand::UpdateReconstructedType(reconstructed_type) =
+            self.frontend_controller.rx_ui.recv()?
+        {
+            // Dump output
+            if let Some(output_file_path) = output_file_path {
+                let mut output_file = File::create(output_file_path)?;
+                output_file.write_all(reconstructed_type.as_bytes())?;
+            } else if highlight_syntax {
+                const LANGUAGE_SYNTAX: &str = "cpp";
+                let theme = syntax_highlighting::CodeTheme::dark();
+                if let Some(colorized_reconstructed_type) =
+                    highlight_code(&theme, &reconstructed_type, LANGUAGE_SYNTAX)
+                {
+                    println!("{}", colorized_reconstructed_type);
+                }
+            } else {
+                println!("{}", reconstructed_type);
+            }
+            Ok(())
+        } else {
+            Err(anyhow!("Invalid response received from the backend?"))
+        }
+    }
 
+    #[allow(clippy::too_many_arguments)]
+    fn diff_type_command(
+        &self,
+        from_pdb_path: PathBuf,
+        to_pdb_path: PathBuf,
+        type_name: String,
+        print_header: bool,
+        print_dependencies: bool,
+        print_access_specifiers: bool,
+        highlight_syntax: bool,
+        print_line_numbers: bool,
+        output_file_path: Option<PathBuf>,
+    ) -> Result<()> {
+        // Request the backend to load the first PDB
+        self.backend.send_command(BackendCommand::LoadPDB(
+            PDB_MAIN_SLOT,
+            from_pdb_path.clone(),
+        ))?;
+        // Wait for the backend to finish loading the PDB
+        if let FrontendCommand::LoadPDBResult(result) = self.frontend_controller.rx_ui.recv()? {
+            if let Err(err) = result {
+                return Err(anyhow!(
+                    "Failed to load PDB '{}': {}",
+                    from_pdb_path.display(),
+                    err
+                ));
+            }
+        } else {
+            return Err(anyhow!("Invalid response received from the backend?"));
+        }
+
+        // Request the backend to load the second PDB
+        self.backend.send_command(BackendCommand::LoadPDB(
+            PDB_DIFF_TO_SLOT,
+            to_pdb_path.clone(),
+        ))?;
+        // Wait for the backend to finish loading the PDB
+        if let FrontendCommand::LoadPDBResult(result) = self.frontend_controller.rx_ui.recv()? {
+            if let Err(err) = result {
+                return Err(anyhow!(
+                    "Failed to load PDB '{}': {}",
+                    to_pdb_path.display(),
+                    err
+                ));
+            }
+        } else {
+            return Err(anyhow!("Invalid response received from the backend?"));
+        }
+
+        // Queue a request for the backend to diff the given type
+        self.backend.send_command(BackendCommand::DiffTypeByName(
+            PDB_MAIN_SLOT,
+            PDB_DIFF_TO_SLOT,
+            type_name,
+            print_header,
+            print_dependencies,
+            print_access_specifiers,
+            print_line_numbers,
+        ))?;
         // Wait for the backend to finish
         if let FrontendCommand::UpdateReconstructedType(reconstructed_type) =
             self.frontend_controller.rx_ui.recv()?
@@ -261,14 +416,50 @@ impl CodeHighlighter {
         let mut output = String::default();
         let mut h = HighlightLines::new(syntax, &self.ts.themes[theme]);
         for line in LinesWithEndings::from(code) {
-            let regions = h.highlight(line, &self.ps);
+            let mut regions = h.highlight(line, &self.ps);
+            hightlight_regions_diff(&mut regions);
             let _r = write!(
                 &mut output,
                 "{}",
-                as_24_bit_terminal_escaped(&regions[..], false)
+                as_24_bit_terminal_escaped(&regions[..], true)
             );
         }
 
         Some(output)
     }
+}
+
+/// Changes the background of regions that have been affected in the diff.
+// FIXME: This is really dirty, do better.
+fn hightlight_regions_diff(regions: &mut Vec<(Style, &str)>) {
+    const COLOR_TRANSPARENT: Color = Color {
+        r: 0x00,
+        g: 0x00,
+        b: 0x00,
+        a: 0x00,
+    };
+    const COLOR_RED: Color = Color {
+        r: 0x50,
+        g: 0x10,
+        b: 0x10,
+        a: 0xFF,
+    };
+    const COLOR_GREEN: Color = Color {
+        r: 0x10,
+        g: 0x50,
+        b: 0x10,
+        a: 0xFF,
+    };
+
+    let mut bg_color = COLOR_TRANSPARENT;
+    regions.iter_mut().for_each(|(style, s)| {
+        if *s == "+" {
+            bg_color = COLOR_GREEN;
+        } else if *s == "-" {
+            bg_color = COLOR_RED;
+        } else if *s == "\n" {
+            bg_color = COLOR_TRANSPARENT;
+        }
+        style.background = bg_color;
+    });
 }

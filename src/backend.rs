@@ -2,25 +2,39 @@ use anyhow::Result;
 use crossbeam_channel::{Receiver, Sender};
 use rayon::{
     iter::{IntoParallelRefIterator, ParallelIterator},
+    slice::ParallelSliceMut,
     ThreadPool,
 };
 
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::PathBuf,
+    sync::Arc,
+};
 
 use crate::{
-    frontend::FrontendCommand, frontend::FrontendController, pdb_file::PdbFile, PKG_NAME,
-    PKG_VERSION,
+    diffing::diff_type_by_name, frontend::FrontendCommand, frontend::FrontendController,
+    pdb_file::PdbFile, PKG_NAME, PKG_VERSION,
 };
+
+pub type PDBSlot = usize;
 
 pub enum BackendCommand {
     /// Load a PDB file given its path as a `PathBuf`.
-    LoadPDB(PathBuf),
-    /// Reconstruct a type given its type index.
-    ReconstructTypeByIndex(pdb::TypeIndex, bool, bool, bool),
-    /// Reconstruct a type given its name.
-    ReconstructTypeByName(String, bool, bool, bool),
-    /// Retrieve a list of types that match the given filter.
-    UpdateTypeFilter(String, bool, bool),
+    LoadPDB(PDBSlot, PathBuf),
+    /// Unload a PDB file given its slot.
+    UnloadPDB(PDBSlot),
+    /// Reconstruct a type given its type index for a given PDB.
+    ReconstructTypeByIndex(PDBSlot, pdb::TypeIndex, bool, bool, bool),
+    /// Reconstruct a type given its name for a given PDB.
+    ReconstructTypeByName(PDBSlot, String, bool, bool, bool),
+    /// Retrieve a list of types that match the given filter for a given PDB.
+    UpdateTypeFilter(PDBSlot, String, bool, bool),
+    /// Retrieve a list of types that match the given filter for multiple PDBs
+    /// and merge the result.
+    UpdateTypeFilterMerged(Vec<PDBSlot>, String, bool, bool),
+    /// Reconstruct a diff of a type given its name.
+    DiffTypeByName(PDBSlot, PDBSlot, String, bool, bool, bool, bool),
 }
 
 /// Struct that represents the backend. The backend is responsible
@@ -68,15 +82,18 @@ fn worker_thread_routine(
     rx_worker: Receiver<BackendCommand>,
     frontend_controller: &impl FrontendController,
 ) -> Result<()> {
-    let mut pdb_file: Option<PdbFile> = None;
+    let mut pdb_files: BTreeMap<PDBSlot, PdbFile> = BTreeMap::new();
     while let Ok(command) = rx_worker.recv() {
         match command {
-            BackendCommand::LoadPDB(pdb_file_path) => {
+            BackendCommand::LoadPDB(pdb_slot, pdb_file_path) => {
                 log::info!("Loading a new PDB file ...");
                 match PdbFile::load_from_file(&pdb_file_path) {
-                    Err(err) => log::error!("Failed to load PDB file: {}", err),
+                    Err(err) => frontend_controller
+                        .send_command(FrontendCommand::LoadPDBResult(Err(err)))?,
                     Ok(loaded_pdb_file) => {
-                        pdb_file = Some(loaded_pdb_file);
+                        frontend_controller
+                            .send_command(FrontendCommand::LoadPDBResult(Ok(pdb_slot)))?;
+                        pdb_files.insert(pdb_slot, loaded_pdb_file);
                         log::info!(
                             "'{}' has been loaded successfully!",
                             pdb_file_path.display()
@@ -85,13 +102,23 @@ fn worker_thread_routine(
                 }
             }
 
+            BackendCommand::UnloadPDB(pdb_slot) => match pdb_files.remove(&pdb_slot) {
+                None => {
+                    log::error!("Trying to unload an inexistent PDB");
+                }
+                Some(pdb_file) => {
+                    log::info!("'{}' has been unloaded.", pdb_file.file_path.display());
+                }
+            },
+
             BackendCommand::ReconstructTypeByIndex(
+                pdb_slot,
                 type_index,
                 print_header,
                 reconstruct_dependencies,
                 print_access_specifiers,
             ) => {
-                if let Some(pdb_file) = pdb_file.as_ref() {
+                if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
                     let reconstructed_type = reconstruct_type_by_index_command(
                         pdb_file,
                         type_index,
@@ -106,12 +133,13 @@ fn worker_thread_routine(
             }
 
             BackendCommand::ReconstructTypeByName(
+                pdb_slot,
                 type_name,
                 print_header,
                 reconstruct_dependencies,
                 print_access_specifiers,
             ) => {
-                if let Some(pdb_file) = pdb_file.as_ref() {
+                if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
                     let reconstructed_type = reconstruct_type_by_name_command(
                         pdb_file,
                         &type_name,
@@ -125,16 +153,77 @@ fn worker_thread_routine(
                 }
             }
 
-            BackendCommand::UpdateTypeFilter(search_filter, case_insensitive_search, use_regex) => {
-                if let Some(pdb_file) = pdb_file.as_ref() {
+            BackendCommand::UpdateTypeFilter(
+                pdb_slot,
+                search_filter,
+                case_insensitive_search,
+                use_regex,
+            ) => {
+                if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
                     let filtered_type_list = update_type_filter_command(
                         pdb_file,
                         &search_filter,
                         case_insensitive_search,
                         use_regex,
+                        true,
                     );
                     frontend_controller
                         .send_command(FrontendCommand::UpdateFilteredTypes(filtered_type_list))?;
+                }
+            }
+
+            BackendCommand::UpdateTypeFilterMerged(
+                pdb_slots,
+                search_filter,
+                case_insensitive_search,
+                use_regex,
+            ) => {
+                let mut filtered_type_set = BTreeSet::default();
+                for pdb_slot in pdb_slots {
+                    if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
+                        let filtered_type_list = update_type_filter_command(
+                            pdb_file,
+                            &search_filter,
+                            case_insensitive_search,
+                            use_regex,
+                            false,
+                        );
+                        filtered_type_set.extend(filtered_type_list.into_iter().map(|(s, _)| {
+                            // Collapse all type indices to `default`. When merging
+                            // type lists, we can only count on type names to
+                            // represent the types.
+                            (s, pdb::TypeIndex::default())
+                        }));
+                    }
+                }
+                frontend_controller.send_command(FrontendCommand::UpdateFilteredTypes(
+                    filtered_type_set.into_iter().collect(),
+                ))?;
+            }
+
+            BackendCommand::DiffTypeByName(
+                pdb_from_slot,
+                pdb_to_slot,
+                type_name,
+                print_header,
+                reconstruct_dependencies,
+                print_access_specifiers,
+                print_line_numbers,
+            ) => {
+                if let Some(pdb_file_from) = pdb_files.get(&pdb_from_slot) {
+                    if let Some(pdb_file_to) = pdb_files.get(&pdb_to_slot) {
+                        let diffed_type = diff_type_by_name(
+                            pdb_file_from,
+                            pdb_file_to,
+                            &type_name,
+                            print_header,
+                            reconstruct_dependencies,
+                            print_access_specifiers,
+                            print_line_numbers,
+                        );
+                        frontend_controller
+                            .send_command(FrontendCommand::UpdateReconstructedType(diffed_type))?;
+                    }
                 }
             }
         }
@@ -225,6 +314,7 @@ fn update_type_filter_command(
     search_filter: &str,
     case_insensitive_search: bool,
     use_regex: bool,
+    sort_by_index: bool,
 ) -> Vec<(String, pdb::TypeIndex)> {
     let filter_start = std::time::Instant::now();
 
@@ -244,9 +334,11 @@ fn update_type_filter_command(
             case_insensitive_search,
         )
     };
-    // Order types by type index, so the order is deterministic
-    // (i.e., independent from DashMap's hash function)
-    filtered_type_list.sort_by(|lhs, rhs| lhs.1.cmp(&rhs.1));
+    if sort_by_index {
+        // Order types by type index, so the order is deterministic
+        // (i.e., independent from DashMap's hash function)
+        filtered_type_list.par_sort_by(|lhs, rhs| lhs.1.cmp(&rhs.1));
+    }
 
     log::debug!(
         "Type filtering took {} ms",

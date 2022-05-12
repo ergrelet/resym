@@ -1,4 +1,4 @@
-# resym [![Build Status](https://github.com/ergrelet/resym/workflows/Tests/badge.svg?branch=master)](https://github.com/ergrelet/resym/actions?query=workflow%3ATests) [![rustc 1.59.0](https://img.shields.io/badge/rust-1.59.0%2B-orange.svg)](https://img.shields.io/badge/rust-1.59.0%2B-orange.svg)
+# resym [![Build Status](https://github.com/ergrelet/resym/workflows/Tests/badge.svg?branch=master)](https://github.com/ergrelet/resym/actions?query=workflow%3ATests) [![License](https://img.shields.io/badge/license-Apache--2.0_OR_MIT-blue.svg)](https://img.shields.io/badge/license-Apache--2.0_OR_MIT-blue.svg) [![rustc 1.59.0](https://img.shields.io/badge/rust-1.59.0%2B-orange.svg)](https://img.shields.io/badge/rust-1.59.0%2B-orange.svg)
 
 `resym` is a utility that allows browsing and extracting types from PDB files.
 
@@ -37,7 +37,6 @@ $ ./target/release/resym
 If you want to use the GUI version, simply run the `resym` executable.  
 A CLI version (named `resymc`) is also available:
 ```
-$ ./target/release/resymc
 resymc 0.1.0
 resym is a utility that allows browsing and extracting types from PDB files.
 
@@ -49,7 +48,9 @@ FLAGS:
     -V, --version    Prints version information
 
 SUBCOMMANDS:
+    diff    Compute diff for a type between two given PDB files
     dump    Dump type from a given PDB file
     help    Prints this message or the help of the given subcommand(s)
     list    List types from a given PDB file
+
 ```

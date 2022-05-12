@@ -3,11 +3,10 @@
 use anyhow::{anyhow, Result};
 use crossbeam_channel::{Receiver, Sender};
 use eframe::{
-    egui::{self, Visuals},
+    egui::{self, ScrollArea, TextStyle},
     epaint::text::LayoutJob,
     epi,
 };
-use egui::{ScrollArea, TextStyle};
 use memory_logger::blocking::MemoryLogger;
 use serde::{Deserialize, Serialize};
 use syntect::{easy::HighlightLines, highlighting::FontStyle, util::LinesWithEndings};
@@ -16,11 +15,16 @@ use tinyfiledialogs::open_file_dialog;
 use std::sync::{Arc, RwLock};
 
 use resym::{
-    backend::{Backend, BackendCommand},
+    backend::{Backend, BackendCommand, PDBSlot},
     frontend::{FrontendCommand, FrontendController},
     syntax_highlighting::{self, CodeTheme},
     PKG_NAME, PKG_VERSION,
 };
+
+/// Slot for the single PDB or for the PDB we're diffing from
+const PDB_MAIN_SLOT: PDBSlot = 0;
+/// Slot used for the PDB we're diffing to
+const PDB_DIFF_SLOT: PDBSlot = 1;
 
 fn main() -> Result<()> {
     let logger = MemoryLogger::setup(log::Level::Info)?;
@@ -40,6 +44,7 @@ struct ResymApp {
     console_content: Vec<String>,
     settings_wnd_open: bool,
     settings: ResymAppSettings,
+    current_mode: ResymAppMode,
     frontend_controller: Arc<EguiFrontendController>,
     backend: Backend,
 }
@@ -82,9 +87,9 @@ impl epi::App for ResymApp {
 
         // Update theme
         let theme = if self.settings.use_light_theme {
-            Visuals::light()
+            egui::Visuals::light()
         } else {
-            Visuals::dark()
+            egui::Visuals::dark()
         };
         ctx.set_visuals(theme);
 
@@ -105,11 +110,22 @@ impl epi::App for ResymApp {
 
                 if ui.text_edit_singleline(&mut self.search_filter).changed() {
                     // Update filtered list if filter has changed
-                    let result = self.backend.send_command(BackendCommand::UpdateTypeFilter(
-                        self.search_filter.clone(),
-                        self.settings.search_case_insensitive,
-                        self.settings.search_use_regex,
-                    ));
+                    let result = if self.current_mode == ResymAppMode::Comparing {
+                        self.backend
+                            .send_command(BackendCommand::UpdateTypeFilterMerged(
+                                vec![PDB_MAIN_SLOT, PDB_DIFF_SLOT],
+                                self.search_filter.clone(),
+                                self.settings.search_case_insensitive,
+                                self.settings.search_use_regex,
+                            ))
+                    } else {
+                        self.backend.send_command(BackendCommand::UpdateTypeFilter(
+                            PDB_MAIN_SLOT,
+                            self.search_filter.clone(),
+                            self.settings.search_case_insensitive,
+                            self.settings.search_use_regex,
+                        ))
+                    };
                     if let Err(err) = result {
                         log::error!("Failed to update type filter value: {}", err);
                     }
@@ -135,7 +151,11 @@ impl epi::App for ResymApp {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's
-            ui.label("Reconstructed type(s) - C++");
+            ui.label(if self.current_mode == ResymAppMode::Comparing {
+                "Differences between reconstructed type(s) - C++"
+            } else {
+                "Reconstructed type(s) - C++"
+            });
             ui.add_space(4.0);
 
             self.update_code_view(ui);
@@ -159,6 +179,7 @@ impl<'p> ResymApp {
             console_content: vec![],
             settings_wnd_open: false,
             settings: ResymAppSettings::default(),
+            current_mode: ResymAppMode::Idle,
             frontend_controller,
             backend,
         })
@@ -167,6 +188,55 @@ impl<'p> ResymApp {
     fn process_ui_commands(&mut self) {
         while let Ok(cmd) = self.frontend_controller.rx_ui.try_recv() {
             match cmd {
+                FrontendCommand::LoadPDBResult(result) => match result {
+                    Err(err) => {
+                        log::error!("Failed to load PDB file: {}", err);
+                    }
+                    Ok(pdb_slot) => {
+                        if pdb_slot == PDB_MAIN_SLOT {
+                            // Unload the PDB used for diffing if one is loaded
+                            if self.current_mode == ResymAppMode::Comparing {
+                                if let Err(err) = self
+                                    .backend
+                                    .send_command(BackendCommand::UnloadPDB(PDB_DIFF_SLOT))
+                                {
+                                    log::error!(
+                                        "Failed to unload the PDB used for comparison: {}",
+                                        err
+                                    );
+                                }
+                            }
+
+                            self.current_mode = ResymAppMode::Browsing;
+                            // Request a type list update
+                            if let Err(err) =
+                                self.backend.send_command(BackendCommand::UpdateTypeFilter(
+                                    PDB_MAIN_SLOT,
+                                    String::default(),
+                                    false,
+                                    false,
+                                ))
+                            {
+                                log::error!("Failed to update type filter value: {}", err);
+                            }
+                        } else if pdb_slot == PDB_DIFF_SLOT {
+                            self.current_mode = ResymAppMode::Comparing;
+                            // Request a type list update
+                            if let Err(err) =
+                                self.backend
+                                    .send_command(BackendCommand::UpdateTypeFilterMerged(
+                                        vec![PDB_MAIN_SLOT, PDB_DIFF_SLOT],
+                                        String::default(),
+                                        false,
+                                        false,
+                                    ))
+                            {
+                                log::error!("Failed to update type filter value: {}", err);
+                            }
+                        }
+                    }
+                },
+
                 FrontendCommand::UpdateReconstructedType(data) => {
                     self.reconstructed_type_content = data;
                 }
@@ -183,23 +253,28 @@ impl<'p> ResymApp {
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| {
                 if ui.button("Open PDB file").clicked() {
-                    if let Some(file_path) = open_file_dialog(
-                        "Select a PDB file",
-                        "",
-                        Some((&["*.pdb"], "PDB files (*.pdb)")),
-                    ) {
+                    if let Some(file_path) = Self::select_pdb_file() {
                         if let Err(err) = self
                             .backend
-                            .send_command(BackendCommand::LoadPDB(file_path.into()))
+                            .send_command(BackendCommand::LoadPDB(PDB_MAIN_SLOT, file_path.into()))
                         {
                             log::error!("Failed to load the PDB file: {}", err);
-                        } else {
-                            let result = self.backend.send_command(
-                                BackendCommand::UpdateTypeFilter(String::default(), false, false),
-                            );
-                            if let Err(err) = result {
-                                log::error!("Failed to update type filter value: {}", err);
-                            }
+                        }
+                    }
+                }
+                if ui
+                    .add_enabled(
+                        self.current_mode == ResymAppMode::Browsing,
+                        egui::Button::new("Compare with..."),
+                    )
+                    .clicked()
+                {
+                    if let Some(file_path) = Self::select_pdb_file() {
+                        if let Err(err) = self
+                            .backend
+                            .send_command(BackendCommand::LoadPDB(PDB_DIFF_SLOT, file_path.into()))
+                        {
+                            log::error!("Failed to load the PDB file: {}", err);
                         }
                     }
                 }
@@ -231,16 +306,36 @@ impl<'p> ResymApp {
                                 .clicked()
                             {
                                 self.selected_row = row_index;
-                                let result = self.backend.send_command(
-                                    BackendCommand::ReconstructTypeByIndex(
-                                        *type_index,
-                                        self.settings.print_header,
-                                        self.settings.reconstruct_dependencies,
-                                        self.settings.print_access_specifiers,
-                                    ),
-                                );
-                                if let Err(err) = result {
-                                    log::error!("Failed to reconstruct type: {}", err);
+                                match self.current_mode {
+                                    ResymAppMode::Browsing => {
+                                        if let Err(err) = self.backend.send_command(
+                                            BackendCommand::ReconstructTypeByIndex(
+                                                PDB_MAIN_SLOT,
+                                                *type_index,
+                                                self.settings.print_header,
+                                                self.settings.reconstruct_dependencies,
+                                                self.settings.print_access_specifiers,
+                                            ),
+                                        ) {
+                                            log::error!("Failed to reconstruct type: {}", err);
+                                        }
+                                    }
+                                    ResymAppMode::Comparing => {
+                                        if let Err(err) = self.backend.send_command(
+                                            BackendCommand::DiffTypeByName(
+                                                PDB_MAIN_SLOT,
+                                                PDB_DIFF_SLOT,
+                                                type_name.clone(),
+                                                self.settings.print_header,
+                                                self.settings.reconstruct_dependencies,
+                                                self.settings.print_access_specifiers,
+                                                self.settings.print_line_numbers,
+                                            ),
+                                        ) {
+                                            log::error!("Failed to reconstruct type diff: {}", err);
+                                        }
+                                    }
+                                    _ => log::error!("Invalid application state"),
                                 }
                             }
                         }
@@ -343,7 +438,19 @@ impl<'p> ResymApp {
                     &mut self.settings.print_access_specifiers,
                     "Print access specifiers",
                 );
+                ui.add_space(5.0);
+
+                ui.label("Diffing");
+                ui.checkbox(&mut self.settings.print_line_numbers, "Print line numbers");
             });
+    }
+
+    fn select_pdb_file() -> Option<String> {
+        open_file_dialog(
+            "Select a PDB file",
+            "",
+            Some((&["*.pdb"], "PDB files (*.pdb)")),
+        )
     }
 }
 
@@ -357,6 +464,7 @@ struct ResymAppSettings {
     print_header: bool,
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
+    print_line_numbers: bool,
 }
 
 impl Default for ResymAppSettings {
@@ -369,8 +477,16 @@ impl Default for ResymAppSettings {
             print_header: true,
             reconstruct_dependencies: true,
             print_access_specifiers: true,
+            print_line_numbers: false,
         }
     }
+}
+
+#[derive(PartialEq)]
+enum ResymAppMode {
+    Idle,
+    Browsing,
+    Comparing,
 }
 
 /// This struct enables the backend to communicate with us (the frontend)
@@ -477,7 +593,18 @@ impl CodeHighlighter {
         };
 
         for line in LinesWithEndings::from(text) {
+            let mut bg_color = egui::Color32::TRANSPARENT;
             for (style, range) in h.highlight(line, &self.ps) {
+                // Change the background of regions that have been affected in the diff.
+                // FIXME: This is really dirty, do better.
+                if range == "+" {
+                    bg_color = egui::Color32::DARK_GREEN;
+                } else if range == "-" {
+                    bg_color = egui::Color32::DARK_RED;
+                } else if range == "\n" {
+                    bg_color = egui::Color32::TRANSPARENT;
+                }
+
                 let fg = style.foreground;
                 let text_color = egui::Color32::from_rgb(fg.r, fg.g, fg.b);
                 let italics = style.font_style.contains(FontStyle::ITALIC);
@@ -491,6 +618,7 @@ impl CodeHighlighter {
                     leading_space: 0.0,
                     byte_range: as_byte_range(text, range),
                     format: TextFormat {
+                        background: bg_color,
                         font_id: egui::FontId::monospace(14.0),
                         color: text_color,
                         italics,

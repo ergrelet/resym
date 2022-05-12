@@ -1,4 +1,5 @@
 pub mod backend;
+pub mod diffing;
 pub mod frontend;
 pub mod pdb_file;
 pub mod pdb_types;

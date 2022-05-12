@@ -151,7 +151,13 @@ impl<'p> PdbFile<'p> {
                                 continue;
                             }
 
-                            if data.name.to_string() == type_name {
+                            // Rename anonymous tags to something unique
+                            let class_name = data.name.to_string();
+                            if is_unnamed_type(&class_name) {
+                                if type_name == format!("_unnamed_{}", item_type_index) {
+                                    type_index = item_type_index;
+                                }
+                            } else if class_name == type_name {
                                 type_index = item_type_index;
                             } else if let Some(unique_name) = data.unique_name {
                                 if unique_name.to_string() == type_name {
@@ -165,7 +171,13 @@ impl<'p> PdbFile<'p> {
                                 continue;
                             }
 
-                            if data.name.to_string() == type_name {
+                            // Rename anonymous tags to something unique
+                            let union_name = data.name.to_string();
+                            if is_unnamed_type(&union_name) {
+                                if type_name == format!("_unnamed_{}", item_type_index) {
+                                    type_index = item_type_index;
+                                }
+                            } else if data.name.to_string() == type_name {
                                 type_index = item_type_index;
                             } else if let Some(unique_name) = data.unique_name {
                                 if unique_name.to_string() == type_name {
@@ -179,7 +191,13 @@ impl<'p> PdbFile<'p> {
                                 continue;
                             }
 
-                            if data.name.to_string() == type_name {
+                            // Rename anonymous tags to something unique
+                            let enum_name = data.name.to_string();
+                            if is_unnamed_type(&enum_name) {
+                                if type_name == format!("_unnamed_{}", item_type_index) {
+                                    type_index = item_type_index;
+                                }
+                            } else if data.name.to_string() == type_name {
                                 type_index = item_type_index;
                             } else if let Some(unique_name) = data.unique_name {
                                 if unique_name.to_string() == type_name {

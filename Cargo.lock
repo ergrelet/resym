@@ -1958,6 +1958,7 @@ dependencies = [
  "rayon",
  "regex",
  "serde",
+ "similar",
  "structopt",
  "syntect",
  "tinyfiledialogs",
