@@ -9,11 +9,13 @@ use syntect::{
     util::{as_24_bit_terminal_escaped, LinesWithEndings},
 };
 
-use resym::{
+use resym_core::{
     backend::{Backend, BackendCommand, PDBSlot},
     frontend::{FrontendCommand, FrontendController},
     syntax_highlighting::{self, CodeTheme},
 };
+
+const PKG_NAME: &str = env!("CARGO_PKG_NAME");
 
 /// Slot for the single PDB or for the PDB we're diffing from
 const PDB_MAIN_SLOT: PDBSlot = 0;
@@ -82,7 +84,7 @@ fn main() -> Result<()> {
 
 #[derive(Debug, StructOpt)]
 #[structopt(
-    name = "resymc",
+    name = PKG_NAME,
     about = "resym is a utility that allows browsing and extracting types from PDB files."
 )]
 enum ResymOptions {

@@ -1,0 +1,22 @@
+[package]
+name = "resym_core"
+version = "0.1.0"
+edition = "2021"
+exclude = [
+    "tests/data/*",
+    "tests/snapshots/*",
+]
+
+[dependencies]
+pdb = "0.7"
+anyhow = "1.0"
+log = "0.4"
+rayon = "1.5"
+crossbeam-channel = "0.5"
+num_cpus = "1.13"
+dashmap = { version = "5.2", features = ["rayon"] }
+regex = "1.5"
+similar = "2.1"
+
+[dev-dependencies]
+insta = "1.14"

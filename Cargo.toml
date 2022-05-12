@@ -1,29 +1,5 @@
-[package]
-name = "resym"
-version = "0.1.0"
-edition = "2021"
-exclude = [
-    "tests/data/*",
-    "tests/snapshots/*",
-]
+[profile.release]
+lto = true
 
-[dependencies]
-eframe = { version = "0.17", features = ["persistence"] }
-epi = { version = "0.17", features = ["persistence"] }
-pdb = "0.7"
-tinyfiledialogs = "3.0"
-anyhow = "1.0"
-log = "0.4"
-memory_logger = { version = "0.1", features = ["blocking"] }
-rayon = "1.5"
-crossbeam-channel = "0.5"
-num_cpus = "1.13"
-dashmap = { version = "5.2", features = ["rayon"] }
-serde = "1.0"
-regex = "1.5"
-structopt = { version = "0.3", default-features = false }
-syntect = "4.6"
-similar = "2.1"
-
-[dev-dependencies]
-insta = "1.14"
+[workspace]
+members = ["resym_core", "resym", "resymc"]

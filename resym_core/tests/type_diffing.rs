@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use resym::{diffing::diff_type_by_name, pdb_file::PdbFile};
+use resym_core::{diffing::diff_type_by_name, pdb_file::PdbFile};
 
 const TEST_PDB_FROM_FILE_PATH: &str = "tests/data/test_diff_from.pdb";
 const TEST_PDB_TO_FILE_PATH: &str = "tests/data/test_diff_to.pdb";

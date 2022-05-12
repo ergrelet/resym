@@ -1,0 +1,18 @@
+[package]
+name = "resym"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+resym_core = { version = "0.1", path = "../resym_core" }
+
+eframe = { version = "0.17", features = ["persistence"] }
+epi = { version = "0.17", features = ["persistence"] }
+tinyfiledialogs = "3.0"
+pdb = "0.7"
+serde = "1.0"
+syntect = "4.6"
+anyhow = "1.0"
+log = "0.4"
+memory_logger = { version = "0.1", features = ["blocking"] }
+crossbeam-channel = "0.5"

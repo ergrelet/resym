@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use resym::pdb_file::PdbFile;
+use resym_core::pdb_file::PdbFile;
 
 const TEST_PDB_FILE_PATH: &str = "tests/data/test.pdb";
 const TEST_CASES: &[&str] = &[

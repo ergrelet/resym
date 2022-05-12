@@ -14,12 +14,14 @@ use tinyfiledialogs::open_file_dialog;
 
 use std::sync::{Arc, RwLock};
 
-use resym::{
+use resym_core::{
     backend::{Backend, BackendCommand, PDBSlot},
     frontend::{FrontendCommand, FrontendController},
     syntax_highlighting::{self, CodeTheme},
-    PKG_NAME, PKG_VERSION,
 };
+
+const PKG_NAME: &str = env!("CARGO_PKG_NAME");
+const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Slot for the single PDB or for the PDB we're diffing from
 const PDB_MAIN_SLOT: PDBSlot = 0;
