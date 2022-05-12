@@ -181,6 +181,15 @@ impl ResymcApp {
         // Request the backend to load the PDB
         self.backend
             .send_command(BackendCommand::LoadPDB(PDB_MAIN_SLOT, pdb_path))?;
+        // Wait for the backend to finish loading the PDB
+        if let FrontendCommand::LoadPDBResult(result) = self.frontend_controller.rx_ui.recv()? {
+            if let Err(err) = result {
+                return Err(anyhow!("Failed to load PDB: {}", err));
+            }
+        } else {
+            return Err(anyhow!("Invalid response received from the backend?"));
+        }
+
         // Queue a request for the backend to return the list of types that
         // match the given filter
         self.backend.send_command(BackendCommand::UpdateTypeFilter(
@@ -189,8 +198,7 @@ impl ResymcApp {
             case_insensitive,
             use_regex,
         ))?;
-
-        // Wait for the backend to finish
+        // Wait for the backend to finish filtering types
         if let FrontendCommand::UpdateFilteredTypes(type_list) =
             self.frontend_controller.rx_ui.recv()?
         {
@@ -225,6 +233,15 @@ impl ResymcApp {
         // Request the backend to load the PDB
         self.backend
             .send_command(BackendCommand::LoadPDB(PDB_MAIN_SLOT, pdb_path))?;
+        // Wait for the backend to finish loading the PDB
+        if let FrontendCommand::LoadPDBResult(result) = self.frontend_controller.rx_ui.recv()? {
+            if let Err(err) = result {
+                return Err(anyhow!("Failed to load PDB: {}", err));
+            }
+        } else {
+            return Err(anyhow!("Invalid response received from the backend?"));
+        }
+
         // Queue a request for the backend to reconstruct the given type
         self.backend
             .send_command(BackendCommand::ReconstructTypeByName(
@@ -234,8 +251,7 @@ impl ResymcApp {
                 print_dependencies,
                 print_access_specifiers,
             ))?;
-
-        // Wait for the backend to finish
+        // Wait for the backend to finish filtering types
         if let FrontendCommand::UpdateReconstructedType(reconstructed_type) =
             self.frontend_controller.rx_ui.recv()?
         {
@@ -273,11 +289,41 @@ impl ResymcApp {
         print_line_numbers: bool,
         output_file_path: Option<PathBuf>,
     ) -> Result<()> {
-        // Request the backend to load the PDBs
-        self.backend
-            .send_command(BackendCommand::LoadPDB(PDB_MAIN_SLOT, from_pdb_path))?;
-        self.backend
-            .send_command(BackendCommand::LoadPDB(PDB_DIFF_TO_SLOT, to_pdb_path))?;
+        // Request the backend to load the first PDB
+        self.backend.send_command(BackendCommand::LoadPDB(
+            PDB_MAIN_SLOT,
+            from_pdb_path.clone(),
+        ))?;
+        // Wait for the backend to finish loading the PDB
+        if let FrontendCommand::LoadPDBResult(result) = self.frontend_controller.rx_ui.recv()? {
+            if let Err(err) = result {
+                return Err(anyhow!(
+                    "Failed to load PDB '{}': {}",
+                    from_pdb_path.display(),
+                    err
+                ));
+            }
+        } else {
+            return Err(anyhow!("Invalid response received from the backend?"));
+        }
+
+        // Request the backend to load the second PDB
+        self.backend.send_command(BackendCommand::LoadPDB(
+            PDB_DIFF_TO_SLOT,
+            to_pdb_path.clone(),
+        ))?;
+        // Wait for the backend to finish loading the PDB
+        if let FrontendCommand::LoadPDBResult(result) = self.frontend_controller.rx_ui.recv()? {
+            if let Err(err) = result {
+                return Err(anyhow!(
+                    "Failed to load PDB '{}': {}",
+                    to_pdb_path.display(),
+                    err
+                ));
+            }
+        } else {
+            return Err(anyhow!("Invalid response received from the backend?"));
+        }
 
         // Queue a request for the backend to diff the given type
         self.backend.send_command(BackendCommand::DiffTypeByName(
@@ -289,7 +335,6 @@ impl ResymcApp {
             print_access_specifiers,
             print_line_numbers,
         ))?;
-
         // Wait for the backend to finish
         if let FrontendCommand::UpdateReconstructedType(reconstructed_type) =
             self.frontend_controller.rx_ui.recv()?
