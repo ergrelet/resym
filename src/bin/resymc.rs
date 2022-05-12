@@ -122,7 +122,7 @@ enum ResymOptions {
         #[structopt(short = "H", long)]
         highlight_syntax: bool,
     },
-    /// Compute diff for a type from the given PDB files
+    /// Compute diff for a type between two given PDB files
     Diff {
         /// Path of the PDB file to compute the diff from
         from_pdb_path: PathBuf,
