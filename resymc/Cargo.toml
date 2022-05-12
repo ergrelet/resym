@@ -7,7 +7,7 @@ edition = "2021"
 resym_core = { version = "0.1", path = "../resym_core" }
 
 structopt = { version = "0.3", default-features = false }
-syntect = "4.6"
+syntect = "5.0"
 anyhow = "1.0"
 log = "0.4"
 crossbeam-channel = "0.5"

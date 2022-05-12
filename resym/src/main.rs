@@ -596,7 +596,7 @@ impl CodeHighlighter {
 
         for line in LinesWithEndings::from(text) {
             let mut bg_color = egui::Color32::TRANSPARENT;
-            for (style, range) in h.highlight(line, &self.ps) {
+            for (style, range) in h.highlight_line(line, &self.ps).ok()? {
                 // Change the background of regions that have been affected in the diff.
                 // FIXME: This is really dirty, do better.
                 if range == "+" {

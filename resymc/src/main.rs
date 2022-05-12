@@ -418,7 +418,7 @@ impl CodeHighlighter {
         let mut output = String::default();
         let mut h = HighlightLines::new(syntax, &self.ts.themes[theme]);
         for line in LinesWithEndings::from(code) {
-            let mut regions = h.highlight(line, &self.ps);
+            let mut regions = h.highlight_line(line, &self.ps).ok()?;
             hightlight_regions_diff(&mut regions);
             let _r = write!(
                 &mut output,
