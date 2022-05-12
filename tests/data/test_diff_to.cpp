@@ -1,3 +1,7 @@
+struct NewStruct {
+  int field;
+};
+
 struct UserStructAddAndReplace {
   int before1;
   int field1;
@@ -21,6 +25,7 @@ struct UserStructAdd {
 };
 
 int main() {
+  NewStruct new_struct{};
   UserStructAddAndReplace user_struct_add_and_replace{};
   UserStructRemove user_struct_remove{};
   UserStructAdd user_struct_add{};

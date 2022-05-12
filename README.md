@@ -10,6 +10,7 @@ Inspired by [PDBRipper](https://github.com/horsicq/PDBRipper) and
 * Cross-platform
 * GUI and CLI versions available
 * C and C++ types reconstruction
+* C and C++ types diff generation (between two PDBs)
 * Decent performance, even on huge PDB files
 
 ## Why Another PDB Dumper?

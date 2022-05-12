@@ -1,3 +1,7 @@
+struct RemovedStruct {
+  int field;
+};
+
 struct UserStructAddAndReplace {
   int field1;
   char field2;
@@ -17,6 +21,7 @@ struct UserStructAdd {
 };
 
 int main() {
+  RemovedStruct removed_struct{};
   UserStructAddAndReplace user_struct_add_and_replace{};
   UserStructRemove user_struct_remove{};
   UserStructAdd user_struct_add{};
