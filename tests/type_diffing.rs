@@ -28,6 +28,7 @@ fn test_struct_diffing_no_dependencies_without_line_numbers() {
             false,
             false,
             false,
+            false,
         );
         insta::assert_snapshot!(diffed_type);
     }
@@ -45,6 +46,7 @@ fn test_struct_diffing_no_dependencies_with_line_numbers() {
             &pdb_file_from,
             &pdb_file_to,
             test_case_type_name,
+            false,
             false,
             false,
             true,

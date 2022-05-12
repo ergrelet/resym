@@ -2,12 +2,13 @@ use similar::{ChangeTag, TextDiff};
 
 use std::fmt::Write;
 
-use crate::pdb_file::PdbFile;
+use crate::{pdb_file::PdbFile, PKG_NAME, PKG_VERSION};
 
 pub fn diff_type_by_name(
     pdb_file_from: &PdbFile,
     pdb_file_to: &PdbFile,
     type_name: &str,
+    print_header: bool,
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
     show_line_numbers: bool,
@@ -26,6 +27,15 @@ pub fn diff_type_by_name(
 
     // Diff reconstructed reprensentations
     let mut output = String::default();
+    if print_header {
+        // FIXME: Handle error properly
+        let _r = write!(
+            &mut output,
+            "{}",
+            generate_diff_header(pdb_file_from, pdb_file_to)
+        );
+    }
+
     let reconstructed_type_diff =
         TextDiff::from_lines(&reconstructed_type_from, &reconstructed_type_to);
 
@@ -74,6 +84,30 @@ pub fn diff_type_by_name(
     log::debug!("Type diffing took {} ms", diff_start.elapsed().as_millis());
 
     output
+}
+
+fn generate_diff_header(pdb_file_from: &PdbFile, pdb_file_to: &PdbFile) -> String {
+    format!(
+        concat!(
+            "//\n",
+            "// Showing differences between two PDB files:\n",
+            "//\n",
+            "// Reference PDB file: {}\n",
+            "// Image architecture: {}\n",
+            "//\n",
+            "// New PDB file: {}\n",
+            "// Image architecture: {}\n",
+            "//\n",
+            "// Information extracted with {} v{}\n",
+            "//\n\n"
+        ),
+        pdb_file_from.file_path.display(),
+        pdb_file_from.machine_type,
+        pdb_file_to.file_path.display(),
+        pdb_file_to.machine_type,
+        PKG_NAME,
+        PKG_VERSION,
+    )
 }
 
 // FIXME: Replace with `checked_log10` once it's stabilized.

@@ -34,7 +34,7 @@ pub enum BackendCommand {
     /// and merge the result.
     UpdateTypeFilterMerged(Vec<PDBSlot>, String, bool, bool),
     /// Reconstruct a diff of a type given its name.
-    DiffTypeByName(PDBSlot, PDBSlot, String, bool, bool, bool),
+    DiffTypeByName(PDBSlot, PDBSlot, String, bool, bool, bool, bool),
 }
 
 /// Struct that represents the backend. The backend is responsible
@@ -205,6 +205,7 @@ fn worker_thread_routine(
                 pdb_from_slot,
                 pdb_to_slot,
                 type_name,
+                print_header,
                 reconstruct_dependencies,
                 print_access_specifiers,
                 print_line_numbers,
@@ -215,6 +216,7 @@ fn worker_thread_routine(
                             pdb_file_from,
                             pdb_file_to,
                             &type_name,
+                            print_header,
                             reconstruct_dependencies,
                             print_access_specifiers,
                             print_line_numbers,

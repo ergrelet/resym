@@ -61,6 +61,7 @@ fn main() -> Result<()> {
             to_pdb_path,
             type_name,
             output_file_path,
+            print_header,
             print_dependencies,
             print_access_specifiers,
             highlight_syntax,
@@ -69,6 +70,7 @@ fn main() -> Result<()> {
             from_pdb_path,
             to_pdb_path,
             type_name,
+            print_header,
             print_dependencies,
             print_access_specifiers,
             highlight_syntax,
@@ -130,6 +132,9 @@ enum ResymOptions {
         type_name: String,
         /// Path of the output file
         output_file_path: Option<PathBuf>,
+        /// Print header
+        #[structopt(short = "h", long)]
+        print_header: bool,
         /// Print declarations of referenced types
         #[structopt(short = "d", long)]
         print_dependencies: bool,
@@ -261,6 +266,7 @@ impl ResymcApp {
         from_pdb_path: PathBuf,
         to_pdb_path: PathBuf,
         type_name: String,
+        print_header: bool,
         print_dependencies: bool,
         print_access_specifiers: bool,
         highlight_syntax: bool,
@@ -278,6 +284,7 @@ impl ResymcApp {
             PDB_MAIN_SLOT,
             PDB_DIFF_TO_SLOT,
             type_name,
+            print_header,
             print_dependencies,
             print_access_specifiers,
             print_line_numbers,

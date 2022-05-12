@@ -326,6 +326,7 @@ impl<'p> ResymApp {
                                                 PDB_MAIN_SLOT,
                                                 PDB_DIFF_SLOT,
                                                 type_name.clone(),
+                                                self.settings.print_header,
                                                 self.settings.reconstruct_dependencies,
                                                 self.settings.print_access_specifiers,
                                                 self.settings.print_line_numbers,
