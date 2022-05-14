@@ -280,9 +280,9 @@ impl<'p> PdbFile<'p> {
         let mut processed_types = BTreeSet::from([type_index]);
         let dep_start = std::time::Instant::now();
         loop {
-            // Get the last element in needed_types without holding an immutable borrow
-            let last = needed_types.difference(&processed_types).last().copied();
-            match last {
+            // Get the first element in needed_types without holding an immutable borrow
+            let first = needed_types.difference(&processed_types).next().copied();
+            match first {
                 None => break,
                 Some(needed_type_index) => {
                     // Add the type

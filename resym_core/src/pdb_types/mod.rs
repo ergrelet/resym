@@ -4,9 +4,9 @@ mod field;
 mod method;
 mod union;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
-use std::{collections::BTreeSet, ops::Range};
+use std::ops::Range;
 
 use anyhow::{anyhow, Result};
 
