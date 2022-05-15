@@ -16,7 +16,7 @@ use std::sync::{Arc, RwLock};
 
 use resym_core::{
     backend::{Backend, BackendCommand, PDBSlot},
-    frontend::{FrontendCommand, FrontendController},
+    frontend::{FrontendCommand, FrontendController, TypeList},
     syntax_highlighting::{self, CodeTheme},
 };
 
@@ -39,7 +39,7 @@ fn main() -> Result<()> {
 /// It contains the whole application's context at all time.
 struct ResymApp {
     logger: &'static MemoryLogger,
-    filtered_type_list: Vec<(String, pdb::TypeIndex)>,
+    filtered_type_list: TypeList,
     selected_row: usize,
     search_filter: String,
     reconstructed_type_content: String,
