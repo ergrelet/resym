@@ -65,7 +65,6 @@ fn main() -> Result<()> {
             print_dependencies,
             print_access_specifiers,
             highlight_syntax,
-            print_line_numbers,
         } => app.diff_type_command(
             from_pdb_path,
             to_pdb_path,
@@ -74,7 +73,6 @@ fn main() -> Result<()> {
             print_dependencies,
             print_access_specifiers,
             highlight_syntax,
-            print_line_numbers,
             output_file_path,
         ),
     }
@@ -144,9 +142,6 @@ enum ResymOptions {
         /// Highlight C++ output and add/deleted lines
         #[structopt(short = "H", long)]
         highlight_syntax: bool,
-        /// Print line numbers
-        #[structopt(short = "l", long)]
-        print_line_numbers: bool,
     },
 }
 
@@ -263,7 +258,7 @@ impl ResymcApp {
                 const LANGUAGE_SYNTAX: &str = "cpp";
                 let theme = CodeTheme::dark();
                 if let Some(colorized_reconstructed_type) =
-                    highlight_code(&theme, &reconstructed_type, LANGUAGE_SYNTAX)
+                    highlight_code(&theme, &reconstructed_type, LANGUAGE_SYNTAX, None)
                 {
                     println!("{}", colorized_reconstructed_type);
                 }
@@ -286,7 +281,6 @@ impl ResymcApp {
         print_dependencies: bool,
         print_access_specifiers: bool,
         highlight_syntax: bool,
-        print_line_numbers: bool,
         output_file_path: Option<PathBuf>,
     ) -> Result<()> {
         // Request the backend to load the first PDB
@@ -333,26 +327,36 @@ impl ResymcApp {
             print_header,
             print_dependencies,
             print_access_specifiers,
-            print_line_numbers,
         ))?;
         // Wait for the backend to finish
-        if let FrontendCommand::UpdateReconstructedType(reconstructed_type) =
+        if let FrontendCommand::UpdateReconstructedTypeDiff(reconstructed_type_diff) =
             self.frontend_controller.rx_ui.recv()?
         {
             // Dump output
             if let Some(output_file_path) = output_file_path {
                 let mut output_file = File::create(output_file_path)?;
-                output_file.write_all(reconstructed_type.as_bytes())?;
+                output_file.write_all(reconstructed_type_diff.data.as_bytes())?;
             } else if highlight_syntax {
                 const LANGUAGE_SYNTAX: &str = "cpp";
                 let theme = CodeTheme::dark();
-                if let Some(colorized_reconstructed_type) =
-                    highlight_code(&theme, &reconstructed_type, LANGUAGE_SYNTAX)
-                {
+                let line_descriptions =
+                    reconstructed_type_diff
+                        .metadata
+                        .iter()
+                        .fold(vec![], |mut acc, e| {
+                            acc.push(e.1);
+                            acc
+                        });
+                if let Some(colorized_reconstructed_type) = highlight_code(
+                    &theme,
+                    &reconstructed_type_diff.data,
+                    LANGUAGE_SYNTAX,
+                    Some(line_descriptions),
+                ) {
                     println!("{}", colorized_reconstructed_type);
                 }
             } else {
-                println!("{}", reconstructed_type);
+                println!("{}", reconstructed_type_diff.data);
             }
             Ok(())
         } else {

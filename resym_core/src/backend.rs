@@ -14,7 +14,7 @@ use std::{
 
 use crate::{
     diffing::diff_type_by_name, frontend::FrontendCommand, frontend::FrontendController,
-    pdb_file::PdbFile, PKG_NAME, PKG_VERSION,
+    pdb_file::PdbFile, PKG_VERSION,
 };
 
 pub type PDBSlot = usize;
@@ -34,7 +34,7 @@ pub enum BackendCommand {
     /// and merge the result.
     UpdateTypeFilterMerged(Vec<PDBSlot>, String, bool, bool),
     /// Reconstruct a diff of a type given its name.
-    DiffTypeByName(PDBSlot, PDBSlot, String, bool, bool, bool, bool),
+    DiffTypeByName(PDBSlot, PDBSlot, String, bool, bool, bool),
 }
 
 /// Struct that represents the backend. The backend is responsible
@@ -208,21 +208,20 @@ fn worker_thread_routine(
                 print_header,
                 reconstruct_dependencies,
                 print_access_specifiers,
-                print_line_numbers,
             ) => {
                 if let Some(pdb_file_from) = pdb_files.get(&pdb_from_slot) {
                     if let Some(pdb_file_to) = pdb_files.get(&pdb_to_slot) {
-                        let diffed_type = diff_type_by_name(
+                        let type_diff = diff_type_by_name(
                             pdb_file_from,
                             pdb_file_to,
                             &type_name,
                             print_header,
                             reconstruct_dependencies,
                             print_access_specifiers,
-                            print_line_numbers,
-                        );
-                        frontend_controller
-                            .send_command(FrontendCommand::UpdateReconstructedType(diffed_type))?;
+                        )?;
+                        frontend_controller.send_command(
+                            FrontendCommand::UpdateReconstructedTypeDiff(type_diff),
+                        )?;
                     }
                 }
             }
@@ -293,13 +292,12 @@ fn generate_file_header(pdb_file: &PdbFile, include_stdint: bool) -> String {
             "// PDB file: {}\n",
             "// Image architecture: {}\n",
             "//\n",
-            "// Information extracted with {} v{}\n",
+            "// Information extracted with resym v{}\n",
             "//\n",
             "{}"
         ),
         pdb_file.file_path.display(),
         pdb_file.machine_type,
-        PKG_NAME,
         PKG_VERSION,
         if include_stdint {
             "\n#include <cstdint>\n"

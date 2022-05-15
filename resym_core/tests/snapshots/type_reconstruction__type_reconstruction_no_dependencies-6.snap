@@ -1,9 +1,9 @@
 ---
-source: tests/type_reconstruction.rs
+source: resym_core/tests/type_reconstruction.rs
 expression: reconstructed_type
 ---
 
-struct resym_test::StructTest { // Size=0x18
+struct resym_test::StructTest { /* Size=0x18 */
   /* 0x0008 */ public: unsigned char u1;
   /* 0x000a */ public: uint16_t u2;
   /* 0x000c */ public: uint32_t u3;

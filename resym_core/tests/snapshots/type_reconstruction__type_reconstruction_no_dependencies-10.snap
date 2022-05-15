@@ -1,9 +1,9 @@
 ---
-source: tests/type_reconstruction.rs
+source: resym_core/tests/type_reconstruction.rs
 expression: reconstructed_type
 ---
 
-struct resym_test::StructUnnamedUdtTest2 { // Size=0x30
+struct resym_test::StructUnnamedUdtTest2 { /* Size=0x30 */
   /* 0x0000 */ public: uint64_t Before;
   union {
     struct {

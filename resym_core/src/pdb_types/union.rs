@@ -281,7 +281,7 @@ impl<'p> Union<'p> {
         fmt_configuration: &DataFormatConfiguration,
         f: &mut impl std::fmt::Write,
     ) -> fmt::Result {
-        writeln!(f, "union {} {{ // Size={:#x}", self.name, self.size)?;
+        writeln!(f, "union {} {{ /* Size={:#x} */", self.name, self.size)?;
 
         // Nested delcarations
         if !self.nested_classes.is_empty() {

@@ -1,9 +1,9 @@
 ---
-source: tests/type_reconstruction.rs
+source: resym_core/tests/type_reconstruction.rs
 expression: reconstructed_type
 ---
 
-class resym_test::PureVirtualClassSpecialized : resym_test::PureVirtualClass { // Size=0x8
+class resym_test::PureVirtualClassSpecialized : resym_test::PureVirtualClass { /* Size=0x8 */
   /* 0x0000: fields for resym_test::PureVirtualClass */
   
   private: int32_t OtherMethod();

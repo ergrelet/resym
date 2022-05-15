@@ -1,13 +1,13 @@
 ---
-source: tests/type_diffing.rs
-expression: diffed_type
+source: resym_core/tests/type_diffing.rs
+expression: diffed_type.data
 ---
  
--struct UserStructAddAndReplace { // Size=0x10
+-struct UserStructAddAndReplace { /* Size=0x10 */
 -  /* 0x0000 */ int32_t field1;
 -  /* 0x0004 */ char field2;
 -  /* 0x0008 */ void* field3;
-+struct UserStructAddAndReplace { // Size=0x28
++struct UserStructAddAndReplace { /* Size=0x28 */
 +  /* 0x0000 */ int32_t before1;
 +  /* 0x0004 */ int32_t field1;
 +  /* 0x0008 */ int32_t between12;

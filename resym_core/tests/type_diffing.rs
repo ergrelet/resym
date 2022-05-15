@@ -10,11 +10,10 @@ const TEST_CASES: &[&str] = &[
     "UserStructAdd",
     "RemovedStruct",
     "NewStruct",
-    "TypeNotFound",
 ];
 
 #[test]
-fn test_struct_diffing_no_dependencies_without_line_numbers() {
+fn test_struct_diffing() {
     let pdb_file_from = PdbFile::load_from_file(Path::new(TEST_PDB_FROM_FILE_PATH))
         .expect("load test_diff_from.pdb");
     let pdb_file_to =
@@ -28,29 +27,26 @@ fn test_struct_diffing_no_dependencies_without_line_numbers() {
             false,
             false,
             false,
-            false,
-        );
-        insta::assert_snapshot!(diffed_type);
+        )
+        .expect("diff generation");
+        insta::assert_snapshot!(diffed_type.data);
     }
 }
 
 #[test]
-fn test_struct_diffing_no_dependencies_with_line_numbers() {
+fn test_struct_diffing_inexistent_type() {
+    const INEXISTENT_TYPE_NAME: &str = "TypeNotFound";
     let pdb_file_from = PdbFile::load_from_file(Path::new(TEST_PDB_FROM_FILE_PATH))
         .expect("load test_diff_from.pdb");
     let pdb_file_to =
         PdbFile::load_from_file(Path::new(TEST_PDB_TO_FILE_PATH)).expect("load test_diff_to.pdb");
-
-    for test_case_type_name in TEST_CASES {
-        let diffed_type = diff_type_by_name(
-            &pdb_file_from,
-            &pdb_file_to,
-            test_case_type_name,
-            false,
-            false,
-            false,
-            true,
-        );
-        insta::assert_snapshot!(diffed_type);
-    }
+    assert!(diff_type_by_name(
+        &pdb_file_from,
+        &pdb_file_to,
+        INEXISTENT_TYPE_NAME,
+        false,
+        false,
+        false,
+    )
+    .is_err());
 }

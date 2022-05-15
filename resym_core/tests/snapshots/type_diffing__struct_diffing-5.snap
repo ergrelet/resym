@@ -1,0 +1,9 @@
+---
+source: resym_core/tests/type_diffing.rs
+expression: diffed_type.data
+---
++
++struct NewStruct { /* Size=0x4 */
++  /* 0x0000 */ int32_t field;
++};
+

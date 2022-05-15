@@ -11,13 +11,15 @@ use eframe::{
 use memory_logger::blocking::MemoryLogger;
 use resym_core::{
     backend::{Backend, BackendCommand, PDBSlot},
+    diffing::DiffChange,
     frontend::{FrontendCommand, TypeList},
     syntax_highlighting::CodeTheme,
 };
 use serde::{Deserialize, Serialize};
 use tinyfiledialogs::open_file_dialog;
 
-use std::sync::Arc;
+use std::fmt::Write;
+use std::{sync::Arc, vec};
 
 use crate::{frontend::EguiFrontendController, syntax_highlighting::highlight_code};
 
@@ -40,14 +42,13 @@ fn main() -> Result<()> {
 /// It contains the whole application's context at all time.
 struct ResymApp {
     logger: &'static MemoryLogger,
+    current_mode: ResymAppMode,
     filtered_type_list: TypeList,
     selected_row: usize,
     search_filter: String,
-    reconstructed_type_content: String,
     console_content: Vec<String>,
     settings_wnd_open: bool,
     settings: ResymAppSettings,
-    current_mode: ResymAppMode,
     frontend_controller: Arc<EguiFrontendController>,
     backend: Backend,
 }
@@ -113,7 +114,7 @@ impl epi::App for ResymApp {
 
                 if ui.text_edit_singleline(&mut self.search_filter).changed() {
                     // Update filtered list if filter has changed
-                    let result = if self.current_mode == ResymAppMode::Comparing {
+                    let result = if let ResymAppMode::Comparing(..) = self.current_mode {
                         self.backend
                             .send_command(BackendCommand::UpdateTypeFilterMerged(
                                 vec![PDB_MAIN_SLOT, PDB_DIFF_SLOT],
@@ -154,7 +155,7 @@ impl epi::App for ResymApp {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's
-            ui.label(if self.current_mode == ResymAppMode::Comparing {
+            ui.label(if let ResymAppMode::Comparing(..) = self.current_mode {
                 "Differences between reconstructed type(s) - C++"
             } else {
                 "Reconstructed type(s) - C++"
@@ -175,14 +176,13 @@ impl<'p> ResymApp {
 
         Ok(Self {
             logger,
+            current_mode: ResymAppMode::Idle,
             filtered_type_list: vec![],
             selected_row: usize::MAX,
             search_filter: String::default(),
-            reconstructed_type_content: String::default(),
             console_content: vec![],
             settings_wnd_open: false,
             settings: ResymAppSettings::default(),
-            current_mode: ResymAppMode::Idle,
             frontend_controller,
             backend,
         })
@@ -198,7 +198,7 @@ impl<'p> ResymApp {
                     Ok(pdb_slot) => {
                         if pdb_slot == PDB_MAIN_SLOT {
                             // Unload the PDB used for diffing if one is loaded
-                            if self.current_mode == ResymAppMode::Comparing {
+                            if let ResymAppMode::Comparing(..) = self.current_mode {
                                 if let Err(err) = self
                                     .backend
                                     .send_command(BackendCommand::UnloadPDB(PDB_DIFF_SLOT))
@@ -210,7 +210,8 @@ impl<'p> ResymApp {
                                 }
                             }
 
-                            self.current_mode = ResymAppMode::Browsing;
+                            self.current_mode =
+                                ResymAppMode::Browsing(String::default(), String::default());
                             // Request a type list update
                             if let Err(err) =
                                 self.backend.send_command(BackendCommand::UpdateTypeFilter(
@@ -223,7 +224,12 @@ impl<'p> ResymApp {
                                 log::error!("Failed to update type filter value: {}", err);
                             }
                         } else if pdb_slot == PDB_DIFF_SLOT {
-                            self.current_mode = ResymAppMode::Comparing;
+                            self.current_mode = ResymAppMode::Comparing(
+                                String::default(),
+                                String::default(),
+                                vec![],
+                                String::default(),
+                            );
                             // Request a type list update
                             if let Err(err) =
                                 self.backend
@@ -241,7 +247,44 @@ impl<'p> ResymApp {
                 },
 
                 FrontendCommand::UpdateReconstructedType(data) => {
-                    self.reconstructed_type_content = data;
+                    let line_numbers =
+                        (1..1 + data.lines().count()).fold(String::default(), |mut acc, e| {
+                            let _r = writeln!(&mut acc, "{}", e);
+                            acc
+                        });
+                    self.current_mode = ResymAppMode::Browsing(line_numbers, data);
+                }
+
+                FrontendCommand::UpdateReconstructedTypeDiff(type_diff) => {
+                    let (line_numbers_old, line_numbers_new, line_changes) =
+                        type_diff.metadata.iter().fold(
+                            (String::default(), String::default(), vec![]),
+                            |(mut acc_old, mut acc_new, mut acc_changes), metadata| {
+                                let indices = metadata.0;
+
+                                if let Some(indice) = indices.0 {
+                                    let _r = writeln!(&mut acc_old, "{}", 1 + indice);
+                                } else {
+                                    let _r = writeln!(&mut acc_old);
+                                }
+
+                                if let Some(indice) = indices.1 {
+                                    let _r = writeln!(&mut acc_new, "{}", 1 + indice);
+                                } else {
+                                    let _r = writeln!(&mut acc_new);
+                                }
+
+                                acc_changes.push(metadata.1);
+
+                                (acc_old, acc_new, acc_changes)
+                            },
+                        );
+                    self.current_mode = ResymAppMode::Comparing(
+                        line_numbers_old,
+                        line_numbers_new,
+                        line_changes,
+                        type_diff.data,
+                    );
                 }
 
                 FrontendCommand::UpdateFilteredTypes(filtered_types) => {
@@ -267,7 +310,7 @@ impl<'p> ResymApp {
                 }
                 if ui
                     .add_enabled(
-                        self.current_mode == ResymAppMode::Browsing,
+                        matches!(self.current_mode, ResymAppMode::Browsing(..)),
                         egui::Button::new("Compare with..."),
                     )
                     .clicked()
@@ -310,7 +353,7 @@ impl<'p> ResymApp {
                             {
                                 self.selected_row = row_index;
                                 match self.current_mode {
-                                    ResymAppMode::Browsing => {
+                                    ResymAppMode::Browsing(..) => {
                                         if let Err(err) = self.backend.send_command(
                                             BackendCommand::ReconstructTypeByIndex(
                                                 PDB_MAIN_SLOT,
@@ -323,7 +366,7 @@ impl<'p> ResymApp {
                                             log::error!("Failed to reconstruct type: {}", err);
                                         }
                                     }
-                                    ResymAppMode::Comparing => {
+                                    ResymAppMode::Comparing(..) => {
                                         if let Err(err) = self.backend.send_command(
                                             BackendCommand::DiffTypeByName(
                                                 PDB_MAIN_SLOT,
@@ -332,7 +375,6 @@ impl<'p> ResymApp {
                                                 self.settings.print_header,
                                                 self.settings.reconstruct_dependencies,
                                                 self.settings.print_access_specifiers,
-                                                self.settings.print_line_numbers,
                                             ),
                                         ) {
                                             log::error!("Failed to reconstruct type diff: {}", err);
@@ -378,26 +420,95 @@ impl<'p> ResymApp {
             CodeTheme::dark()
         };
 
-        // Layouter that'll apply syntax highlighting
-        let mut layouter = |ui: &egui::Ui, string: &str, wrap_width: f32| {
-            let mut layout_job = highlight_code(ui.ctx(), &theme, string, LANGUAGE_SYNTAX);
-            layout_job.wrap_width = wrap_width;
+        let line_desc = if let ResymAppMode::Comparing(_, _, line_changes, _) = &self.current_mode {
+            Some(line_changes)
+        } else {
+            None
+        };
+
+        // Layouter that'll disable wrapping and apply syntax highlighting if needed
+        let mut layouter = |ui: &egui::Ui, string: &str, _wrap_width: f32| {
+            let layout_job = highlight_code(
+                ui.ctx(),
+                &theme,
+                string,
+                LANGUAGE_SYNTAX,
+                self.settings.enable_syntax_hightlighting,
+                line_desc,
+            );
             ui.fonts().layout_job(layout_job)
         };
 
         // Type dump area
-        egui::ScrollArea::vertical()
+        egui::ScrollArea::both()
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                let mut text_edit_content = self.reconstructed_type_content.as_str();
-                let mut text_edit = egui::TextEdit::multiline(&mut text_edit_content)
-                    .code_editor()
-                    .desired_width(f32::INFINITY);
-                // Override layouter only if needed
-                if self.settings.enable_syntax_hightlighting {
-                    text_edit = text_edit.layouter(&mut layouter);
-                }
-                ui.add(text_edit);
+                let num_colums = if self.settings.print_line_numbers {
+                    if let ResymAppMode::Comparing(..) = self.current_mode {
+                        // Old index + new index + code editor
+                        3
+                    } else {
+                        // Line numbers + code editor
+                        2
+                    }
+                } else {
+                    // Code editor only
+                    1
+                };
+                egui::Grid::new("code_editor_grid")
+                    .num_columns(num_colums)
+                    .show(ui, |ui| {
+                        const LINE_NUMBER_WIDTH: f32 = 30.0;
+                        match &self.current_mode {
+                            ResymAppMode::Comparing(
+                                line_numbers_old,
+                                line_numbers_new,
+                                _,
+                                reconstructed_type_diff,
+                            ) => {
+                                // Line numbers
+                                if self.settings.print_line_numbers {
+                                    ui.add(
+                                        egui::TextEdit::multiline(&mut line_numbers_old.as_str())
+                                            .interactive(false)
+                                            .desired_width(LINE_NUMBER_WIDTH),
+                                    );
+                                    ui.add(
+                                        egui::TextEdit::multiline(&mut line_numbers_new.as_str())
+                                            .interactive(false)
+                                            .desired_width(LINE_NUMBER_WIDTH),
+                                    );
+                                }
+                                // Text content
+                                ui.add(
+                                    egui::TextEdit::multiline(
+                                        &mut reconstructed_type_diff.as_str(),
+                                    )
+                                    .code_editor()
+                                    .layouter(&mut layouter),
+                                );
+                            }
+                            ResymAppMode::Browsing(line_numbers, reconstructed_type_content) => {
+                                // Line numbers
+                                if self.settings.print_line_numbers {
+                                    ui.add(
+                                        egui::TextEdit::multiline(&mut line_numbers.as_str())
+                                            .interactive(false)
+                                            .desired_width(LINE_NUMBER_WIDTH),
+                                    );
+                                }
+                                // Text content
+                                ui.add(
+                                    egui::TextEdit::multiline(
+                                        &mut reconstructed_type_content.as_str(),
+                                    )
+                                    .code_editor()
+                                    .layouter(&mut layouter),
+                                );
+                            }
+                            ResymAppMode::Idle => {}
+                        }
+                    });
             });
     }
 
@@ -441,9 +552,6 @@ impl<'p> ResymApp {
                     &mut self.settings.print_access_specifiers,
                     "Print access specifiers",
                 );
-                ui.add_space(5.0);
-
-                ui.label("Diffing");
                 ui.checkbox(&mut self.settings.print_line_numbers, "Print line numbers");
             });
     }
@@ -488,6 +596,6 @@ impl Default for ResymAppSettings {
 #[derive(PartialEq)]
 enum ResymAppMode {
     Idle,
-    Browsing,
-    Comparing,
+    Browsing(String, String),
+    Comparing(String, String, Vec<DiffChange>, String),
 }

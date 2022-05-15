@@ -1,9 +1,9 @@
 ---
-source: tests/type_reconstruction.rs
+source: resym_core/tests/type_reconstruction.rs
 expression: reconstructed_type
 ---
 
-class resym_test::ClassWithRefsAndStaticsTest { // Size=0x40
+class resym_test::ClassWithRefsAndStaticsTest { /* Size=0x40 */
   /* 0x0000 */ private: int32_t& iref;
   /* 0x0008 */ private: const int32_t& ciref;
   /* 0x0010 */ private: int32_t* iptr;

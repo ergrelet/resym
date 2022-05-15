@@ -1,16 +1,42 @@
-use resym_core::syntax_highlighting::CodeTheme;
+use resym_core::{diffing::DiffChange, syntax_highlighting::CodeTheme};
 use syntect::{
     easy::HighlightLines,
     highlighting::{Color, Style},
     util::{as_24_bit_terminal_escaped, LinesWithEndings},
 };
 
+pub type LineDescriptions = Vec<DiffChange>;
+
+const COLOR_TRANSPARENT: Color = Color {
+    r: 0x00,
+    g: 0x00,
+    b: 0x00,
+    a: 0x00,
+};
+const COLOR_RED: Color = Color {
+    r: 0x50,
+    g: 0x10,
+    b: 0x10,
+    a: 0xFF,
+};
+const COLOR_GREEN: Color = Color {
+    r: 0x10,
+    g: 0x50,
+    b: 0x10,
+    a: 0xFF,
+};
+
 /// Function relying on `syntect` to highlight the given `code` str.
 /// In case of success, the result is a `String` that is ready to be printed in a
 /// terminal.
-pub fn highlight_code(theme: &CodeTheme, code: &str, language: &str) -> Option<String> {
+pub fn highlight_code(
+    theme: &CodeTheme,
+    code: &str,
+    language: &str,
+    line_descriptions: Option<LineDescriptions>,
+) -> Option<String> {
     let highlighter = CodeHighlighter::default();
-    highlighter.highlight(theme, code, language)
+    highlighter.highlight(theme, code, language, line_descriptions)
 }
 
 struct CodeHighlighter {
@@ -28,7 +54,13 @@ impl Default for CodeHighlighter {
 }
 
 impl CodeHighlighter {
-    fn highlight(&self, theme: &CodeTheme, code: &str, language: &str) -> Option<String> {
+    fn highlight(
+        &self,
+        theme: &CodeTheme,
+        code: &str,
+        language: &str,
+        line_descriptions: Option<LineDescriptions>,
+    ) -> Option<String> {
         use std::fmt::Write;
 
         let syntax = self
@@ -39,9 +71,12 @@ impl CodeHighlighter {
         let theme = theme.syntect_theme.syntect_key_name();
         let mut output = String::default();
         let mut h = HighlightLines::new(syntax, &self.ts.themes[theme]);
-        for line in LinesWithEndings::from(code) {
+        for (line_id, line) in LinesWithEndings::from(code).enumerate() {
             let mut regions = h.highlight_line(line, &self.ps).ok()?;
-            hightlight_regions_diff(&mut regions);
+            // Apply highlight related to diff changes if needed
+            if let Some(line_descriptions) = &line_descriptions {
+                highlight_regions_diff(&mut regions, line_descriptions.get(line_id)?);
+            }
             let _r = write!(
                 &mut output,
                 "{}",
@@ -54,36 +89,17 @@ impl CodeHighlighter {
 }
 
 /// Changes the background of regions that have been affected in the diff.
-// FIXME: This is really dirty, do better.
-fn hightlight_regions_diff(regions: &mut Vec<(Style, &str)>) {
-    const COLOR_TRANSPARENT: Color = Color {
-        r: 0x00,
-        g: 0x00,
-        b: 0x00,
-        a: 0x00,
+fn highlight_regions_diff(regions: &mut Vec<(Style, &str)>, line_description: &DiffChange) {
+    let bg_color = match line_description {
+        DiffChange::Insert => COLOR_GREEN,
+        DiffChange::Delete => COLOR_RED,
+        DiffChange::Equal => COLOR_TRANSPARENT,
     };
-    const COLOR_RED: Color = Color {
-        r: 0x50,
-        g: 0x10,
-        b: 0x10,
-        a: 0xFF,
-    };
-    const COLOR_GREEN: Color = Color {
-        r: 0x10,
-        g: 0x50,
-        b: 0x10,
-        a: 0xFF,
-    };
-
-    let mut bg_color = COLOR_TRANSPARENT;
-    regions.iter_mut().for_each(|(style, s)| {
-        if *s == "+" {
-            bg_color = COLOR_GREEN;
-        } else if *s == "-" {
-            bg_color = COLOR_RED;
-        } else if *s == "\n" {
-            bg_color = COLOR_TRANSPARENT;
+    regions.iter_mut().for_each(|(style, str)| {
+        if *str != "\n" {
+            style.background = bg_color;
+        } else {
+            style.background = COLOR_TRANSPARENT;
         }
-        style.background = bg_color;
     });
 }

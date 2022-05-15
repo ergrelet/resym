@@ -1,8 +1,23 @@
+use anyhow::{anyhow, Result};
 use similar::{ChangeTag, TextDiff};
 
 use std::fmt::Write;
 
-use crate::{pdb_file::PdbFile, PKG_NAME, PKG_VERSION};
+use crate::{pdb_file::PdbFile, PKG_VERSION};
+
+pub type DiffChange = ChangeTag;
+pub type DiffIndices = (Option<usize>, Option<usize>);
+
+#[derive(Default)]
+pub struct DiffedType {
+    pub metadata: Vec<(DiffIndices, DiffChange)>,
+    pub data: String,
+}
+pub struct DiffLine {
+    pub indices: DiffIndices,
+    pub change: DiffChange,
+    pub line: String,
+}
 
 pub fn diff_type_by_name(
     pdb_file_from: &PdbFile,
@@ -11,79 +26,55 @@ pub fn diff_type_by_name(
     print_header: bool,
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
-    show_line_numbers: bool,
-) -> String {
+) -> Result<DiffedType> {
     let diff_start = std::time::Instant::now();
-    let reconstructed_type_from = pdb_file_from
-        .reconstruct_type_by_name(type_name, reconstruct_dependencies, print_access_specifiers)
-        .unwrap_or_default();
-    let reconstructed_type_to = pdb_file_to
-        .reconstruct_type_by_name(type_name, reconstruct_dependencies, print_access_specifiers)
-        .unwrap_or_default();
-    if reconstructed_type_from.is_empty() && reconstructed_type_to.is_empty() {
-        // Make it obvious an error occured
-        return "Error: type not found".to_string();
+    // Prepend header if needed
+    let (mut reconstructed_type_from, mut reconstructed_type_to) = if print_header {
+        let diff_header = generate_diff_header(pdb_file_from, pdb_file_to);
+        (diff_header.clone(), diff_header)
+    } else {
+        (String::default(), String::default())
+    };
+
+    // Reconstruct type from both PDBs
+    {
+        let reconstructed_type_from_tmp = pdb_file_from
+            .reconstruct_type_by_name(type_name, reconstruct_dependencies, print_access_specifiers)
+            .unwrap_or_default();
+        let reconstructed_type_to_tmp = pdb_file_to
+            .reconstruct_type_by_name(type_name, reconstruct_dependencies, print_access_specifiers)
+            .unwrap_or_default();
+        if reconstructed_type_from_tmp.is_empty() && reconstructed_type_to_tmp.is_empty() {
+            // Make it obvious an error occured
+            return Err(anyhow!("Type not found"));
+        }
+        reconstructed_type_from.push_str(&reconstructed_type_from_tmp);
+        reconstructed_type_to.push_str(&reconstructed_type_to_tmp);
     }
 
     // Diff reconstructed reprensentations
-    let mut output = String::default();
-    if print_header {
-        // FIXME: Handle error properly
-        let _r = write!(
-            &mut output,
-            "{}",
-            generate_diff_header(pdb_file_from, pdb_file_to)
-        );
+    let mut diff_metadata = vec![];
+    let mut diff_data = String::default();
+    {
+        let reconstructed_type_diff =
+            TextDiff::from_lines(&reconstructed_type_from, &reconstructed_type_to);
+        for change in reconstructed_type_diff.iter_all_changes() {
+            diff_metadata.push(((change.old_index(), change.new_index()), change.tag()));
+            let prefix = match change.tag() {
+                ChangeTag::Insert => "+",
+                ChangeTag::Delete => "-",
+                ChangeTag::Equal => " ",
+            };
+            write!(&mut diff_data, "{}{}", prefix, change)?;
+        }
     }
 
-    let reconstructed_type_diff =
-        TextDiff::from_lines(&reconstructed_type_from, &reconstructed_type_to);
-
-    let line_count = reconstructed_type_diff.iter_all_changes().count();
-    let line_number_max_width = int_log10(line_count);
-    let empty_padding = " ".repeat(line_number_max_width);
-    for change in reconstructed_type_diff.iter_all_changes() {
-        let line_numbers = match change.tag() {
-            ChangeTag::Delete => format!(
-                "{:>width$} {} |",
-                change.old_index().unwrap_or_default() + 1,
-                empty_padding,
-                width = line_number_max_width
-            ),
-            ChangeTag::Insert => format!(
-                "{} {:>width$} |",
-                empty_padding,
-                change.new_index().unwrap_or_default() + 1,
-                width = line_number_max_width
-            ),
-            ChangeTag::Equal => format!(
-                "{:>width$} {:>width$} |",
-                change.old_index().unwrap_or_default() + 1,
-                change.new_index().unwrap_or_default() + 1,
-                width = line_number_max_width
-            ),
-        };
-        let sign = match change.tag() {
-            ChangeTag::Delete => "-",
-            ChangeTag::Insert => "+",
-            ChangeTag::Equal => " ",
-        };
-        // FIXME: Handle error properly
-        let _r = write!(
-            &mut output,
-            "{}{}{}",
-            if show_line_numbers {
-                line_numbers
-            } else {
-                String::default()
-            },
-            sign,
-            change
-        );
-    }
     log::debug!("Type diffing took {} ms", diff_start.elapsed().as_millis());
 
-    output
+    Ok(DiffedType {
+        metadata: diff_metadata,
+        data: diff_data,
+    })
 }
 
 fn generate_diff_header(pdb_file_from: &PdbFile, pdb_file_to: &PdbFile) -> String {
@@ -98,35 +89,13 @@ fn generate_diff_header(pdb_file_from: &PdbFile, pdb_file_to: &PdbFile) -> Strin
             "// New PDB file: {}\n",
             "// Image architecture: {}\n",
             "//\n",
-            "// Information extracted with {} v{}\n",
-            "//\n\n"
+            "// Information extracted with resym v{}\n",
+            "//\n"
         ),
         pdb_file_from.file_path.display(),
         pdb_file_from.machine_type,
         pdb_file_to.file_path.display(),
         pdb_file_to.machine_type,
-        PKG_NAME,
         PKG_VERSION,
     )
-}
-
-// FIXME: Replace with `checked_log10` once it's stabilized.
-fn int_log10<T>(mut i: T) -> usize
-where
-    T: std::ops::DivAssign + std::cmp::PartialOrd + From<u8> + Copy,
-{
-    let zero = T::from(0);
-    if i == zero {
-        return 1;
-    }
-
-    let mut len = 0;
-    let ten = T::from(10);
-
-    while i > zero {
-        i /= ten;
-        len += 1;
-    }
-
-    len
 }

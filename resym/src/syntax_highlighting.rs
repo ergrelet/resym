@@ -1,7 +1,9 @@
 use eframe::{egui, epaint::text::LayoutJob};
 use syntect::{easy::HighlightLines, highlighting::FontStyle, util::LinesWithEndings};
 
-use resym_core::syntax_highlighting::CodeTheme;
+use resym_core::{diffing::DiffChange, syntax_highlighting::CodeTheme};
+
+pub type LineDescriptions = Vec<DiffChange>;
 
 /// Memoized code highlighting
 pub fn highlight_code(
@@ -9,10 +11,26 @@ pub fn highlight_code(
     theme: &CodeTheme,
     code: &str,
     language: &str,
+    enabled: bool,
+    line_descriptions: Option<&LineDescriptions>,
 ) -> LayoutJob {
-    impl egui::util::cache::ComputerMut<(&CodeTheme, &str, &str), LayoutJob> for CodeHighlighter {
-        fn compute(&mut self, (theme, code, lang): (&CodeTheme, &str, &str)) -> LayoutJob {
-            self.highlight(theme, code, lang)
+    impl
+        egui::util::cache::ComputerMut<
+            (&CodeTheme, &str, &str, bool, Option<&LineDescriptions>),
+            LayoutJob,
+        > for CodeHighlighter
+    {
+        fn compute(
+            &mut self,
+            (theme, code, lang, enabled, line_descriptions): (
+                &CodeTheme,
+                &str,
+                &str,
+                bool,
+                Option<&LineDescriptions>,
+            ),
+        ) -> LayoutJob {
+            self.highlight(theme, code, lang, enabled, line_descriptions)
         }
     }
 
@@ -20,7 +38,7 @@ pub fn highlight_code(
 
     let mut memory = ctx.memory();
     let highlight_cache = memory.caches.cache::<HighlightCache<'_>>();
-    highlight_cache.get((theme, code, language))
+    highlight_cache.get((theme, code, language, enabled, line_descriptions))
 }
 
 struct CodeHighlighter {
@@ -38,24 +56,42 @@ impl Default for CodeHighlighter {
 }
 
 impl CodeHighlighter {
-    fn highlight(&self, theme: &CodeTheme, code: &str, lang: &str) -> LayoutJob {
-        self.highlight_impl(theme, code, lang).unwrap_or_else(|| {
-            // Fallback:
-            LayoutJob::simple(
-                code.into(),
-                egui::FontId::monospace(14.0),
-                if theme.dark_mode {
-                    egui::Color32::LIGHT_GRAY
-                } else {
-                    egui::Color32::DARK_GRAY
-                },
-                f32::INFINITY,
-            )
-        })
+    fn highlight(
+        &self,
+        theme: &CodeTheme,
+        code: &str,
+        lang: &str,
+        enabled: bool,
+        line_descriptions: Option<&LineDescriptions>,
+    ) -> LayoutJob {
+        self.highlight_impl(theme, code, lang, enabled, line_descriptions)
+            .unwrap_or_else(|| {
+                // Fallback:
+                LayoutJob::simple(
+                    code.into(),
+                    egui::FontId::monospace(14.0),
+                    if theme.dark_mode {
+                        egui::Color32::LIGHT_GRAY
+                    } else {
+                        egui::Color32::DARK_GRAY
+                    },
+                    f32::INFINITY,
+                )
+            })
     }
 
-    fn highlight_impl(&self, theme: &CodeTheme, text: &str, language: &str) -> Option<LayoutJob> {
-        const COLOR_TRANSPARENT: egui::Color32 = egui::Color32::from_rgb_additive(0, 0, 0);
+    fn highlight_impl(
+        &self,
+        theme: &CodeTheme,
+        text: &str,
+        language: &str,
+        enabled: bool,
+        line_descriptions: Option<&LineDescriptions>,
+    ) -> Option<LayoutJob> {
+        if !enabled {
+            return None;
+        }
+
         const COLOR_RED: egui::Color32 = egui::Color32::from_rgb(0x50, 0x10, 0x10);
         const COLOR_GREEN: egui::Color32 = egui::Color32::from_rgb(0x10, 0x50, 0x10);
 
@@ -71,22 +107,26 @@ impl CodeHighlighter {
 
         let mut job = LayoutJob {
             text: text.into(),
+            // Disable wrapping forcefully
+            wrap_width: f32::INFINITY,
             ..Default::default()
         };
 
-        for line in LinesWithEndings::from(text) {
-            let mut bg_color = egui::Color32::TRANSPARENT;
-            for (style, range) in h.highlight_line(line, &self.ps).ok()? {
-                // Change the background of regions that have been affected in the diff.
-                // FIXME: This is really dirty, do better.
-                if range == "+" {
-                    bg_color = COLOR_GREEN;
-                } else if range == "-" {
-                    bg_color = COLOR_RED;
-                } else if range == "\n" {
-                    bg_color = COLOR_TRANSPARENT;
-                }
+        for (line_id, line) in LinesWithEndings::from(text).enumerate() {
+            // Change the background of regions that have been affected in the diff.
+            let bg_color = match line_descriptions {
+                None => egui::Color32::TRANSPARENT,
+                Some(line_desc) => match line_desc.get(line_id) {
+                    None => egui::Color32::TRANSPARENT,
+                    Some(line_desc) => match line_desc {
+                        DiffChange::Insert => COLOR_GREEN,
+                        DiffChange::Delete => COLOR_RED,
+                        DiffChange::Equal => egui::Color32::TRANSPARENT,
+                    },
+                },
+            };
 
+            for (style, range) in h.highlight_line(line, &self.ps).ok()? {
                 let fg = style.foreground;
                 let text_color = egui::Color32::from_rgb(fg.r, fg.g, fg.b);
                 let italics = style.font_style.contains(FontStyle::ITALIC);

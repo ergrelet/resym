@@ -364,7 +364,7 @@ impl<'p> Class<'p> {
             }
         }
 
-        writeln!(f, " {{ // Size={:#x}", self.size)?;
+        writeln!(f, " {{ /* Size={:#x} */", self.size)?;
 
         for base in &self.base_classes {
             writeln!(
