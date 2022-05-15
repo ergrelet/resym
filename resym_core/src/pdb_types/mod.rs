@@ -535,7 +535,19 @@ impl<'p> Data<'p> {
                 }
 
                 if let Some(fields) = data.fields {
-                    class.add_fields(type_finder, type_forwarder, fields, needed_types)?;
+                    // Note: Do not propagate the error, this allows the
+                    // reconstruction to go through even when LF_TYPESERVER_ST
+                    // types are encountered. Alert the user that the result
+                    // might be incomplete.
+                    if let Err(err) =
+                        class.add_fields(type_finder, type_forwarder, fields, needed_types)
+                    {
+                        log::error!(
+                            "Error encountered while reconstructing '{}': {}",
+                            class.name,
+                            err
+                        );
+                    }
                 }
 
                 self.classes.insert(0, class);
@@ -562,7 +574,15 @@ impl<'p> Data<'p> {
                     nested_enums: Vec::new(),
                 };
 
-                u.add_fields(type_finder, type_forwarder, data.fields, needed_types)?;
+                if let Err(err) =
+                    u.add_fields(type_finder, type_forwarder, data.fields, needed_types)
+                {
+                    log::error!(
+                        "Error encountered while reconstructing '{}': {}",
+                        u.name,
+                        err
+                    );
+                }
 
                 self.unions.insert(0, u);
             }
@@ -588,7 +608,13 @@ impl<'p> Data<'p> {
                     values: Vec::new(),
                 };
 
-                e.add_fields(type_finder, data.fields, needed_types)?;
+                if let Err(err) = e.add_fields(type_finder, data.fields, needed_types) {
+                    log::error!(
+                        "Error encountered while reconstructing '{}': {}",
+                        e.name,
+                        err
+                    );
+                }
 
                 self.enums.insert(0, e);
             }
