@@ -1922,7 +1922,6 @@ dependencies = [
  "anyhow",
  "crossbeam-channel",
  "eframe",
- "epi",
  "log",
  "memory_logger",
  "resym_core",

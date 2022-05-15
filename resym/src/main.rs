@@ -1,24 +1,25 @@
 #![windows_subsystem = "windows"]
 
-use anyhow::{anyhow, Result};
-use crossbeam_channel::{Receiver, Sender};
+mod frontend;
+mod syntax_highlighting;
+
+use anyhow::Result;
 use eframe::{
     egui::{self, ScrollArea, TextStyle},
-    epaint::text::LayoutJob,
     epi,
 };
 use memory_logger::blocking::MemoryLogger;
-use serde::{Deserialize, Serialize};
-use syntect::{easy::HighlightLines, highlighting::FontStyle, util::LinesWithEndings};
-use tinyfiledialogs::open_file_dialog;
-
-use std::sync::{Arc, RwLock};
-
 use resym_core::{
     backend::{Backend, BackendCommand, PDBSlot},
-    frontend::{FrontendCommand, FrontendController, TypeList},
-    syntax_highlighting::{self, CodeTheme},
+    frontend::{FrontendCommand, TypeList},
+    syntax_highlighting::CodeTheme,
 };
+use serde::{Deserialize, Serialize};
+use tinyfiledialogs::open_file_dialog;
+
+use std::sync::Arc;
+
+use crate::{frontend::EguiFrontendController, syntax_highlighting::highlight_code};
 
 const PKG_NAME: &str = env!("CARGO_PKG_NAME");
 const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -372,9 +373,9 @@ impl<'p> ResymApp {
     fn update_code_view(&mut self, ui: &mut egui::Ui) {
         const LANGUAGE_SYNTAX: &str = "cpp";
         let theme = if self.settings.use_light_theme {
-            syntax_highlighting::CodeTheme::light()
+            CodeTheme::light()
         } else {
-            syntax_highlighting::CodeTheme::dark()
+            CodeTheme::dark()
         };
 
         // Layouter that'll apply syntax highlighting
@@ -489,157 +490,4 @@ enum ResymAppMode {
     Idle,
     Browsing,
     Comparing,
-}
-
-/// This struct enables the backend to communicate with us (the frontend)
-struct EguiFrontendController {
-    tx_ui: Sender<FrontendCommand>,
-    rx_ui: Receiver<FrontendCommand>,
-    ui_frame: RwLock<Option<epi::Frame>>,
-}
-
-impl FrontendController for EguiFrontendController {
-    /// Used by the backend to send us commands and trigger a UI update
-    fn send_command(&self, command: FrontendCommand) -> Result<()> {
-        self.tx_ui.send(command)?;
-        // Force the UI backend to call our app's update function on the other end
-        if let Ok(ui_frame_opt) = self.ui_frame.try_read() {
-            if let Some(ui_frame) = ui_frame_opt.as_ref() {
-                ui_frame.request_repaint();
-            }
-        }
-        Ok(())
-    }
-}
-
-impl EguiFrontendController {
-    pub fn new(tx_ui: Sender<FrontendCommand>, rx_ui: Receiver<FrontendCommand>) -> Self {
-        Self {
-            tx_ui,
-            rx_ui,
-            ui_frame: RwLock::new(None),
-        }
-    }
-
-    fn set_ui_frame(&self, ui_frame: epi::Frame) -> Result<()> {
-        match self.ui_frame.write() {
-            Err(_) => Err(anyhow!("Failed to update `ui_frame`")),
-            Ok(mut ui_frame_opt) => {
-                *ui_frame_opt = Some(ui_frame);
-                Ok(())
-            }
-        }
-    }
-}
-
-/// Memoized code highlighting
-fn highlight_code(ctx: &egui::Context, theme: &CodeTheme, code: &str, language: &str) -> LayoutJob {
-    impl egui::util::cache::ComputerMut<(&CodeTheme, &str, &str), LayoutJob> for CodeHighlighter {
-        fn compute(&mut self, (theme, code, lang): (&CodeTheme, &str, &str)) -> LayoutJob {
-            self.highlight(theme, code, lang)
-        }
-    }
-
-    type HighlightCache<'a> = egui::util::cache::FrameCache<LayoutJob, CodeHighlighter>;
-
-    let mut memory = ctx.memory();
-    let highlight_cache = memory.caches.cache::<HighlightCache<'_>>();
-    highlight_cache.get((theme, code, language))
-}
-
-struct CodeHighlighter {
-    ps: syntect::parsing::SyntaxSet,
-    ts: syntect::highlighting::ThemeSet,
-}
-
-impl Default for CodeHighlighter {
-    fn default() -> Self {
-        Self {
-            ps: syntect::parsing::SyntaxSet::load_defaults_newlines(),
-            ts: syntect::highlighting::ThemeSet::load_defaults(),
-        }
-    }
-}
-
-impl CodeHighlighter {
-    fn highlight(&self, theme: &CodeTheme, code: &str, lang: &str) -> LayoutJob {
-        self.highlight_impl(theme, code, lang).unwrap_or_else(|| {
-            // Fallback:
-            LayoutJob::simple(
-                code.into(),
-                egui::FontId::monospace(14.0),
-                if theme.dark_mode {
-                    egui::Color32::LIGHT_GRAY
-                } else {
-                    egui::Color32::DARK_GRAY
-                },
-                f32::INFINITY,
-            )
-        })
-    }
-
-    fn highlight_impl(&self, theme: &CodeTheme, text: &str, language: &str) -> Option<LayoutJob> {
-        let syntax = self
-            .ps
-            .find_syntax_by_name(language)
-            .or_else(|| self.ps.find_syntax_by_extension(language))?;
-
-        let theme = theme.syntect_theme.syntect_key_name();
-        let mut h = HighlightLines::new(syntax, &self.ts.themes[theme]);
-
-        use egui::text::{LayoutSection, TextFormat};
-
-        let mut job = LayoutJob {
-            text: text.into(),
-            ..Default::default()
-        };
-
-        for line in LinesWithEndings::from(text) {
-            let mut bg_color = egui::Color32::TRANSPARENT;
-            for (style, range) in h.highlight_line(line, &self.ps).ok()? {
-                // Change the background of regions that have been affected in the diff.
-                // FIXME: This is really dirty, do better.
-                if range == "+" {
-                    bg_color = egui::Color32::DARK_GREEN;
-                } else if range == "-" {
-                    bg_color = egui::Color32::DARK_RED;
-                } else if range == "\n" {
-                    bg_color = egui::Color32::TRANSPARENT;
-                }
-
-                let fg = style.foreground;
-                let text_color = egui::Color32::from_rgb(fg.r, fg.g, fg.b);
-                let italics = style.font_style.contains(FontStyle::ITALIC);
-                let underline = style.font_style.contains(FontStyle::ITALIC);
-                let underline = if underline {
-                    egui::Stroke::new(1.0, text_color)
-                } else {
-                    egui::Stroke::none()
-                };
-                job.sections.push(LayoutSection {
-                    leading_space: 0.0,
-                    byte_range: as_byte_range(text, range),
-                    format: TextFormat {
-                        background: bg_color,
-                        font_id: egui::FontId::monospace(14.0),
-                        color: text_color,
-                        italics,
-                        underline,
-                        ..Default::default()
-                    },
-                });
-            }
-        }
-
-        Some(job)
-    }
-}
-
-fn as_byte_range(whole: &str, range: &str) -> std::ops::Range<usize> {
-    let whole_start = whole.as_ptr() as usize;
-    let range_start = range.as_ptr() as usize;
-    assert!(whole_start <= range_start);
-    assert!(range_start + range.len() <= whole_start + whole.len());
-    let offset = range_start - whole_start;
-    offset..(offset + range.len())
 }
