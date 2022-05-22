@@ -7,8 +7,8 @@ pub type TypeList = Vec<(String, pdb::TypeIndex)>;
 pub enum FrontendCommand {
     LoadPDBResult(Result<PDBSlot>),
     UpdateFilteredTypes(TypeList),
-    UpdateReconstructedType(String),
-    UpdateReconstructedTypeDiff(DiffedType),
+    ReconstructTypeResult(Result<String>),
+    DiffTypeResult(Result<DiffedType>),
 }
 
 pub trait FrontendController {

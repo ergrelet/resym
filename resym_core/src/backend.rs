@@ -119,15 +119,15 @@ fn worker_thread_routine(
                 print_access_specifiers,
             ) => {
                 if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
-                    let reconstructed_type = reconstruct_type_by_index_command(
+                    let reconstructed_type_result = reconstruct_type_by_index_command(
                         pdb_file,
                         type_index,
                         print_header,
                         reconstruct_dependencies,
                         print_access_specifiers,
                     );
-                    frontend_controller.send_command(FrontendCommand::UpdateReconstructedType(
-                        reconstructed_type,
+                    frontend_controller.send_command(FrontendCommand::ReconstructTypeResult(
+                        reconstructed_type_result,
                     ))?;
                 }
             }
@@ -140,15 +140,15 @@ fn worker_thread_routine(
                 print_access_specifiers,
             ) => {
                 if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
-                    let reconstructed_type = reconstruct_type_by_name_command(
+                    let reconstructed_type_result = reconstruct_type_by_name_command(
                         pdb_file,
                         &type_name,
                         print_header,
                         reconstruct_dependencies,
                         print_access_specifiers,
                     );
-                    frontend_controller.send_command(FrontendCommand::UpdateReconstructedType(
-                        reconstructed_type,
+                    frontend_controller.send_command(FrontendCommand::ReconstructTypeResult(
+                        reconstructed_type_result,
                     ))?;
                 }
             }
@@ -211,17 +211,16 @@ fn worker_thread_routine(
             ) => {
                 if let Some(pdb_file_from) = pdb_files.get(&pdb_from_slot) {
                     if let Some(pdb_file_to) = pdb_files.get(&pdb_to_slot) {
-                        let type_diff = diff_type_by_name(
+                        let type_diff_result = diff_type_by_name(
                             pdb_file_from,
                             pdb_file_to,
                             &type_name,
                             print_header,
                             reconstruct_dependencies,
                             print_access_specifiers,
-                        )?;
-                        frontend_controller.send_command(
-                            FrontendCommand::UpdateReconstructedTypeDiff(type_diff),
-                        )?;
+                        );
+                        frontend_controller
+                            .send_command(FrontendCommand::DiffTypeResult(type_diff_result))?;
                     }
                 }
             }
@@ -237,24 +236,17 @@ fn reconstruct_type_by_index_command(
     print_header: bool,
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
-) -> String {
-    match pdb_file.reconstruct_type_by_type_index(
+) -> Result<String> {
+    let data = pdb_file.reconstruct_type_by_type_index(
         type_index,
         reconstruct_dependencies,
         print_access_specifiers,
-    ) {
-        Err(err) => {
-            // Make it obvious an error occured
-            format!("Error: {}", err)
-        }
-        Ok(data) => {
-            if print_header {
-                let file_header = generate_file_header(pdb_file, true);
-                format!("{}{}", file_header, data)
-            } else {
-                data
-            }
-        }
+    )?;
+    if print_header {
+        let file_header = generate_file_header(pdb_file, true);
+        Ok(format!("{}{}", file_header, data))
+    } else {
+        Ok(data)
     }
 }
 
@@ -264,24 +256,17 @@ fn reconstruct_type_by_name_command(
     print_header: bool,
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
-) -> String {
-    match pdb_file.reconstruct_type_by_name(
+) -> Result<String> {
+    let data = pdb_file.reconstruct_type_by_name(
         type_name,
         reconstruct_dependencies,
         print_access_specifiers,
-    ) {
-        Err(err) => {
-            // Make it obvious an error occured
-            format!("Error: {}", err)
-        }
-        Ok(data) => {
-            if print_header {
-                let file_header = generate_file_header(pdb_file, true);
-                format!("{}{}", file_header, data)
-            } else {
-                data
-            }
-        }
+    )?;
+    if print_header {
+        let file_header = generate_file_header(pdb_file, true);
+        Ok(format!("{}{}", file_header, data))
+    } else {
+        Ok(data)
     }
 }
 

@@ -247,25 +247,30 @@ impl ResymcApp {
                 print_access_specifiers,
             ))?;
         // Wait for the backend to finish filtering types
-        if let FrontendCommand::UpdateReconstructedType(reconstructed_type) =
+        if let FrontendCommand::ReconstructTypeResult(reconstructed_type_result) =
             self.frontend_controller.rx_ui.recv()?
         {
-            // Dump output
-            if let Some(output_file_path) = output_file_path {
-                let mut output_file = File::create(output_file_path)?;
-                output_file.write_all(reconstructed_type.as_bytes())?;
-            } else if highlight_syntax {
-                const LANGUAGE_SYNTAX: &str = "cpp";
-                let theme = CodeTheme::dark();
-                if let Some(colorized_reconstructed_type) =
-                    highlight_code(&theme, &reconstructed_type, LANGUAGE_SYNTAX, None)
-                {
-                    println!("{}", colorized_reconstructed_type);
+            match reconstructed_type_result {
+                Err(err) => Err(err),
+                Ok(reconstructed_type) => {
+                    // Dump output
+                    if let Some(output_file_path) = output_file_path {
+                        let mut output_file = File::create(output_file_path)?;
+                        output_file.write_all(reconstructed_type.as_bytes())?;
+                    } else if highlight_syntax {
+                        const LANGUAGE_SYNTAX: &str = "cpp";
+                        let theme = CodeTheme::dark();
+                        if let Some(colorized_reconstructed_type) =
+                            highlight_code(&theme, &reconstructed_type, LANGUAGE_SYNTAX, None)
+                        {
+                            println!("{}", colorized_reconstructed_type);
+                        }
+                    } else {
+                        println!("{}", reconstructed_type);
+                    }
+                    Ok(())
                 }
-            } else {
-                println!("{}", reconstructed_type);
             }
-            Ok(())
         } else {
             Err(anyhow!("Invalid response received from the backend?"))
         }
@@ -329,36 +334,41 @@ impl ResymcApp {
             print_access_specifiers,
         ))?;
         // Wait for the backend to finish
-        if let FrontendCommand::UpdateReconstructedTypeDiff(reconstructed_type_diff) =
+        if let FrontendCommand::DiffTypeResult(reconstructed_type_diff_result) =
             self.frontend_controller.rx_ui.recv()?
         {
-            // Dump output
-            if let Some(output_file_path) = output_file_path {
-                let mut output_file = File::create(output_file_path)?;
-                output_file.write_all(reconstructed_type_diff.data.as_bytes())?;
-            } else if highlight_syntax {
-                const LANGUAGE_SYNTAX: &str = "cpp";
-                let theme = CodeTheme::dark();
-                let line_descriptions =
-                    reconstructed_type_diff
-                        .metadata
-                        .iter()
-                        .fold(vec![], |mut acc, e| {
-                            acc.push(e.1);
-                            acc
-                        });
-                if let Some(colorized_reconstructed_type) = highlight_code(
-                    &theme,
-                    &reconstructed_type_diff.data,
-                    LANGUAGE_SYNTAX,
-                    Some(line_descriptions),
-                ) {
-                    println!("{}", colorized_reconstructed_type);
+            match reconstructed_type_diff_result {
+                Err(err) => Err(err),
+                Ok(reconstructed_type_diff) => {
+                    // Dump output
+                    if let Some(output_file_path) = output_file_path {
+                        let mut output_file = File::create(output_file_path)?;
+                        output_file.write_all(reconstructed_type_diff.data.as_bytes())?;
+                    } else if highlight_syntax {
+                        const LANGUAGE_SYNTAX: &str = "cpp";
+                        let theme = CodeTheme::dark();
+                        let line_descriptions =
+                            reconstructed_type_diff
+                                .metadata
+                                .iter()
+                                .fold(vec![], |mut acc, e| {
+                                    acc.push(e.1);
+                                    acc
+                                });
+                        if let Some(colorized_reconstructed_type) = highlight_code(
+                            &theme,
+                            &reconstructed_type_diff.data,
+                            LANGUAGE_SYNTAX,
+                            Some(line_descriptions),
+                        ) {
+                            println!("{}", colorized_reconstructed_type);
+                        }
+                    } else {
+                        println!("{}", reconstructed_type_diff.data);
+                    }
+                    Ok(())
                 }
-            } else {
-                println!("{}", reconstructed_type_diff.data);
             }
-            Ok(())
         } else {
             Err(anyhow!("Invalid response received from the backend?"))
         }

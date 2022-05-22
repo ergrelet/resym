@@ -53,6 +53,16 @@ struct ResymApp {
     backend: Backend,
 }
 
+#[derive(PartialEq)]
+enum ResymAppMode {
+    /// Mode in which the application starts
+    Idle,
+    /// This mode means we're browsing a single PDB file
+    Browsing(String, usize, String),
+    /// This mode means we're comparing two PDB files for differences
+    Comparing(String, String, usize, Vec<DiffChange>, String),
+}
+
 // GUI-related trait
 impl eframe::App for ResymApp {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
@@ -199,7 +209,7 @@ impl<'p> ResymApp {
                             }
 
                             self.current_mode =
-                                ResymAppMode::Browsing(String::default(), String::default());
+                                ResymAppMode::Browsing(String::default(), 0, String::default());
                             // Request a type list update
                             if let Err(err) =
                                 self.backend.send_command(BackendCommand::UpdateTypeFilter(
@@ -215,6 +225,7 @@ impl<'p> ResymApp {
                             self.current_mode = ResymAppMode::Comparing(
                                 String::default(),
                                 String::default(),
+                                0,
                                 vec![],
                                 String::default(),
                             );
@@ -234,46 +245,70 @@ impl<'p> ResymApp {
                     }
                 },
 
-                FrontendCommand::UpdateReconstructedType(data) => {
-                    let line_numbers =
-                        (1..1 + data.lines().count()).fold(String::default(), |mut acc, e| {
-                            let _r = writeln!(&mut acc, "{}", e);
-                            acc
-                        });
-                    self.current_mode = ResymAppMode::Browsing(line_numbers, data);
+                FrontendCommand::ReconstructTypeResult(type_reconstruction_result) => {
+                    match type_reconstruction_result {
+                        Err(err) => {
+                            log::error!("Failed to reconstruct type: {}", err);
+                        }
+                        Ok(reconstructed_type) => {
+                            let last_line_number = 1 + reconstructed_type.lines().count();
+                            let line_numbers =
+                                (1..last_line_number).fold(String::default(), |mut acc, e| {
+                                    let _r = writeln!(&mut acc, "{}", e);
+                                    acc
+                                });
+                            self.current_mode = ResymAppMode::Browsing(
+                                line_numbers,
+                                last_line_number,
+                                reconstructed_type,
+                            );
+                        }
+                    }
                 }
 
-                FrontendCommand::UpdateReconstructedTypeDiff(type_diff) => {
-                    let (line_numbers_old, line_numbers_new, line_changes) =
-                        type_diff.metadata.iter().fold(
-                            (String::default(), String::default(), vec![]),
-                            |(mut acc_old, mut acc_new, mut acc_changes), metadata| {
-                                let indices = metadata.0;
+                FrontendCommand::DiffTypeResult(type_diff_result) => match type_diff_result {
+                    Err(err) => {
+                        log::error!("Failed to diff type: {}", err);
+                    }
+                    Ok(type_diff) => {
+                        let mut last_line_number = 1;
+                        let (line_numbers_old, line_numbers_new, line_changes) =
+                            type_diff.metadata.iter().fold(
+                                (String::default(), String::default(), vec![]),
+                                |(mut acc_old, mut acc_new, mut acc_changes), metadata| {
+                                    let indices = metadata.0;
 
-                                if let Some(indice) = indices.0 {
-                                    let _r = writeln!(&mut acc_old, "{}", 1 + indice);
-                                } else {
-                                    let _r = writeln!(&mut acc_old);
-                                }
+                                    if let Some(indice) = indices.0 {
+                                        last_line_number =
+                                            std::cmp::max(last_line_number, 1 + indice);
+                                        let _r = writeln!(&mut acc_old, "{}", 1 + indice);
+                                    } else {
+                                        let _r = writeln!(&mut acc_old);
+                                    }
 
-                                if let Some(indice) = indices.1 {
-                                    let _r = writeln!(&mut acc_new, "{}", 1 + indice);
-                                } else {
-                                    let _r = writeln!(&mut acc_new);
-                                }
+                                    if let Some(indice) = indices.1 {
+                                        last_line_number =
+                                            std::cmp::max(last_line_number, 1 + indice);
+                                        let _r = writeln!(&mut acc_new, "{}", 1 + indice);
+                                    } else {
+                                        let _r = writeln!(&mut acc_new);
+                                    }
 
-                                acc_changes.push(metadata.1);
+                                    acc_changes.push(metadata.1);
 
-                                (acc_old, acc_new, acc_changes)
-                            },
+                                    (acc_old, acc_new, acc_changes)
+                                },
+                            );
+
+                        self.current_mode = ResymAppMode::Comparing(
+                            line_numbers_old,
+                            line_numbers_new,
+                            last_line_number,
+                            line_changes,
+                            type_diff.data,
                         );
-                    self.current_mode = ResymAppMode::Comparing(
-                        line_numbers_old,
-                        line_numbers_new,
-                        line_changes,
-                        type_diff.data,
-                    );
-                }
+                    }
+                },
 
                 FrontendCommand::UpdateFilteredTypes(filtered_types) => {
                     self.filtered_type_list = filtered_types;
@@ -408,11 +443,12 @@ impl<'p> ResymApp {
             CodeTheme::dark()
         };
 
-        let line_desc = if let ResymAppMode::Comparing(_, _, line_changes, _) = &self.current_mode {
-            Some(line_changes)
-        } else {
-            None
-        };
+        let line_desc =
+            if let ResymAppMode::Comparing(_, _, _, line_changes, _) = &self.current_mode {
+                Some(line_changes)
+            } else {
+                None
+            };
 
         // Layouter that'll disable wrapping and apply syntax highlighting if needed
         let mut layouter = |ui: &egui::Ui, string: &str, _wrap_width: f32| {
@@ -431,27 +467,44 @@ impl<'p> ResymApp {
         egui::ScrollArea::both()
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                let num_colums = if self.settings.print_line_numbers {
-                    if let ResymAppMode::Comparing(..) = self.current_mode {
-                        // Old index + new index + code editor
-                        3
-                    } else {
-                        // Line numbers + code editor
-                        2
+                const LINE_NUMBER_DIGIT_WIDTH: usize = 10;
+                let (num_colums, min_column_width) = if self.settings.print_line_numbers {
+                    match self.current_mode {
+                        ResymAppMode::Comparing(_, _, last_line_number, ..) => {
+                            // Compute the columns' sizes from the number of digits
+                            let char_count = int_log10(last_line_number);
+                            let line_number_width = (char_count * LINE_NUMBER_DIGIT_WIDTH) as f32;
+
+                            // Old index + new index + code editor
+                            (3, line_number_width)
+                        }
+                        ResymAppMode::Browsing(_, last_line_number, _) => {
+                            // Compute the columns' sizes from the number of digits
+                            let char_count = int_log10(last_line_number);
+                            let line_number_width = (char_count * LINE_NUMBER_DIGIT_WIDTH) as f32;
+
+                            // Line numbers + code editor
+                            (2, line_number_width)
+                        }
+                        _ => {
+                            // Code editor only
+                            (1, 0.0)
+                        }
                     }
                 } else {
                     // Code editor only
-                    1
+                    (1, 0.0)
                 };
-                const LINE_NUMBER_WIDTH: f32 = 40.0;
+
                 egui::Grid::new("code_editor_grid")
                     .num_columns(num_colums)
-                    .min_col_width(LINE_NUMBER_WIDTH)
+                    .min_col_width(min_column_width)
                     .show(ui, |ui| {
                         match &self.current_mode {
                             ResymAppMode::Comparing(
                                 line_numbers_old,
                                 line_numbers_new,
+                                _,
                                 _,
                                 reconstructed_type_diff,
                             ) => {
@@ -460,12 +513,12 @@ impl<'p> ResymApp {
                                     ui.add(
                                         egui::TextEdit::multiline(&mut line_numbers_old.as_str())
                                             .interactive(false)
-                                            .desired_width(LINE_NUMBER_WIDTH),
+                                            .desired_width(min_column_width),
                                     );
                                     ui.add(
                                         egui::TextEdit::multiline(&mut line_numbers_new.as_str())
                                             .interactive(false)
-                                            .desired_width(LINE_NUMBER_WIDTH),
+                                            .desired_width(min_column_width),
                                     );
                                 }
                                 // Text content
@@ -477,13 +530,13 @@ impl<'p> ResymApp {
                                     .layouter(&mut layouter),
                                 );
                             }
-                            ResymAppMode::Browsing(line_numbers, reconstructed_type_content) => {
+                            ResymAppMode::Browsing(line_numbers, _, reconstructed_type_content) => {
                                 // Line numbers
                                 if self.settings.print_line_numbers {
                                     ui.add(
                                         egui::TextEdit::multiline(&mut line_numbers.as_str())
                                             .interactive(false)
-                                            .desired_width(LINE_NUMBER_WIDTH),
+                                            .desired_width(min_column_width),
                                     );
                                 }
                                 // Text content
@@ -582,9 +635,23 @@ impl Default for ResymAppSettings {
     }
 }
 
-#[derive(PartialEq)]
-enum ResymAppMode {
-    Idle,
-    Browsing(String, String),
-    Comparing(String, String, Vec<DiffChange>, String),
+// FIXME: Replace with `checked_log10` once it's stabilized.
+fn int_log10<T>(mut i: T) -> usize
+where
+    T: std::ops::DivAssign + std::cmp::PartialOrd + From<u8> + Copy,
+{
+    let zero = T::from(0);
+    if i == zero {
+        return 1;
+    }
+
+    let mut len = 0;
+    let ten = T::from(10);
+
+    while i > zero {
+        i /= ten;
+        len += 1;
+    }
+
+    len
 }
