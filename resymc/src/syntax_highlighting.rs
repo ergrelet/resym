@@ -89,7 +89,7 @@ impl CodeHighlighter {
 }
 
 /// Changes the background of regions that have been affected in the diff.
-fn highlight_regions_diff(regions: &mut Vec<(Style, &str)>, line_description: &DiffChange) {
+fn highlight_regions_diff(regions: &mut [(Style, &str)], line_description: &DiffChange) {
     let bg_color = match line_description {
         DiffChange::Insert => COLOR_GREEN,
         DiffChange::Delete => COLOR_RED,

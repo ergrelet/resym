@@ -1,4 +1,7 @@
-use eframe::{egui, epaint::text::LayoutJob};
+use eframe::{
+    egui,
+    epaint::text::{LayoutJob, TextWrapping},
+};
 use syntect::{easy::HighlightLines, highlighting::FontStyle, util::LinesWithEndings};
 
 use resym_core::{diffing::DiffChange, syntax_highlighting::CodeTheme};
@@ -108,7 +111,10 @@ impl CodeHighlighter {
         let mut job = LayoutJob {
             text: text.into(),
             // Disable wrapping forcefully
-            wrap_width: f32::INFINITY,
+            wrap: TextWrapping {
+                max_width: f32::INFINITY,
+                ..Default::default()
+            },
             ..Default::default()
         };
 

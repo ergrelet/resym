@@ -4,10 +4,7 @@ mod frontend;
 mod syntax_highlighting;
 
 use anyhow::Result;
-use eframe::{
-    egui::{self, ScrollArea, TextStyle},
-    epi,
-};
+use eframe::egui::{self, ScrollArea, TextStyle};
 use memory_logger::blocking::MemoryLogger;
 use resym_core::{
     backend::{Backend, BackendCommand, PDBSlot},
@@ -33,9 +30,12 @@ const PDB_DIFF_SLOT: PDBSlot = 1;
 
 fn main() -> Result<()> {
     let logger = MemoryLogger::setup(log::Level::Info)?;
-    let app = ResymApp::new(logger)?;
     let native_options = eframe::NativeOptions::default();
-    eframe::run_native(Box::new(app), native_options);
+    eframe::run_native(
+        PKG_NAME,
+        native_options,
+        Box::new(|cc| Box::new(ResymApp::new(cc, logger).expect("application creation"))),
+    );
 }
 
 /// Struct that represents our GUI application.
@@ -54,38 +54,15 @@ struct ResymApp {
 }
 
 // GUI-related trait
-impl epi::App for ResymApp {
-    fn name(&self) -> &str {
-        PKG_NAME
-    }
-
-    /// Called once before the first frame.
-    fn setup(
-        &mut self,
-        _ctx: &egui::Context,
-        frame: &epi::Frame,
-        storage: Option<&dyn epi::Storage>,
-    ) {
-        log::info!("{} {}", PKG_NAME, PKG_VERSION);
-        // If this fails, let it burn
-        self.frontend_controller
-            .set_ui_frame(frame.clone())
-            .unwrap();
-
-        // Load settings on launch
-        if let Some(storage) = storage {
-            self.settings = epi::get_value(storage, epi::APP_KEY).unwrap_or_default()
-        }
-    }
-
-    fn save(&mut self, storage: &mut dyn epi::Storage) {
+impl eframe::App for ResymApp {
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
         // Save settings on shutdown
-        epi::set_value(storage, epi::APP_KEY, &self.settings);
+        eframe::set_value(storage, eframe::APP_KEY, &self.settings);
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
-    fn update(&mut self, ctx: &egui::Context, frame: &epi::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         // Process incoming commands, if any
         self.process_ui_commands();
 
@@ -169,11 +146,22 @@ impl epi::App for ResymApp {
 
 // Utility associated functions and methods
 impl<'p> ResymApp {
-    fn new(logger: &'static MemoryLogger) -> Result<Self> {
+    fn new(cc: &eframe::CreationContext<'_>, logger: &'static MemoryLogger) -> Result<Self> {
         let (tx_ui, rx_ui) = crossbeam_channel::unbounded::<FrontendCommand>();
-        let frontend_controller = Arc::new(EguiFrontendController::new(tx_ui, rx_ui));
+        let frontend_controller = Arc::new(EguiFrontendController::new(
+            tx_ui,
+            rx_ui,
+            cc.egui_ctx.clone(),
+        ));
         let backend = Backend::new(frontend_controller.clone())?;
 
+        // Load settings on launch
+        let mut settings = ResymAppSettings::default();
+        if let Some(storage) = cc.storage {
+            settings = eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()
+        }
+
+        log::info!("{} {}", PKG_NAME, PKG_VERSION);
         Ok(Self {
             logger,
             current_mode: ResymAppMode::Idle,
@@ -182,7 +170,7 @@ impl<'p> ResymApp {
             search_filter: String::default(),
             console_content: vec![],
             settings_wnd_open: false,
-            settings: ResymAppSettings::default(),
+            settings,
             frontend_controller,
             backend,
         })
@@ -295,7 +283,7 @@ impl<'p> ResymApp {
         }
     }
 
-    fn update_menu_bar(&mut self, ui: &mut egui::Ui, frame: &epi::Frame) {
+    fn update_menu_bar(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| {
                 if ui.button("Open PDB file").clicked() {
@@ -455,10 +443,11 @@ impl<'p> ResymApp {
                     // Code editor only
                     1
                 };
+                const LINE_NUMBER_WIDTH: f32 = 40.0;
                 egui::Grid::new("code_editor_grid")
                     .num_columns(num_colums)
+                    .min_col_width(LINE_NUMBER_WIDTH)
                     .show(ui, |ui| {
-                        const LINE_NUMBER_WIDTH: f32 = 30.0;
                         match &self.current_mode {
                             ResymAppMode::Comparing(
                                 line_numbers_old,

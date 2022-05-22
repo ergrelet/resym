@@ -1,4 +1,4 @@
-# resym [![Build Status](https://github.com/ergrelet/resym/workflows/Tests/badge.svg?branch=master)](https://github.com/ergrelet/resym/actions?query=workflow%3ATests) [![License](https://img.shields.io/badge/license-Apache--2.0_OR_MIT-blue.svg)](https://img.shields.io/badge/license-Apache--2.0_OR_MIT-blue.svg) [![rustc 1.59.0](https://img.shields.io/badge/rust-1.59.0%2B-orange.svg)](https://img.shields.io/badge/rust-1.59.0%2B-orange.svg)
+# resym [![Build Status](https://github.com/ergrelet/resym/workflows/Tests/badge.svg?branch=master)](https://github.com/ergrelet/resym/actions?query=workflow%3ATests) [![License](https://img.shields.io/badge/license-Apache--2.0_OR_MIT-blue.svg)](https://img.shields.io/badge/license-Apache--2.0_OR_MIT-blue.svg) [![rustc 1.60.0](https://img.shields.io/badge/rust-1.60.0%2B-orange.svg)](https://img.shields.io/badge/rust-1.60.0%2B-orange.svg)
 
 `resym` is a utility that allows browsing and extracting types from PDB files.
 
@@ -12,6 +12,13 @@ Inspired by [PDBRipper](https://github.com/horsicq/PDBRipper) and
 * C and C++ types reconstruction
 * C and C++ types diff generation (between two PDBs)
 * Decent performance, even on huge PDB files
+
+## Know limitations
+
+The GUI version might struggle to display huge outputs (>20 MB). Disabling
+syntax highlighting (or dependency reconstruction altogether) will help, but
+generally the CLI version is more suited when dumping types with a huge amount
+of dependencies.
 
 ## Why Another PDB Dumper?
 
