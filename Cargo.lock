@@ -1480,7 +1480,7 @@ checksum = "f497285884f3fcff424ffc933e56d7cbca511def0c9831a7f9b5f6153e3cc89b"
 
 [[package]]
 name = "resym"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "crossbeam-channel",
@@ -1495,7 +1495,7 @@ dependencies = [
 
 [[package]]
 name = "resym_core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "crossbeam-channel",
@@ -1511,7 +1511,7 @@ dependencies = [
 
 [[package]]
 name = "resymc"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "crossbeam-channel",

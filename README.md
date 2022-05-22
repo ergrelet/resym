@@ -45,8 +45,8 @@ $ ./target/release/resym
 If you want to use the GUI version, simply run the `resym` executable.  
 A CLI version (named `resymc`) is also available:
 ```
-resymc 0.1.0
-resym is a utility that allows browsing and extracting types from PDB files.
+resymc 0.2.0
+resymc is a utility that allows browsing and extracting types from PDB files.
 
 USAGE:
     resymc.exe <SUBCOMMAND>

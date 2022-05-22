@@ -1,10 +1,10 @@
 [package]
 name = "resym"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
-resym_core = { version = "0.1", path = "../resym_core" }
+resym_core = { version = "0.2", path = "../resym_core" }
 
 eframe = { version = "0.18", features = ["persistence"] }
 tinyfiledialogs = "3.0"

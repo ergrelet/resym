@@ -81,7 +81,7 @@ fn main() -> Result<()> {
 #[derive(Debug, StructOpt)]
 #[structopt(
     name = PKG_NAME,
-    about = "resym is a utility that allows browsing and extracting types from PDB files."
+    about = "resymc is a utility that allows browsing and extracting types from PDB files."
 )]
 enum ResymOptions {
     /// List types from a given PDB file
