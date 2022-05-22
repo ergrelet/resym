@@ -75,7 +75,9 @@ impl CodeHighlighter {
             let mut regions = h.highlight_line(line, &self.ps).ok()?;
             // Apply highlight related to diff changes if needed
             if let Some(line_descriptions) = &line_descriptions {
-                highlight_regions_diff(&mut regions, line_descriptions.get(line_id)?);
+                highlight_regions_diff(&mut regions, line_descriptions.get(line_id));
+            } else {
+                highlight_regions_diff(&mut regions, None);
             }
             let _r = write!(
                 &mut output,
@@ -89,17 +91,23 @@ impl CodeHighlighter {
 }
 
 /// Changes the background of regions that have been affected in the diff.
-fn highlight_regions_diff(regions: &mut [(Style, &str)], line_description: &DiffChange) {
-    let bg_color = match line_description {
-        DiffChange::Insert => COLOR_GREEN,
-        DiffChange::Delete => COLOR_RED,
-        DiffChange::Equal => COLOR_TRANSPARENT,
-    };
-    regions.iter_mut().for_each(|(style, str)| {
-        if *str != "\n" {
-            style.background = bg_color;
-        } else {
+fn highlight_regions_diff(regions: &mut [(Style, &str)], line_description: Option<&DiffChange>) {
+    if let Some(line_description) = line_description {
+        let bg_color = match line_description {
+            DiffChange::Insert => COLOR_GREEN,
+            DiffChange::Delete => COLOR_RED,
+            DiffChange::Equal => COLOR_TRANSPARENT,
+        };
+        regions.iter_mut().for_each(|(style, str)| {
+            if *str != "\n" {
+                style.background = bg_color;
+            } else {
+                style.background = COLOR_TRANSPARENT;
+            }
+        });
+    } else {
+        regions.iter_mut().for_each(|(style, _)| {
             style.background = COLOR_TRANSPARENT;
-        }
-    });
+        });
+    }
 }
