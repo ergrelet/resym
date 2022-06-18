@@ -11,7 +11,6 @@ use super::{
     DataFormatConfiguration, Field, Method, TypeForwarder, TypeSet,
 };
 
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClassAccess {
     None,

@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+### Fixed
+- Reconstruct access specifiers for base classes (@TrinityDevelopers)
 
 ## [0.2.0] - 2022-05-22
 ### Added
