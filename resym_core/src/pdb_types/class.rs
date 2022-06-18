@@ -11,10 +11,45 @@ use super::{
     DataFormatConfiguration, Field, Method, TypeForwarder, TypeSet,
 };
 
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ClassAccess {
+    None,
+    Private,
+    Protected,
+    Public,
+}
+impl ClassAccess {
+    pub fn from_field_attribute(value: u8) -> Self {
+        match value {
+            0 => ClassAccess::None,
+            1 => ClassAccess::Private,
+            2 => ClassAccess::Protected,
+            3 => ClassAccess::Public,
+            _ => unreachable!("Major PDB format update?"),
+        }
+    }
+}
+impl fmt::Display for ClassAccess {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                ClassAccess::None => "",
+                ClassAccess::Private => "private",
+                ClassAccess::Protected => "protected",
+                ClassAccess::Public => "public",
+            }
+        )
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BaseClass {
     type_name: String,
     offset: u32,
+    access: ClassAccess,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -291,6 +326,7 @@ impl<'p> Class<'p> {
                     )?
                     .0,
                     offset: data.offset,
+                    access: ClassAccess::from_field_attribute(data.attributes.access()),
                 })
             }
 
@@ -307,6 +343,7 @@ impl<'p> Class<'p> {
                     )?
                     .0,
                     offset: data.base_pointer_offset,
+                    access: ClassAccess::from_field_attribute(data.attributes.access()),
                 })
             }
 
@@ -360,7 +397,7 @@ impl<'p> Class<'p> {
                     0 => " :",
                     _ => ",",
                 };
-                write!(f, "{} {}", prefix, base.type_name)?;
+                write!(f, "{} {} {}", prefix, base.access, base.type_name)?;
             }
         }
 
