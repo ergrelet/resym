@@ -327,7 +327,7 @@ impl<'p> Union<'p> {
             for method in &self.instance_methods {
                 writeln!(
                     f,
-                    "  {}{}{}{}({}){};",
+                    "  {}{}{}{}({}){}{}{};",
                     if fmt_configuration.print_access_specifiers {
                         &method.access
                     } else {
@@ -341,6 +341,8 @@ impl<'p> Union<'p> {
                     },
                     &method.name,
                     method.arguments.join(", "),
+                    if method.is_const { " const"} else { "" },
+                    if method.is_volatile { " volatile"} else { "" },
                     if method.is_pure_virtual { " = 0" } else { "" },
                 )?;
             }
@@ -351,7 +353,7 @@ impl<'p> Union<'p> {
             for method in &self.static_methods {
                 writeln!(
                     f,
-                    "  {}{}static {} {}({});",
+                    "  {}{}static {} {}({}){}{};",
                     if fmt_configuration.print_access_specifiers {
                         &method.access
                     } else {
@@ -360,7 +362,9 @@ impl<'p> Union<'p> {
                     if method.is_virtual { "virtual " } else { "" },
                     method.return_type_name,
                     &method.name,
-                    method.arguments.join(", ")
+                    method.arguments.join(", "),
+                    if method.is_const { " const"} else { "" },
+                    if method.is_volatile { " volatile"} else { "" },
                 )?;
             }
         }

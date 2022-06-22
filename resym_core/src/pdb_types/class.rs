@@ -454,7 +454,7 @@ impl<'p> Class<'p> {
             for method in &self.instance_methods {
                 writeln!(
                     f,
-                    "  {}{}{}{}({}){};",
+                    "  {}{}{}{}({}){}{}{};",
                     if fmt_configuration.print_access_specifiers {
                         &method.access
                     } else {
@@ -468,6 +468,8 @@ impl<'p> Class<'p> {
                     },
                     &method.name,
                     method.arguments.join(", "),
+                    if method.is_const { " const"} else { "" },
+                    if method.is_volatile { " volatile"} else { "" },
                     if method.is_pure_virtual { " = 0" } else { "" },
                 )?;
             }
@@ -478,7 +480,7 @@ impl<'p> Class<'p> {
             for method in &self.static_methods {
                 writeln!(
                     f,
-                    "  {}static {} {}({});",
+                    "  {}static {} {}({}){}{};",
                     if fmt_configuration.print_access_specifiers {
                         &method.access
                     } else {
@@ -486,7 +488,9 @@ impl<'p> Class<'p> {
                     },
                     method.return_type_name,
                     &method.name,
-                    method.arguments.join(", ")
+                    method.arguments.join(", "),
+                    if method.is_const { " const"} else { "" },
+                    if method.is_volatile { " volatile"} else { "" },
                 )?;
             }
         }

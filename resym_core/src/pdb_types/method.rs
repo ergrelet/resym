@@ -10,6 +10,8 @@ pub struct Method<'p> {
     pub is_virtual: bool,
     pub is_pure_virtual: bool,
     pub is_ctor: bool,
+    pub is_const: bool,
+    pub is_volatile: bool,
     pub access: FieldAccess,
 }
 
@@ -45,6 +47,20 @@ impl<'p> Method<'p> {
                 is_pure_virtual: attributes.is_pure_virtual(),
                 is_ctor: data.attributes.is_constructor()
                     || data.attributes.is_constructor_with_virtual_bases(),
+                is_const: {
+                    if let Some(func_modifier) = Method::find_func_modifier(&data, type_finder) {
+                        func_modifier.constant
+                    } else {
+                        false
+                    }
+                },
+                is_volatile: {
+                    if let Some(func_modifier) = Method::find_func_modifier(&data, type_finder) {
+                        func_modifier.volatile
+                    } else {
+                        false
+                    }
+                },
                 access: FieldAccess::from_field_attribute(attributes.access()),
             }),
 
@@ -52,6 +68,34 @@ impl<'p> Method<'p> {
                 log::error!("other: {:?}", other);
                 Err(anyhow!("Unhandled type data"))
             }
+        }
+    }
+
+    pub fn find_func_modifier(
+        member_func_type: &pdb::MemberFunctionType,
+        type_finder: &pdb::TypeFinder<'p>
+    ) -> Option<pdb::ModifierType> {
+        if let Some(this_pointer_type) = member_func_type.this_pointer_type {
+            match type_finder.find(this_pointer_type).ok()?.parse().ok()? {
+                pdb::TypeData::Pointer(data) => {
+                    match type_finder.find(data.underlying_type).ok()?.parse().ok()? {
+                        pdb::TypeData::Modifier(data) => {
+                            Some(data)
+                        },
+                        _ => {
+                            // no modifier on this_pointer_type
+                            None
+                        }
+                    }
+                },
+                _ => {
+                    // this_pointer_type is not a pointer
+                    None
+                }
+            }
+        } else {
+            // no this pointer
+            None
         }
     }
 }
