@@ -341,8 +341,8 @@ impl<'p> Union<'p> {
                     },
                     &method.name,
                     method.arguments.join(", "),
-                    if method.is_const { " const"} else { "" },
-                    if method.is_volatile { " volatile"} else { "" },
+                    if method.is_const { " const" } else { "" },
+                    if method.is_volatile { " volatile" } else { "" },
                     if method.is_pure_virtual { " = 0" } else { "" },
                 )?;
             }
@@ -363,8 +363,8 @@ impl<'p> Union<'p> {
                     method.return_type_name,
                     &method.name,
                     method.arguments.join(", "),
-                    if method.is_const { " const"} else { "" },
-                    if method.is_volatile { " volatile"} else { "" },
+                    if method.is_const { " const" } else { "" },
+                    if method.is_volatile { " volatile" } else { "" },
                 )?;
             }
         }

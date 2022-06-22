@@ -3,6 +3,7 @@
 ## [Unreleased]
 ### Fixed
 - Reconstruct access specifiers for base classes (@TrinityDevelopers)
+- Reconstruct type qualifiers for member functions (@TrinityDevelopers)
 
 ## [0.2.0] - 2022-05-22
 ### Added

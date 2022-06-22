@@ -73,21 +73,19 @@ impl<'p> Method<'p> {
 
     pub fn find_func_modifier(
         member_func_type: &pdb::MemberFunctionType,
-        type_finder: &pdb::TypeFinder<'p>
+        type_finder: &pdb::TypeFinder<'p>,
     ) -> Option<pdb::ModifierType> {
         if let Some(this_pointer_type) = member_func_type.this_pointer_type {
             match type_finder.find(this_pointer_type).ok()?.parse().ok()? {
                 pdb::TypeData::Pointer(data) => {
                     match type_finder.find(data.underlying_type).ok()?.parse().ok()? {
-                        pdb::TypeData::Modifier(data) => {
-                            Some(data)
-                        },
+                        pdb::TypeData::Modifier(data) => Some(data),
                         _ => {
                             // no modifier on this_pointer_type
                             None
                         }
                     }
-                },
+                }
                 _ => {
                     // this_pointer_type is not a pointer
                     None
