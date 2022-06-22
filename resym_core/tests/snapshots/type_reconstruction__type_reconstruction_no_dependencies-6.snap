@@ -11,6 +11,9 @@ struct resym_test::StructTest { /* Size=0x18 */
   public: static uint64_t su5;
   
   public: void* GetPtr();
+  public: void* ConstMethod() const;
+  public: void* VolatileMethod() volatile;
+  public: void* ConstVolatileMethod() const volatile;
   public: virtual int32_t Virtual();
   public: StructTest(resym_test::StructTest&);
   public: StructTest(const resym_test::StructTest&);

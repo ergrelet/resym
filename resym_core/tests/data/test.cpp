@@ -71,6 +71,9 @@ struct BitFieldsTest2 {
 
 union UnionTest {
   void* GetPtr() { return nullptr; }
+  void* ConstMethod() const { return nullptr; }
+  void* VolatileMethod() volatile { return nullptr; }
+  void* ConstVolatileMethod() const volatile { return nullptr; }
   static int Magic() { return 42; }
   static int MagicVar1(...) { return 64; }
   static int MagicVar2(int arg...) { return 96; }
@@ -84,6 +87,9 @@ union UnionTest {
 
 struct StructTest {
   void* GetPtr() { return nullptr; }
+  void* ConstMethod() const { return nullptr; }
+  void* VolatileMethod() volatile { return nullptr; }
+  void* ConstVolatileMethod() const volatile { return nullptr; }
   virtual int Virtual() { return 37; }
   static int Magic() { return 42; }
   static int MagicVar1(...) { return 64; }
