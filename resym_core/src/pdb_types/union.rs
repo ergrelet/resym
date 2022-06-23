@@ -327,7 +327,7 @@ impl<'p> Union<'p> {
             for method in &self.instance_methods {
                 writeln!(
                     f,
-                    "  {}{}{}{}({}){}{}{};",
+                    "  {}{}{}{}{}({}){}{}{}{};",
                     if fmt_configuration.print_access_specifiers {
                         &method.access
                     } else {
@@ -337,10 +337,12 @@ impl<'p> Union<'p> {
                     if method.is_ctor {
                         String::default()
                     } else {
-                        format!("{} ", method.return_type_name)
+                        method.return_type_name.0.clone()
                     },
+                    if method.return_type_name.1.is_empty() { " " } else { "" },
                     &method.name,
                     method.arguments.join(", "),
+                    method.return_type_name.1,
                     if method.is_const { " const" } else { "" },
                     if method.is_volatile { " volatile" } else { "" },
                     if method.is_pure_virtual { " = 0" } else { "" },
@@ -353,16 +355,18 @@ impl<'p> Union<'p> {
             for method in &self.static_methods {
                 writeln!(
                     f,
-                    "  {}{}static {} {}({}){}{};",
+                    "  {}{}static {}{}{}({}){}{}{};",
                     if fmt_configuration.print_access_specifiers {
                         &method.access
                     } else {
                         &FieldAccess::None
                     },
                     if method.is_virtual { "virtual " } else { "" },
-                    method.return_type_name,
+                    method.return_type_name.0,
+                    if method.return_type_name.1.is_empty() { " " } else { "" },
                     &method.name,
                     method.arguments.join(", "),
+                    method.return_type_name.1,
                     if method.is_const { " const" } else { "" },
                     if method.is_volatile { " volatile" } else { "" },
                 )?;
