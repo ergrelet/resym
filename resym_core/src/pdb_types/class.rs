@@ -462,7 +462,7 @@ impl<'p> Class<'p> {
                     },
                     if method.is_virtual { "virtual " } else { "" },
                     if method.is_ctor { "" } else { &method.return_type_name.0 },
-                    if method.return_type_name.1.is_empty() { " " } else { "" },
+                    if !method.is_ctor && method.return_type_name.1.is_empty() { " " } else { "" },
                     &method.name,
                     method.arguments.join(", "),
                     method.return_type_name.1,
