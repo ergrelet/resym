@@ -5,7 +5,7 @@ use super::{argument_list, field::FieldAccess, type_name, TypeForwarder, TypeSet
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Method<'p> {
     pub name: pdb::RawString<'p>,
-    pub return_type_name: String,
+    pub return_type_name: (String, String),
     pub arguments: Vec<String>,
     pub is_virtual: bool,
     pub is_pure_virtual: bool,
@@ -32,8 +32,7 @@ impl<'p> Method<'p> {
                     type_forwarder,
                     data.return_type,
                     needed_types,
-                )?
-                .0,
+                )?,
                 arguments: argument_list(
                     type_finder,
                     type_forwarder,

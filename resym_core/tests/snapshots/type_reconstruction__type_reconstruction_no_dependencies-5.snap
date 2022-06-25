@@ -14,6 +14,7 @@ union resym_test::UnionTest { /* Size=0x8 */
   public: void* ConstMethod() const;
   public: void* VolatileMethod() volatile;
   public: void* ConstVolatileMethod() const volatile;
+  public: void (*ReturnFuncPointerMethod())(int32_t);
   public: UnionTest();
   
   public: static int32_t Magic();
