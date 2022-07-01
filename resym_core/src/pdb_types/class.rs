@@ -466,7 +466,7 @@ impl<'p> Class<'p> {
                     } else {
                         &method.return_type_name.0
                     },
-                    if !method.is_ctor && method.return_type_name.1.is_empty() {
+                    if !method.is_ctor && !method.is_dtor && method.return_type_name.1.is_empty() {
                         " "
                     } else {
                         ""
