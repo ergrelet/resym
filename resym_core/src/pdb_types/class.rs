@@ -461,7 +461,7 @@ impl<'p> Class<'p> {
                         &FieldAccess::None
                     },
                     if method.is_virtual { "virtual " } else { "" },
-                    if method.is_ctor {
+                    if method.is_ctor || method.is_dtor {
                         ""
                     } else {
                         &method.return_type_name.0
