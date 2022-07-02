@@ -461,12 +461,12 @@ impl<'p> Class<'p> {
                         &FieldAccess::None
                     },
                     if method.is_virtual { "virtual " } else { "" },
-                    if method.is_ctor {
+                    if method.is_ctor || method.is_dtor {
                         ""
                     } else {
                         &method.return_type_name.0
                     },
-                    if !method.is_ctor && method.return_type_name.1.is_empty() {
+                    if !method.is_ctor && !method.is_dtor && method.return_type_name.1.is_empty() {
                         " "
                     } else {
                         ""

@@ -70,6 +70,9 @@ struct BitFieldsTest2 {
 };
 
 union UnionTest {
+  UnionTest() : u4() {}
+  ~UnionTest() {}
+
   void* GetPtr() { return nullptr; }
   void* ConstMethod() const { return nullptr; }
   void* VolatileMethod() volatile { return nullptr; }
@@ -79,7 +82,7 @@ union UnionTest {
   static int MagicVar1(...) { return 64; }
   static int MagicVar2(int arg...) { return 96; }
 
-  uint8_t u1{};
+  uint8_t u1;
   uint16_t u2;
   uint32_t u3;
   uint64_t u4;
@@ -87,6 +90,9 @@ union UnionTest {
 };
 
 struct StructTest {
+  StructTest() : u1(), u2(), u3(), u4() {}
+  ~StructTest() {}
+
   void* GetPtr() { return nullptr; }
   void* ConstMethod() const { return nullptr; }
   void* VolatileMethod() volatile { return nullptr; }
@@ -97,10 +103,10 @@ struct StructTest {
   static int MagicVar1(...) { return 64; }
   static int MagicVar2(int arg...) { return 96; }
 
-  uint8_t u1{};
-  uint16_t u2{};
-  uint32_t u3{};
-  uint64_t u4{};
+  uint8_t u1;
+  uint16_t u2;
+  uint32_t u3;
+  uint64_t u4;
   static uint64_t su5;
 };
 

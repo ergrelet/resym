@@ -10,17 +10,17 @@ struct resym_test::StructTest { /* Size=0x18 */
   /* 0x0010 */ public: uint64_t u4;
   public: static uint64_t su5;
   
+  public: StructTest(const resym_test::StructTest&);
+  public: StructTest();
+  public: ~StructTest();
   public: void* GetPtr();
   public: void* ConstMethod() const;
   public: void* VolatileMethod() volatile;
   public: void* ConstVolatileMethod() const volatile;
   public: void (*ReturnFuncPointerMethod())(int32_t);
   public: virtual int32_t Virtual();
-  public: StructTest(resym_test::StructTest&);
-  public: StructTest(const resym_test::StructTest&);
-  public: StructTest();
-  public: resym_test::StructTest& operator=(resym_test::StructTest&);
   public: resym_test::StructTest& operator=(const resym_test::StructTest&);
+  public: void* __vecDelDtor(uint32_t);
   
   public: static int32_t Magic();
   public: static int32_t MagicVar1(...);

@@ -10,12 +10,14 @@ union resym_test::UnionTest { /* Size=0x8 */
   /* 0x0000 */ public: uint64_t u4;
   public: static uint64_t su5;
   
+  public: UnionTest();
+  public: ~UnionTest();
   public: void* GetPtr();
   public: void* ConstMethod() const;
   public: void* VolatileMethod() volatile;
   public: void* ConstVolatileMethod() const volatile;
   public: void (*ReturnFuncPointerMethod())(int32_t);
-  public: UnionTest();
+  public: void* __vecDelDtor(uint32_t);
   
   public: static int32_t Magic();
   public: static int32_t MagicVar1(...);

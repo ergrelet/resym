@@ -10,6 +10,7 @@ pub struct Method<'p> {
     pub is_virtual: bool,
     pub is_pure_virtual: bool,
     pub is_ctor: bool,
+    pub is_dtor: bool,
     pub is_const: bool,
     pub is_volatile: bool,
     pub access: FieldAccess,
@@ -46,6 +47,7 @@ impl<'p> Method<'p> {
                 is_pure_virtual: attributes.is_pure_virtual(),
                 is_ctor: data.attributes.is_constructor()
                     || data.attributes.is_constructor_with_virtual_bases(),
+                is_dtor: name.to_string().starts_with("~"),
                 is_const: {
                     if let Some(func_modifier) = Method::find_func_modifier(&data, type_finder) {
                         func_modifier.constant
