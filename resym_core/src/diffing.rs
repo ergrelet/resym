@@ -3,7 +3,7 @@ use similar::{ChangeTag, TextDiff};
 
 use std::fmt::Write;
 
-use crate::{pdb_file::PdbFile, PKG_VERSION};
+use crate::{pdb_file::PdbFile, pdb_types::PrimitiveReconstructionFlavor, PKG_VERSION};
 
 pub type DiffChange = ChangeTag;
 pub type DiffIndices = (Option<usize>, Option<usize>);
@@ -23,6 +23,7 @@ pub fn diff_type_by_name(
     pdb_file_from: &PdbFile,
     pdb_file_to: &PdbFile,
     type_name: &str,
+    primitives_flavor: PrimitiveReconstructionFlavor,
     print_header: bool,
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
@@ -39,10 +40,20 @@ pub fn diff_type_by_name(
     // Reconstruct type from both PDBs
     {
         let reconstructed_type_from_tmp = pdb_file_from
-            .reconstruct_type_by_name(type_name, reconstruct_dependencies, print_access_specifiers)
+            .reconstruct_type_by_name(
+                type_name,
+                primitives_flavor,
+                reconstruct_dependencies,
+                print_access_specifiers,
+            )
             .unwrap_or_default();
         let reconstructed_type_to_tmp = pdb_file_to
-            .reconstruct_type_by_name(type_name, reconstruct_dependencies, print_access_specifiers)
+            .reconstruct_type_by_name(
+                type_name,
+                primitives_flavor,
+                reconstruct_dependencies,
+                print_access_specifiers,
+            )
             .unwrap_or_default();
         if reconstructed_type_from_tmp.is_empty() && reconstructed_type_to_tmp.is_empty() {
             // Make it obvious an error occured

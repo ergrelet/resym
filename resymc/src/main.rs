@@ -7,6 +7,7 @@ use anyhow::{anyhow, Result};
 use resym_core::{
     backend::{Backend, BackendCommand, PDBSlot},
     frontend::FrontendCommand,
+    pdb_types::PrimitiveReconstructionFlavor,
     syntax_highlighting::CodeTheme,
 };
 use structopt::StructOpt;
@@ -242,6 +243,7 @@ impl ResymcApp {
             .send_command(BackendCommand::ReconstructTypeByName(
                 PDB_MAIN_SLOT,
                 type_name,
+                PrimitiveReconstructionFlavor::Portable,
                 print_header,
                 print_dependencies,
                 print_access_specifiers,
@@ -329,6 +331,7 @@ impl ResymcApp {
             PDB_MAIN_SLOT,
             PDB_DIFF_TO_SLOT,
             type_name,
+            PrimitiveReconstructionFlavor::Portable,
             print_header,
             print_dependencies,
             print_access_specifiers,

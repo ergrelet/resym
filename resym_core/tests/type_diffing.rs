@@ -1,6 +1,8 @@
 use std::path::Path;
 
-use resym_core::{diffing::diff_type_by_name, pdb_file::PdbFile};
+use resym_core::{
+    diffing::diff_type_by_name, pdb_file::PdbFile, pdb_types::PrimitiveReconstructionFlavor,
+};
 
 const TEST_PDB_FROM_FILE_PATH: &str = "tests/data/test_diff_from.pdb";
 const TEST_PDB_TO_FILE_PATH: &str = "tests/data/test_diff_to.pdb";
@@ -24,6 +26,7 @@ fn test_struct_diffing() {
             &pdb_file_from,
             &pdb_file_to,
             test_case_type_name,
+            PrimitiveReconstructionFlavor::Portable,
             false,
             false,
             false,
@@ -44,6 +47,7 @@ fn test_struct_diffing_inexistent_type() {
         &pdb_file_from,
         &pdb_file_to,
         INEXISTENT_TYPE_NAME,
+        PrimitiveReconstructionFlavor::Portable,
         false,
         false,
         false,

@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use resym_core::pdb_file::PdbFile;
+use resym_core::{pdb_file::PdbFile, pdb_types::PrimitiveReconstructionFlavor};
 
 const TEST_PDB_FILE_PATH: &str = "tests/data/test.pdb";
 const TEST_CASES: &[&str] = &[
@@ -27,7 +27,12 @@ fn test_type_reconstruction_no_dependencies() {
     let pdb_file = PdbFile::load_from_file(Path::new(TEST_PDB_FILE_PATH)).expect("load test.pdb");
     for test_case_type_name in TEST_CASES {
         let reconstructed_type = pdb_file
-            .reconstruct_type_by_name(test_case_type_name, false, true)
+            .reconstruct_type_by_name(
+                test_case_type_name,
+                PrimitiveReconstructionFlavor::Portable,
+                false,
+                true,
+            )
             .expect(format!("reconstruct type: {}", test_case_type_name).as_str());
 
         insta::assert_snapshot!(reconstructed_type);

@@ -6,8 +6,10 @@ use super::{
     class::Class,
     enumeration::Enum,
     field::{FieldAccess, StaticField},
-    fmt_union_fields_recursive, is_unnamed_type, resolve_complete_type_index, type_name, type_size,
-    DataFormatConfiguration, Field, Method, TypeForwarder, TypeSet,
+    fmt_union_fields_recursive, is_unnamed_type,
+    primitive_types::PrimitiveReconstructionFlavor,
+    resolve_complete_type_index, type_name, type_size, DataFormatConfiguration, Field, Method,
+    TypeForwarder, TypeSet,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +31,7 @@ impl<'p> Union<'p> {
         type_finder: &pdb::TypeFinder<'p>,
         type_forwarder: &TypeForwarder,
         type_index: pdb::TypeIndex,
+        primitive_flavor: &PrimitiveReconstructionFlavor,
         needed_types: &mut TypeSet,
     ) -> Result<()> {
         // Resolve the complete type's index, if present in the PDB
@@ -36,12 +39,24 @@ impl<'p> Union<'p> {
         match type_finder.find(complete_type_index)?.parse()? {
             pdb::TypeData::FieldList(data) => {
                 for field in &data.fields {
-                    self.add_field(type_finder, type_forwarder, field, needed_types)?;
+                    self.add_field(
+                        type_finder,
+                        type_forwarder,
+                        field,
+                        primitive_flavor,
+                        needed_types,
+                    )?;
                 }
 
                 if let Some(continuation) = data.continuation {
                     // recurse
-                    self.add_fields(type_finder, type_forwarder, continuation, needed_types)?;
+                    self.add_fields(
+                        type_finder,
+                        type_forwarder,
+                        continuation,
+                        primitive_flavor,
+                        needed_types,
+                    )?;
                 }
             }
 
@@ -74,7 +89,13 @@ impl<'p> Union<'p> {
                 }
 
                 if let Some(fields) = data.fields {
-                    class.add_fields(type_finder, type_forwarder, fields, needed_types)?;
+                    class.add_fields(
+                        type_finder,
+                        type_forwarder,
+                        fields,
+                        primitive_flavor,
+                        needed_types,
+                    )?;
                 }
 
                 self.nested_classes.insert(0, class);
@@ -101,7 +122,13 @@ impl<'p> Union<'p> {
                     nested_enums: Vec::new(),
                 };
 
-                u.add_fields(type_finder, type_forwarder, data.fields, needed_types)?;
+                u.add_fields(
+                    type_finder,
+                    type_forwarder,
+                    data.fields,
+                    primitive_flavor,
+                    needed_types,
+                )?;
 
                 self.nested_unions.insert(0, u);
             }
@@ -121,6 +148,7 @@ impl<'p> Union<'p> {
                         type_finder,
                         type_forwarder,
                         data.underlying_type,
+                        primitive_flavor,
                         needed_types,
                     )?
                     .0,
@@ -153,6 +181,7 @@ impl<'p> Union<'p> {
         type_finder: &pdb::TypeFinder<'p>,
         type_forwarder: &TypeForwarder,
         field: &pdb::TypeData<'p>,
+        primitive_flavor: &PrimitiveReconstructionFlavor,
         needed_types: &mut TypeSet,
     ) -> Result<()> {
         match *field {
@@ -164,6 +193,7 @@ impl<'p> Union<'p> {
                     type_finder,
                     type_forwarder,
                     complete_type_index,
+                    primitive_flavor,
                     needed_types,
                 )?;
                 let type_size = type_size(type_finder, complete_type_index)?;
@@ -187,6 +217,7 @@ impl<'p> Union<'p> {
                     type_finder,
                     type_forwarder,
                     complete_type_index,
+                    primitive_flavor,
                     needed_types,
                 )?;
                 let access = FieldAccess::from_field_attribute(data.attributes.access());
@@ -206,6 +237,7 @@ impl<'p> Union<'p> {
                     type_finder,
                     type_forwarder,
                     data.method_type,
+                    primitive_flavor,
                     needed_types,
                 )?;
                 if data.attributes.is_static() {
@@ -246,6 +278,7 @@ impl<'p> Union<'p> {
                                 type_finder,
                                 type_forwarder,
                                 method_type,
+                                primitive_flavor,
                                 needed_types,
                             )?;
 

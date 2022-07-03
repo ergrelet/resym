@@ -10,6 +10,7 @@ use resym_core::{
     backend::{Backend, BackendCommand, PDBSlot},
     diffing::DiffChange,
     frontend::{FrontendCommand, TypeList},
+    pdb_types::PrimitiveReconstructionFlavor,
     syntax_highlighting::CodeTheme,
 };
 use serde::{Deserialize, Serialize};
@@ -381,6 +382,7 @@ impl<'p> ResymApp {
                                             BackendCommand::ReconstructTypeByIndex(
                                                 PDB_MAIN_SLOT,
                                                 *type_index,
+                                                PrimitiveReconstructionFlavor::Portable,
                                                 self.settings.print_header,
                                                 self.settings.reconstruct_dependencies,
                                                 self.settings.print_access_specifiers,
@@ -395,6 +397,7 @@ impl<'p> ResymApp {
                                                 PDB_MAIN_SLOT,
                                                 PDB_DIFF_SLOT,
                                                 type_name.clone(),
+                                                PrimitiveReconstructionFlavor::Portable,
                                                 self.settings.print_header,
                                                 self.settings.reconstruct_dependencies,
                                                 self.settings.print_access_specifiers,
