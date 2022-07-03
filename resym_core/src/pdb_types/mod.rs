@@ -2,6 +2,7 @@ mod class;
 mod enumeration;
 mod field;
 mod method;
+mod primitive_types;
 mod union;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -12,11 +13,10 @@ use anyhow::{anyhow, Result};
 
 use class::Class;
 use enumeration::Enum;
-use field::Field;
+use field::{Field, FieldAccess};
 use method::Method;
+use primitive_types::primitive_kind_as_str_portable;
 use union::Union;
-
-use self::field::FieldAccess;
 
 /// Set of `TypeIndex` objets
 pub type TypeSet = BTreeSet<pdb::TypeIndex>;
@@ -32,44 +32,7 @@ pub fn type_name<'p>(
 ) -> Result<(String, String)> {
     let (type_left, type_right) = match type_finder.find(type_index)?.parse()? {
         pdb::TypeData::Primitive(data) => {
-            let mut name = match data.kind {
-                pdb::PrimitiveKind::Void => "void".to_string(),
-                pdb::PrimitiveKind::Char | pdb::PrimitiveKind::RChar => "char".to_string(),
-                pdb::PrimitiveKind::UChar => "unsigned char".to_string(),
-                pdb::PrimitiveKind::WChar => "wchar_t".to_string(),
-                pdb::PrimitiveKind::RChar16 => "char16_t".to_string(),
-                pdb::PrimitiveKind::RChar32 => "char32_t".to_string(),
-
-                pdb::PrimitiveKind::I8 => "int8_t".to_string(),
-                pdb::PrimitiveKind::U8 => "uint8_t".to_string(),
-                pdb::PrimitiveKind::I16 | pdb::PrimitiveKind::Short => "int16_t".to_string(),
-                pdb::PrimitiveKind::U16 | pdb::PrimitiveKind::UShort => "uint16_t".to_string(),
-                pdb::PrimitiveKind::I32 | pdb::PrimitiveKind::Long => "int32_t".to_string(),
-                pdb::PrimitiveKind::U32 | pdb::PrimitiveKind::ULong => "uint32_t".to_string(),
-                pdb::PrimitiveKind::I64 | pdb::PrimitiveKind::Quad => "int64_t".to_string(),
-                pdb::PrimitiveKind::U64 | pdb::PrimitiveKind::UQuad => "uint64_t".to_string(),
-
-                pdb::PrimitiveKind::F32 => "float".to_string(),
-                pdb::PrimitiveKind::F64 => "double".to_string(),
-
-                pdb::PrimitiveKind::Bool8 => "bool".to_string(),
-
-                // Windows-specific, usually implemented as "long"
-                pdb::PrimitiveKind::HRESULT => "HRESULT".to_string(),
-
-                // TODO: Seems valid for C++ method parameters. Are there other
-                // cases of legitimate "NoType" occurences?
-                pdb::PrimitiveKind::NoType => "...".to_string(),
-
-                _ => format!(
-                    "/* FIXME: Unhandled primitive kind: '{:?}' */ void",
-                    data.kind
-                ),
-            };
-
-            if data.indirection.is_some() {
-                name.push('*');
-            }
+            let name = primitive_kind_as_str_portable(data.kind, data.indirection.is_some())?;
 
             (name, String::default())
         }
