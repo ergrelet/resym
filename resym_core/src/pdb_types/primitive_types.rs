@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum PrimitiveReconstructionFlavor {
     Portable,
     Microsoft,
