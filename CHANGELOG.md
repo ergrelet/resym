@@ -5,6 +5,7 @@
 - Reconstruct access specifiers for base classes (@TrinityDevelopers)
 - Reconstruct type qualifiers for member functions (@TrinityDevelopers)
 - Fix reconstruction of function pointer return types for member functions (@TrinityDevelopers)
+- Fix incorrect reconstruction of class/struct and union destructors (@TrinityDevelopers)
 
 ## [0.2.0] - 2022-05-22
 ### Added
