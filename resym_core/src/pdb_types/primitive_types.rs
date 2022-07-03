@@ -1,3 +1,5 @@
+use std::{fmt, str::FromStr};
+
 use anyhow::{anyhow, Result};
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -5,6 +7,28 @@ pub enum PrimitiveReconstructionFlavor {
     Portable,
     Microsoft,
     Raw,
+}
+
+impl FromStr for PrimitiveReconstructionFlavor {
+    type Err = ParsePrimitiveFlavorError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "portable" => Ok(PrimitiveReconstructionFlavor::Portable),
+            "ms" | "msft" | "microsoft" => Ok(PrimitiveReconstructionFlavor::Microsoft),
+            _ => Err(ParsePrimitiveFlavorError {}),
+        }
+    }
+}
+
+/// An error returned when parsing a `PrimitiveReconstructionFlavor` from a string fails.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParsePrimitiveFlavorError {}
+
+impl fmt::Display for ParsePrimitiveFlavorError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        "provided string was not recognized as a valid flavor".fmt(f)
+    }
 }
 
 pub fn include_headers_for_flavor(flavor: PrimitiveReconstructionFlavor) -> String {
