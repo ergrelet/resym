@@ -23,18 +23,33 @@ const TEST_CASES: &[&str] = &[
 ];
 
 #[test]
-fn test_type_reconstruction_no_dependencies() {
+fn test_type_reconstruction_portable_access_specifiers() {
+    test_type_reconstruction_internal(
+        "type_reconstruction_portable_access_specifiers",
+        PrimitiveReconstructionFlavor::Portable,
+        false,
+        true,
+    );
+}
+
+fn test_type_reconstruction_internal(
+    test_name: &str,
+    primitives_flavor: PrimitiveReconstructionFlavor,
+    reconstruct_dependencies: bool,
+    print_access_specifiers: bool,
+) {
     let pdb_file = PdbFile::load_from_file(Path::new(TEST_PDB_FILE_PATH)).expect("load test.pdb");
-    for test_case_type_name in TEST_CASES {
+    for (i, test_case_type_name) in TEST_CASES.iter().enumerate() {
         let reconstructed_type = pdb_file
             .reconstruct_type_by_name(
                 test_case_type_name,
-                PrimitiveReconstructionFlavor::Portable,
-                false,
-                true,
+                primitives_flavor,
+                reconstruct_dependencies,
+                print_access_specifiers,
             )
             .expect(format!("reconstruct type: {}", test_case_type_name).as_str());
 
-        insta::assert_snapshot!(reconstructed_type);
+        let snapshot_name = format!("{}-{}", test_name, i);
+        insta::assert_snapshot!(snapshot_name, reconstructed_type);
     }
 }
