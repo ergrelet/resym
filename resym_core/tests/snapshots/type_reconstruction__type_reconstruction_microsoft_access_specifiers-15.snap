@@ -1,0 +1,21 @@
+---
+source: resym_core/tests/type_reconstruction.rs
+expression: reconstructed_type
+---
+
+class resym_test::ClassWithRefsAndStaticsTest { /* Size=0x40 */
+  /* 0x0000 */ private: LONG& iref;
+  /* 0x0008 */ private: const LONG& ciref;
+  /* 0x0010 */ private: PLONG iptr;
+  /* 0x0018 */ private: const LONG* ciptr;
+  /* 0x0020 */ private: BOOLEAN& bref;
+  /* 0x0028 */ private: const BOOLEAN& cbref;
+  /* 0x0030 */ private: PBOOLEAN bptr;
+  /* 0x0038 */ private: const BOOLEAN* cbptr;
+  private: static LONG sint;
+  private: static BOOLEAN sbool;
+  
+  public: ClassWithRefsAndStaticsTest();
+  public: VOID __autoclassinit2(ULONGLONG);
+};
+

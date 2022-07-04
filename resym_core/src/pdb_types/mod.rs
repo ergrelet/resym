@@ -2,6 +2,7 @@ mod class;
 mod enumeration;
 mod field;
 mod method;
+mod primitive_types;
 mod union;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -12,11 +13,12 @@ use anyhow::{anyhow, Result};
 
 use class::Class;
 use enumeration::Enum;
-use field::Field;
+use field::{Field, FieldAccess};
 use method::Method;
+use primitive_types::primitive_kind_as_str;
 use union::Union;
 
-use self::field::FieldAccess;
+pub use primitive_types::{include_headers_for_flavor, PrimitiveReconstructionFlavor};
 
 /// Set of `TypeIndex` objets
 pub type TypeSet = BTreeSet<pdb::TypeIndex>;
@@ -28,48 +30,13 @@ pub fn type_name<'p>(
     type_finder: &pdb::TypeFinder<'p>,
     type_forwarder: &TypeForwarder,
     type_index: pdb::TypeIndex,
+    primitive_flavor: &PrimitiveReconstructionFlavor,
     needed_types: &mut TypeSet,
 ) -> Result<(String, String)> {
     let (type_left, type_right) = match type_finder.find(type_index)?.parse()? {
         pdb::TypeData::Primitive(data) => {
-            let mut name = match data.kind {
-                pdb::PrimitiveKind::Void => "void".to_string(),
-                pdb::PrimitiveKind::Char | pdb::PrimitiveKind::RChar => "char".to_string(),
-                pdb::PrimitiveKind::UChar => "unsigned char".to_string(),
-                pdb::PrimitiveKind::WChar => "wchar_t".to_string(),
-                pdb::PrimitiveKind::RChar16 => "char16_t".to_string(),
-                pdb::PrimitiveKind::RChar32 => "char32_t".to_string(),
-
-                pdb::PrimitiveKind::I8 => "int8_t".to_string(),
-                pdb::PrimitiveKind::U8 => "uint8_t".to_string(),
-                pdb::PrimitiveKind::I16 | pdb::PrimitiveKind::Short => "int16_t".to_string(),
-                pdb::PrimitiveKind::U16 | pdb::PrimitiveKind::UShort => "uint16_t".to_string(),
-                pdb::PrimitiveKind::I32 | pdb::PrimitiveKind::Long => "int32_t".to_string(),
-                pdb::PrimitiveKind::U32 | pdb::PrimitiveKind::ULong => "uint32_t".to_string(),
-                pdb::PrimitiveKind::I64 | pdb::PrimitiveKind::Quad => "int64_t".to_string(),
-                pdb::PrimitiveKind::U64 | pdb::PrimitiveKind::UQuad => "uint64_t".to_string(),
-
-                pdb::PrimitiveKind::F32 => "float".to_string(),
-                pdb::PrimitiveKind::F64 => "double".to_string(),
-
-                pdb::PrimitiveKind::Bool8 => "bool".to_string(),
-
-                // Windows-specific, usually implemented as "long"
-                pdb::PrimitiveKind::HRESULT => "HRESULT".to_string(),
-
-                // TODO: Seems valid for C++ method parameters. Are there other
-                // cases of legitimate "NoType" occurences?
-                pdb::PrimitiveKind::NoType => "...".to_string(),
-
-                _ => format!(
-                    "/* FIXME: Unhandled primitive kind: '{:?}' */ void",
-                    data.kind
-                ),
-            };
-
-            if data.indirection.is_some() {
-                name.push('*');
-            }
+            let name =
+                primitive_kind_as_str(primitive_flavor, data.kind, data.indirection.is_some())?;
 
             (name, String::default())
         }
@@ -111,6 +78,7 @@ pub fn type_name<'p>(
                 type_finder,
                 type_forwarder,
                 complete_underlying_type_index,
+                primitive_flavor,
                 needed_types,
             )?;
             if data.attributes.is_reference() {
@@ -128,6 +96,7 @@ pub fn type_name<'p>(
                 type_finder,
                 type_forwarder,
                 complete_underlying_type_index,
+                primitive_flavor,
                 needed_types,
             )?;
 
@@ -149,6 +118,7 @@ pub fn type_name<'p>(
                 type_finder,
                 type_forwarder,
                 complete_element_type_index,
+                primitive_flavor,
                 needed_types,
             )?;
             let type_size = u32::try_from(type_size(type_finder, complete_element_type_index)?)?;
@@ -191,6 +161,7 @@ pub fn type_name<'p>(
                 type_finder,
                 type_forwarder,
                 complete_underlying_type_index,
+                primitive_flavor,
                 needed_types,
             )?;
             (type_left, format!("{} : {}", type_right, data.length))
@@ -206,6 +177,7 @@ pub fn type_name<'p>(
                     type_finder,
                     type_forwarder,
                     complete_return_type_index,
+                    primitive_flavor,
                     needed_types,
                 )?
             } else {
@@ -215,6 +187,7 @@ pub fn type_name<'p>(
                 type_finder,
                 type_forwarder,
                 data.argument_list,
+                primitive_flavor,
                 needed_types,
             )?;
 
@@ -235,18 +208,21 @@ pub fn type_name<'p>(
                 type_finder,
                 type_forwarder,
                 complete_return_type_index,
+                primitive_flavor,
                 needed_types,
             )?;
             let (class_type_left, _) = type_name(
                 type_finder,
                 type_forwarder,
                 complete_class_type_index,
+                primitive_flavor,
                 needed_types,
             )?;
             let arg_list = argument_list(
                 type_finder,
                 type_forwarder,
                 data.argument_list,
+                primitive_flavor,
                 needed_types,
             )?;
 
@@ -275,6 +251,7 @@ fn array_base_name<'p>(
     type_finder: &pdb::TypeFinder<'p>,
     type_forwarder: &TypeForwarder,
     type_index: pdb::TypeIndex,
+    primitive_flavor: &PrimitiveReconstructionFlavor,
     needed_types: &mut TypeSet,
 ) -> Result<(String, Vec<usize>)> {
     match type_finder.find(type_index)?.parse()? {
@@ -286,6 +263,7 @@ fn array_base_name<'p>(
                 type_finder,
                 type_forwarder,
                 complete_element_type_index,
+                primitive_flavor,
                 needed_types,
             )?;
             let type_size = u32::try_from(type_size(type_finder, complete_element_type_index)?)?;
@@ -313,7 +291,14 @@ fn array_base_name<'p>(
             Ok((base_name, base_dimensions))
         }
         _ => Ok((
-            type_name(type_finder, type_forwarder, type_index, needed_types)?.0,
+            type_name(
+                type_finder,
+                type_forwarder,
+                type_index,
+                primitive_flavor,
+                needed_types,
+            )?
+            .0,
             vec![],
         )),
     }
@@ -323,13 +308,23 @@ pub fn argument_list<'p>(
     type_finder: &pdb::TypeFinder<'p>,
     type_forwarder: &TypeForwarder,
     type_index: pdb::TypeIndex,
+    primitive_flavor: &PrimitiveReconstructionFlavor,
     needed_types: &mut TypeSet,
 ) -> Result<Vec<String>> {
     match type_finder.find(type_index)?.parse()? {
         pdb::TypeData::ArgumentList(data) => {
             let mut args: Vec<String> = Vec::new();
             for arg_type in data.arguments {
-                args.push(type_name(type_finder, type_forwarder, arg_type, needed_types)?.0);
+                args.push(
+                    type_name(
+                        type_finder,
+                        type_forwarder,
+                        arg_type,
+                        primitive_flavor,
+                        needed_types,
+                    )?
+                    .0,
+                );
             }
             Ok(args)
         }
@@ -495,6 +490,7 @@ impl<'p> Data<'p> {
         type_finder: &pdb::TypeFinder<'p>,
         type_forwarder: &TypeForwarder,
         type_index: pdb::TypeIndex,
+        primitive_flavor: &PrimitiveReconstructionFlavor,
         needed_types: &mut TypeSet,
     ) -> Result<()> {
         match type_finder.find(type_index)?.parse()? {
@@ -539,9 +535,13 @@ impl<'p> Data<'p> {
                     // reconstruction to go through even when LF_TYPESERVER_ST
                     // types are encountered. Alert the user that the result
                     // might be incomplete.
-                    if let Err(err) =
-                        class.add_fields(type_finder, type_forwarder, fields, needed_types)
-                    {
+                    if let Err(err) = class.add_fields(
+                        type_finder,
+                        type_forwarder,
+                        fields,
+                        primitive_flavor,
+                        needed_types,
+                    ) {
                         log::error!(
                             "Error encountered while reconstructing '{}': {}",
                             class.name,
@@ -574,9 +574,13 @@ impl<'p> Data<'p> {
                     nested_enums: Vec::new(),
                 };
 
-                if let Err(err) =
-                    u.add_fields(type_finder, type_forwarder, data.fields, needed_types)
-                {
+                if let Err(err) = u.add_fields(
+                    type_finder,
+                    type_forwarder,
+                    data.fields,
+                    primitive_flavor,
+                    needed_types,
+                ) {
                     log::error!(
                         "Error encountered while reconstructing '{}': {}",
                         u.name,
@@ -602,6 +606,7 @@ impl<'p> Data<'p> {
                         type_finder,
                         type_forwarder,
                         data.underlying_type,
+                        primitive_flavor,
                         needed_types,
                     )?
                     .0,

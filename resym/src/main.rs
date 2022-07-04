@@ -1,6 +1,7 @@
 #![windows_subsystem = "windows"]
 
 mod frontend;
+mod settings;
 mod syntax_highlighting;
 
 use anyhow::Result;
@@ -10,15 +11,18 @@ use resym_core::{
     backend::{Backend, BackendCommand, PDBSlot},
     diffing::DiffChange,
     frontend::{FrontendCommand, TypeList},
+    pdb_types::PrimitiveReconstructionFlavor,
     syntax_highlighting::CodeTheme,
 };
-use serde::{Deserialize, Serialize};
 use tinyfiledialogs::open_file_dialog;
 
 use std::fmt::Write;
 use std::{sync::Arc, vec};
 
-use crate::{frontend::EguiFrontendController, syntax_highlighting::highlight_code};
+use crate::{
+    frontend::EguiFrontendController, settings::ResymAppSettings,
+    syntax_highlighting::highlight_code,
+};
 
 const PKG_NAME: &str = env!("CARGO_PKG_NAME");
 const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -381,6 +385,7 @@ impl<'p> ResymApp {
                                             BackendCommand::ReconstructTypeByIndex(
                                                 PDB_MAIN_SLOT,
                                                 *type_index,
+                                                self.settings.primitive_types_flavor,
                                                 self.settings.print_header,
                                                 self.settings.reconstruct_dependencies,
                                                 self.settings.print_access_specifiers,
@@ -395,6 +400,7 @@ impl<'p> ResymApp {
                                                 PDB_MAIN_SLOT,
                                                 PDB_DIFF_SLOT,
                                                 type_name.clone(),
+                                                self.settings.primitive_types_flavor,
                                                 self.settings.print_header,
                                                 self.settings.reconstruct_dependencies,
                                                 self.settings.print_access_specifiers,
@@ -585,6 +591,31 @@ impl<'p> ResymApp {
                     &mut self.settings.enable_syntax_hightlighting,
                     "Enable C++ syntax highlighting",
                 );
+
+                ui.label(
+                    egui::RichText::new("Primitive types style")
+                        .color(ui.style().visuals.widgets.inactive.text_color()),
+                );
+                egui::ComboBox::from_id_source("primitive_types_flavor")
+                    .selected_text(format!("{:?}", self.settings.primitive_types_flavor))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(
+                            &mut self.settings.primitive_types_flavor,
+                            PrimitiveReconstructionFlavor::Portable,
+                            "Portable",
+                        );
+                        ui.selectable_value(
+                            &mut self.settings.primitive_types_flavor,
+                            PrimitiveReconstructionFlavor::Microsoft,
+                            "Microsoft",
+                        );
+                        ui.selectable_value(
+                            &mut self.settings.primitive_types_flavor,
+                            PrimitiveReconstructionFlavor::Raw,
+                            "Raw",
+                        );
+                    });
+
                 ui.checkbox(&mut self.settings.print_header, "Print header");
                 ui.checkbox(
                     &mut self.settings.reconstruct_dependencies,
@@ -604,34 +635,6 @@ impl<'p> ResymApp {
             "",
             Some((&["*.pdb"], "PDB files (*.pdb)")),
         )
-    }
-}
-
-/// This struct represents the persistent settings of the application.
-#[derive(Serialize, Deserialize)]
-struct ResymAppSettings {
-    use_light_theme: bool,
-    search_case_insensitive: bool,
-    search_use_regex: bool,
-    enable_syntax_hightlighting: bool,
-    print_header: bool,
-    reconstruct_dependencies: bool,
-    print_access_specifiers: bool,
-    print_line_numbers: bool,
-}
-
-impl Default for ResymAppSettings {
-    fn default() -> Self {
-        Self {
-            use_light_theme: false,
-            search_case_insensitive: true,
-            search_use_regex: false,
-            enable_syntax_hightlighting: true,
-            print_header: true,
-            reconstruct_dependencies: true,
-            print_access_specifiers: true,
-            print_line_numbers: false,
-        }
     }
 }
 

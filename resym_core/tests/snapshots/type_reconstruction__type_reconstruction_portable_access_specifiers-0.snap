@@ -24,6 +24,6 @@ struct resym_test::PrimitiveTypesTest { /* Size=0x70 */
   /* 0x0050 */ public: double f2;
   /* 0x0058 */ public: double f3;
   /* 0x0060 */ public: double f4;
-  /* 0x0068 */ public: HRESULT hres;
+  /* 0x0068 */ public: int32_t hres;
 };
 

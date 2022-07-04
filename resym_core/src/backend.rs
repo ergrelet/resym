@@ -13,8 +13,12 @@ use std::{
 };
 
 use crate::{
-    diffing::diff_type_by_name, frontend::FrontendCommand, frontend::FrontendController,
-    pdb_file::PdbFile, PKG_VERSION,
+    diffing::diff_type_by_name,
+    frontend::FrontendCommand,
+    frontend::FrontendController,
+    pdb_file::PdbFile,
+    pdb_types::{include_headers_for_flavor, PrimitiveReconstructionFlavor},
+    PKG_VERSION,
 };
 
 pub type PDBSlot = usize;
@@ -25,16 +29,38 @@ pub enum BackendCommand {
     /// Unload a PDB file given its slot.
     UnloadPDB(PDBSlot),
     /// Reconstruct a type given its type index for a given PDB.
-    ReconstructTypeByIndex(PDBSlot, pdb::TypeIndex, bool, bool, bool),
+    ReconstructTypeByIndex(
+        PDBSlot,
+        pdb::TypeIndex,
+        PrimitiveReconstructionFlavor,
+        bool,
+        bool,
+        bool,
+    ),
     /// Reconstruct a type given its name for a given PDB.
-    ReconstructTypeByName(PDBSlot, String, bool, bool, bool),
+    ReconstructTypeByName(
+        PDBSlot,
+        String,
+        PrimitiveReconstructionFlavor,
+        bool,
+        bool,
+        bool,
+    ),
     /// Retrieve a list of types that match the given filter for a given PDB.
     UpdateTypeFilter(PDBSlot, String, bool, bool),
     /// Retrieve a list of types that match the given filter for multiple PDBs
     /// and merge the result.
     UpdateTypeFilterMerged(Vec<PDBSlot>, String, bool, bool),
     /// Reconstruct a diff of a type given its name.
-    DiffTypeByName(PDBSlot, PDBSlot, String, bool, bool, bool),
+    DiffTypeByName(
+        PDBSlot,
+        PDBSlot,
+        String,
+        PrimitiveReconstructionFlavor,
+        bool,
+        bool,
+        bool,
+    ),
 }
 
 /// Struct that represents the backend. The backend is responsible
@@ -114,6 +140,7 @@ fn worker_thread_routine(
             BackendCommand::ReconstructTypeByIndex(
                 pdb_slot,
                 type_index,
+                primitives_flavor,
                 print_header,
                 reconstruct_dependencies,
                 print_access_specifiers,
@@ -122,6 +149,7 @@ fn worker_thread_routine(
                     let reconstructed_type_result = reconstruct_type_by_index_command(
                         pdb_file,
                         type_index,
+                        primitives_flavor,
                         print_header,
                         reconstruct_dependencies,
                         print_access_specifiers,
@@ -135,6 +163,7 @@ fn worker_thread_routine(
             BackendCommand::ReconstructTypeByName(
                 pdb_slot,
                 type_name,
+                primitives_flavor,
                 print_header,
                 reconstruct_dependencies,
                 print_access_specifiers,
@@ -143,6 +172,7 @@ fn worker_thread_routine(
                     let reconstructed_type_result = reconstruct_type_by_name_command(
                         pdb_file,
                         &type_name,
+                        primitives_flavor,
                         print_header,
                         reconstruct_dependencies,
                         print_access_specifiers,
@@ -205,6 +235,7 @@ fn worker_thread_routine(
                 pdb_from_slot,
                 pdb_to_slot,
                 type_name,
+                primitives_flavor,
                 print_header,
                 reconstruct_dependencies,
                 print_access_specifiers,
@@ -215,6 +246,7 @@ fn worker_thread_routine(
                             pdb_file_from,
                             pdb_file_to,
                             &type_name,
+                            primitives_flavor,
                             print_header,
                             reconstruct_dependencies,
                             print_access_specifiers,
@@ -233,17 +265,19 @@ fn worker_thread_routine(
 fn reconstruct_type_by_index_command(
     pdb_file: &PdbFile,
     type_index: pdb::TypeIndex,
+    primitives_flavor: PrimitiveReconstructionFlavor,
     print_header: bool,
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
 ) -> Result<String> {
     let data = pdb_file.reconstruct_type_by_type_index(
         type_index,
+        &primitives_flavor,
         reconstruct_dependencies,
         print_access_specifiers,
     )?;
     if print_header {
-        let file_header = generate_file_header(pdb_file, true);
+        let file_header = generate_file_header(pdb_file, primitives_flavor, true);
         Ok(format!("{}{}", file_header, data))
     } else {
         Ok(data)
@@ -253,24 +287,30 @@ fn reconstruct_type_by_index_command(
 fn reconstruct_type_by_name_command(
     pdb_file: &PdbFile,
     type_name: &str,
+    primitives_flavor: PrimitiveReconstructionFlavor,
     print_header: bool,
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
 ) -> Result<String> {
     let data = pdb_file.reconstruct_type_by_name(
         type_name,
+        primitives_flavor,
         reconstruct_dependencies,
         print_access_specifiers,
     )?;
     if print_header {
-        let file_header = generate_file_header(pdb_file, true);
+        let file_header = generate_file_header(pdb_file, primitives_flavor, true);
         Ok(format!("{}{}", file_header, data))
     } else {
         Ok(data)
     }
 }
 
-fn generate_file_header(pdb_file: &PdbFile, include_stdint: bool) -> String {
+fn generate_file_header(
+    pdb_file: &PdbFile,
+    primitives_flavor: PrimitiveReconstructionFlavor,
+    include_header_files: bool,
+) -> String {
     format!(
         concat!(
             "//\n",
@@ -284,10 +324,10 @@ fn generate_file_header(pdb_file: &PdbFile, include_stdint: bool) -> String {
         pdb_file.file_path.display(),
         pdb_file.machine_type,
         PKG_VERSION,
-        if include_stdint {
-            "\n#include <cstdint>\n"
+        if include_header_files {
+            format!("\n{}", include_headers_for_flavor(primitives_flavor))
         } else {
-            ""
+            "".to_string()
         }
     )
 }

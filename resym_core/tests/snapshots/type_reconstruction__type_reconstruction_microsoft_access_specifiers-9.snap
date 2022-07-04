@@ -1,0 +1,25 @@
+---
+source: resym_core/tests/type_reconstruction.rs
+expression: reconstructed_type
+---
+
+struct resym_test::StructUnnamedUdtTest2 { /* Size=0x30 */
+  /* 0x0000 */ public: ULONGLONG Before;
+  union {
+    struct {
+      /* 0x0008 */ public: ULONGLONG u1;
+      /* 0x0010 */ public: ULONGLONG u2;
+    };
+    struct {
+      /* 0x0008 */ public: PULONGLONG p1;
+      /* 0x0010 */ public: PULONGLONG p2;
+    };
+  };
+  /* 0x0018 */ public: ULONGLONG Middle;
+  union {
+    /* 0x0020 */ public: ULONGLONG u3;
+    /* 0x0020 */ public: PULONGLONG p3;
+  };
+  /* 0x0028 */ public: ULONGLONG After;
+};
+

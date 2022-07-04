@@ -1,0 +1,44 @@
+---
+source: resym_core/tests/type_reconstruction.rs
+expression: reconstructed_type
+---
+
+struct resym_test::StructUnnamedUdtTest1 { /* Size=0xa0 */
+  union {
+    struct {
+      /* 0x0000 */ public: ULONG i1;
+      /* 0x0004 */ public: ULONG i2;
+      union {
+        /* 0x0008 */ public: ULONG i3;
+        /* 0x0008 */ public: ULONG i4;
+      };
+    };
+    /* 0x0000 */ public: ULONG i5;
+    struct {
+      /* 0x0000 */ public: ULONG i21;
+      /* 0x0004 */ public: ULONG i22;
+      /* 0x0008 */ public: ULONG i23;
+    };
+    /* 0x0000 */ public: resym_test::PrimitiveTypesTest s1;
+    /* 0x0000 */ public: ULONGLONG QuadPart;
+  };
+  /* 0x0070 */ public: ULONGLONG QuadPart2;
+  /* 0x0078 */ public: ULONGLONG QuadPart3;
+  union {
+    /* 0x0080 */ public: ULONG Reserved;
+    struct {
+      /* 0x0080 */ public: UCHAR Type;
+      /* 0x0081 */ public: UCHAR Reserved1;
+      /* 0x0082 */ public: USHORT Reserved2;
+    };
+  };
+  /* 0x0084 */ public: LONG i6;
+  /* 0x0088 */ public: LONG i7;
+  union {
+    /* 0x0090 */ public: PVOID c1;
+    /* 0x0090 */ public: CHAR c2;
+  };
+  /* 0x0098 */ public: LONG i8;
+  /* 0x009c */ public: LONG i9;
+};
+

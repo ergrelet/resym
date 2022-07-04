@@ -25,7 +25,7 @@ of dependencies.
 I often need to extract and analyze C++ types from 1GB+ PDB files comfortably,
 in an interactive manner, but I haven't been able to find a tool that ticks all
 the boxes for me so far, so this my shot at making that tool.  
-So if you're in the same boat, this some tool might be of some use to you.
+So if you're in the same boat, this tool might be of some use to you.
 
 ## How to Build
 

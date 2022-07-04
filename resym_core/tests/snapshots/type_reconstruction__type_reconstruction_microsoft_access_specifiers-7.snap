@@ -1,0 +1,11 @@
+---
+source: resym_core/tests/type_reconstruction.rs
+expression: reconstructed_type
+---
+
+enum resym_test::EnumTest2 : UCHAR {
+  kEnumTest2Val1 = 0x0000,
+  kEnumTest2Val2 = 0x0001,
+  kEnumTest2Val3 = 0x0002,
+};
+

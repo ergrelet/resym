@@ -10,7 +10,9 @@ use std::{
     sync::Arc,
 };
 
-use crate::pdb_types::{self, is_unnamed_type, DataFormatConfiguration};
+use crate::pdb_types::{
+    self, is_unnamed_type, DataFormatConfiguration, PrimitiveReconstructionFlavor,
+};
 
 pub struct PdbFile<'p> {
     pub complete_type_list: Vec<(String, pdb::TypeIndex)>,
@@ -131,6 +133,7 @@ impl<'p> PdbFile<'p> {
     pub fn reconstruct_type_by_name(
         &self,
         type_name: &str,
+        primitives_flavor: PrimitiveReconstructionFlavor,
         reconstruct_dependencies: bool,
         print_access_specifiers: bool,
     ) -> Result<String> {
@@ -218,6 +221,7 @@ impl<'p> PdbFile<'p> {
             self.reconstruct_type_by_type_index_internal(
                 &type_finder,
                 type_index,
+                &primitives_flavor,
                 reconstruct_dependencies,
                 print_access_specifiers,
             )
@@ -227,6 +231,7 @@ impl<'p> PdbFile<'p> {
     pub fn reconstruct_type_by_type_index(
         &self,
         type_index: pdb::TypeIndex,
+        primitives_flavor: &PrimitiveReconstructionFlavor,
         reconstruct_dependencies: bool,
         print_access_specifiers: bool,
     ) -> Result<String> {
@@ -242,6 +247,7 @@ impl<'p> PdbFile<'p> {
         self.reconstruct_type_by_type_index_internal(
             &type_finder,
             type_index,
+            primitives_flavor,
             reconstruct_dependencies,
             print_access_specifiers,
         )
@@ -251,6 +257,7 @@ impl<'p> PdbFile<'p> {
         &self,
         type_finder: &pdb::TypeFinder,
         type_index: pdb::TypeIndex,
+        primitives_flavor: &PrimitiveReconstructionFlavor,
         reconstruct_dependencies: bool,
         print_access_specifiers: bool,
     ) -> Result<String> {
@@ -265,6 +272,7 @@ impl<'p> PdbFile<'p> {
             type_finder,
             &self.forwarder_to_complete_type,
             type_index,
+            primitives_flavor,
             &mut needed_types,
         )?;
 
@@ -290,6 +298,7 @@ impl<'p> PdbFile<'p> {
                         type_finder,
                         &self.forwarder_to_complete_type,
                         needed_type_index,
+                        primitives_flavor,
                         &mut needed_types,
                     )?;
 

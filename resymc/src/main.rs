@@ -7,6 +7,7 @@ use anyhow::{anyhow, Result};
 use resym_core::{
     backend::{Backend, BackendCommand, PDBSlot},
     frontend::FrontendCommand,
+    pdb_types::PrimitiveReconstructionFlavor,
     syntax_highlighting::CodeTheme,
 };
 use structopt::StructOpt;
@@ -43,6 +44,7 @@ fn main() -> Result<()> {
             pdb_path,
             type_name,
             output_file_path,
+            primitive_types_flavor,
             print_header,
             print_dependencies,
             print_access_specifiers,
@@ -50,6 +52,7 @@ fn main() -> Result<()> {
         } => app.dump_types_command(
             pdb_path,
             type_name,
+            primitive_types_flavor.unwrap_or(PrimitiveReconstructionFlavor::Portable),
             print_header,
             print_dependencies,
             print_access_specifiers,
@@ -61,6 +64,7 @@ fn main() -> Result<()> {
             to_pdb_path,
             type_name,
             output_file_path,
+            primitive_types_flavor,
             print_header,
             print_dependencies,
             print_access_specifiers,
@@ -69,6 +73,7 @@ fn main() -> Result<()> {
             from_pdb_path,
             to_pdb_path,
             type_name,
+            primitive_types_flavor.unwrap_or(PrimitiveReconstructionFlavor::Portable),
             print_header,
             print_dependencies,
             print_access_specifiers,
@@ -107,6 +112,9 @@ enum ResymOptions {
         type_name: String,
         /// Path of the output file
         output_file_path: Option<PathBuf>,
+        /// Representation of primitive types
+        #[structopt(short = "f", long)]
+        primitive_types_flavor: Option<PrimitiveReconstructionFlavor>,
         /// Print header
         #[structopt(short = "h", long)]
         print_header: bool,
@@ -130,6 +138,9 @@ enum ResymOptions {
         type_name: String,
         /// Path of the output file
         output_file_path: Option<PathBuf>,
+        /// Representation of primitive types
+        #[structopt(short = "f", long)]
+        primitive_types_flavor: Option<PrimitiveReconstructionFlavor>,
         /// Print header
         #[structopt(short = "h", long)]
         print_header: bool,
@@ -219,6 +230,7 @@ impl ResymcApp {
         &self,
         pdb_path: PathBuf,
         type_name: String,
+        primitive_types_flavor: PrimitiveReconstructionFlavor,
         print_header: bool,
         print_dependencies: bool,
         print_access_specifiers: bool,
@@ -242,6 +254,7 @@ impl ResymcApp {
             .send_command(BackendCommand::ReconstructTypeByName(
                 PDB_MAIN_SLOT,
                 type_name,
+                primitive_types_flavor,
                 print_header,
                 print_dependencies,
                 print_access_specifiers,
@@ -282,6 +295,7 @@ impl ResymcApp {
         from_pdb_path: PathBuf,
         to_pdb_path: PathBuf,
         type_name: String,
+        primitive_types_flavor: PrimitiveReconstructionFlavor,
         print_header: bool,
         print_dependencies: bool,
         print_access_specifiers: bool,
@@ -329,6 +343,7 @@ impl ResymcApp {
             PDB_MAIN_SLOT,
             PDB_DIFF_TO_SLOT,
             type_name,
+            primitive_types_flavor,
             print_header,
             print_dependencies,
             print_access_specifiers,

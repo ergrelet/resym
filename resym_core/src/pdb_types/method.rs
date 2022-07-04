@@ -1,6 +1,9 @@
 use anyhow::{anyhow, Result};
 
-use super::{argument_list, field::FieldAccess, type_name, TypeForwarder, TypeSet};
+use super::{
+    argument_list, field::FieldAccess, primitive_types::PrimitiveReconstructionFlavor, type_name,
+    TypeForwarder, TypeSet,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Method<'p> {
@@ -23,6 +26,7 @@ impl<'p> Method<'p> {
         type_finder: &pdb::TypeFinder<'p>,
         type_forwarder: &TypeForwarder,
         type_index: pdb::TypeIndex,
+        primitive_flavor: &PrimitiveReconstructionFlavor,
         needed_types: &mut TypeSet,
     ) -> Result<Method<'p>> {
         match type_finder.find(type_index)?.parse()? {
@@ -32,12 +36,14 @@ impl<'p> Method<'p> {
                     type_finder,
                     type_forwarder,
                     data.return_type,
+                    primitive_flavor,
                     needed_types,
                 )?,
                 arguments: argument_list(
                     type_finder,
                     type_forwarder,
                     data.argument_list,
+                    primitive_flavor,
                     needed_types,
                 )?,
                 is_virtual: attributes.is_virtual()
@@ -47,7 +53,7 @@ impl<'p> Method<'p> {
                 is_pure_virtual: attributes.is_pure_virtual(),
                 is_ctor: data.attributes.is_constructor()
                     || data.attributes.is_constructor_with_virtual_bases(),
-                is_dtor: name.to_string().starts_with("~"),
+                is_dtor: name.to_string().starts_with('~'),
                 is_const: {
                     if let Some(func_modifier) = Method::find_func_modifier(&data, type_finder) {
                         func_modifier.constant

@@ -1,0 +1,26 @@
+---
+source: resym_core/tests/type_reconstruction.rs
+expression: reconstructed_type
+---
+
+union resym_test::UnionTest { /* Size=0x8 */
+  /* 0x0000 */ public: UCHAR u1;
+  /* 0x0000 */ public: USHORT u2;
+  /* 0x0000 */ public: ULONG u3;
+  /* 0x0000 */ public: ULONGLONG u4;
+  public: static ULONGLONG su5;
+  
+  public: UnionTest();
+  public: ~UnionTest();
+  public: PVOID GetPtr();
+  public: PVOID ConstMethod() const;
+  public: PVOID VolatileMethod() volatile;
+  public: PVOID ConstVolatileMethod() const volatile;
+  public: VOID (*ReturnFuncPointerMethod())(LONG);
+  public: PVOID __vecDelDtor(ULONG);
+  
+  public: static LONG Magic();
+  public: static LONG MagicVar1(...);
+  public: static LONG MagicVar2(LONG, ...);
+};
+
