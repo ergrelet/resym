@@ -1,0 +1,29 @@
+---
+source: resym_core/tests/type_reconstruction.rs
+expression: reconstructed_type
+---
+
+struct resym_test::StructTest { /* Size=0x18 */
+  /* 0x0008 */ public: UCHAR u1;
+  /* 0x000a */ public: USHORT u2;
+  /* 0x000c */ public: ULONG u3;
+  /* 0x0010 */ public: ULONGLONG u4;
+  public: static ULONGLONG su5;
+  
+  public: StructTest(const resym_test::StructTest&);
+  public: StructTest();
+  public: ~StructTest();
+  public: PVOID GetPtr();
+  public: PVOID ConstMethod() const;
+  public: PVOID VolatileMethod() volatile;
+  public: PVOID ConstVolatileMethod() const volatile;
+  public: VOID (*ReturnFuncPointerMethod())(LONG);
+  public: virtual LONG Virtual();
+  public: resym_test::StructTest& operator=(const resym_test::StructTest&);
+  public: PVOID __vecDelDtor(ULONG);
+  
+  public: static LONG Magic();
+  public: static LONG MagicVar1(...);
+  public: static LONG MagicVar2(LONG, ...);
+};
+

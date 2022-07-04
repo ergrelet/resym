@@ -1,0 +1,13 @@
+---
+source: resym_core/tests/type_reconstruction.rs
+expression: reconstructed_type
+---
+
+struct resym_test::BitFieldsTest2 { /* Size=0x2 */
+  /* 0x0000 */ public: UCHAR b1 : 3;
+  union {
+    /* 0x0001 */ public: UCHAR b2 : 6;
+    /* 0x0001 */ public: UCHAR b3 : 2;
+  };
+};
+

@@ -32,6 +32,26 @@ fn test_type_reconstruction_portable_access_specifiers() {
     );
 }
 
+#[test]
+fn test_type_reconstruction_microsoft_access_specifiers() {
+    test_type_reconstruction_internal(
+        "type_reconstruction_microsoft_access_specifiers",
+        PrimitiveReconstructionFlavor::Microsoft,
+        false,
+        true,
+    );
+}
+
+#[test]
+fn test_type_reconstruction_raw_access_specifiers() {
+    test_type_reconstruction_internal(
+        "type_reconstruction_raw_access_specifiers",
+        PrimitiveReconstructionFlavor::Raw,
+        false,
+        true,
+    );
+}
+
 fn test_type_reconstruction_internal(
     test_name: &str,
     primitives_flavor: PrimitiveReconstructionFlavor,

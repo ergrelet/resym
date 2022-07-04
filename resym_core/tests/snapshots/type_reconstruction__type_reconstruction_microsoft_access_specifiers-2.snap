@@ -1,0 +1,13 @@
+---
+source: resym_core/tests/type_reconstruction.rs
+expression: reconstructed_type
+---
+
+struct resym_test::BitFieldsTest1 { /* Size=0x4 */
+  union {
+    /* 0x0000 */ public: ULONG b1 : 1;
+    /* 0x0000 */ public: ULONG b2 : 1;
+    /* 0x0000 */ public: ULONG b3 : 30;
+  };
+};
+
