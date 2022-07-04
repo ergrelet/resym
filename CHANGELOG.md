@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+- Allow switching between different primitive type representations
+
 ### Fixed
 - Reconstruct access specifiers for base classes (@TrinityDevelopers)
 - Reconstruct type qualifiers for member functions (@TrinityDevelopers)
