@@ -16,6 +16,7 @@ impl FromStr for PrimitiveReconstructionFlavor {
         match s.to_lowercase().as_str() {
             "portable" => Ok(PrimitiveReconstructionFlavor::Portable),
             "ms" | "msft" | "microsoft" => Ok(PrimitiveReconstructionFlavor::Microsoft),
+            "raw" => Ok(PrimitiveReconstructionFlavor::Raw),
             _ => Err(ParsePrimitiveFlavorError {}),
         }
     }
