@@ -326,6 +326,7 @@ impl<'p> ResymApp {
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| {
                 if ui.button("Open PDB file").clicked() {
+                    ui.close_menu();
                     if let Some(file_path) = Self::select_pdb_file() {
                         if let Err(err) = self
                             .backend
@@ -342,6 +343,7 @@ impl<'p> ResymApp {
                     )
                     .clicked()
                 {
+                    ui.close_menu();
                     if let Some(file_path) = Self::select_pdb_file() {
                         if let Err(err) = self
                             .backend
@@ -352,9 +354,11 @@ impl<'p> ResymApp {
                     }
                 }
                 if ui.button("Settings").clicked() {
+                    ui.close_menu();
                     self.settings_wnd_open = true;
                 }
                 if ui.button("Exit").clicked() {
+                    ui.close_menu();
                     frame.quit();
                 }
             });
