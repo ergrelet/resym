@@ -140,6 +140,12 @@ impl<'p> PdbFile<'p> {
         // Populate our `TypeFinder` and find the right type index
         let mut type_index = pdb::TypeIndex::default();
         let mut type_finder = self.type_information.finder();
+        let mut result = String::new();
+        let mut dump_all = false;
+        let mut todump = Vec::<pdb::TypeIndex>::new();
+        if type_name == "*" {
+            dump_all = true;
+        }
         {
             let mut type_iter = self.type_information.iter();
             while let Some(item) = type_iter.next()? {
@@ -156,7 +162,10 @@ impl<'p> PdbFile<'p> {
 
                             // Rename anonymous tags to something unique
                             let class_name = data.name.to_string();
-                            if is_unnamed_type(&class_name) {
+                            if dump_all {
+                                type_index = item_type_index;
+                                todump.push(type_index);
+                            } else if is_unnamed_type(&class_name) {
                                 if type_name == format!("_unnamed_{}", item_type_index) {
                                     type_index = item_type_index;
                                 }
@@ -176,7 +185,10 @@ impl<'p> PdbFile<'p> {
 
                             // Rename anonymous tags to something unique
                             let union_name = data.name.to_string();
-                            if is_unnamed_type(&union_name) {
+                            if dump_all {
+                                type_index = item_type_index;
+                                todump.push(type_index);
+                            } else if is_unnamed_type(&union_name) {
                                 if type_name == format!("_unnamed_{}", item_type_index) {
                                     type_index = item_type_index;
                                 }
@@ -196,7 +208,10 @@ impl<'p> PdbFile<'p> {
 
                             // Rename anonymous tags to something unique
                             let enum_name = data.name.to_string();
-                            if is_unnamed_type(&enum_name) {
+                            if dump_all {
+                                type_index = item_type_index;
+                                todump.push(type_index);
+                            } else if is_unnamed_type(&enum_name) {
                                 if type_name == format!("_unnamed_{}", item_type_index) {
                                     type_index = item_type_index;
                                 }
@@ -215,16 +230,32 @@ impl<'p> PdbFile<'p> {
             }
         }
 
-        if type_index == pdb::TypeIndex::default() {
-            Err(anyhow!("type not found"))
+        if dump_all {
+            todump.reverse();
+            while let Some(tindex) = todump.pop() {
+                if let Ok(res) = self.reconstruct_type_by_type_index_internal(
+                    &type_finder,
+                    tindex,
+                    &primitives_flavor,
+                    reconstruct_dependencies,
+                    print_access_specifiers,
+                ) {
+                    result = result + &res + "\n";
+                }
+            }
+            Ok(result)
         } else {
-            self.reconstruct_type_by_type_index_internal(
-                &type_finder,
-                type_index,
-                &primitives_flavor,
-                reconstruct_dependencies,
-                print_access_specifiers,
-            )
+            if type_index == pdb::TypeIndex::default() {
+                Err(anyhow!("type not found"))
+            } else {
+                self.reconstruct_type_by_type_index_internal(
+                    &type_finder,
+                    type_index,
+                    &primitives_flavor,
+                    reconstruct_dependencies,
+                    print_access_specifiers,
+                )
+            }
         }
     }
 
