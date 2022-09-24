@@ -260,7 +260,7 @@ impl<'p> Class<'p> {
                     type_left,
                     type_right,
                     name: data.name,
-                    offset: data.offset,
+                    offset: data.offset as u32,
                     size: type_size,
                     access,
                 });

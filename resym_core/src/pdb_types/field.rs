@@ -5,7 +5,7 @@ pub struct Field<'p> {
     pub type_left: String,
     pub type_right: String,
     pub name: pdb::RawString<'p>,
-    pub offset: u16,
+    pub offset: u32,
     pub size: usize,
     pub access: FieldAccess,
 }
