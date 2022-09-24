@@ -212,7 +212,7 @@ impl ResymcApp {
             if let Some(output_file_path) = output_file_path {
                 let mut output_file = File::create(output_file_path)?;
                 for (type_name, _) in type_list {
-                    output_file.write_all(type_name.as_bytes())?;
+                    writeln!(output_file, "{}", &type_name)?;
                 }
             } else {
                 for (type_name, _) in type_list {
