@@ -1,0 +1,33 @@
+name: Tarpaulin
+
+on: [push]
+
+jobs:
+  check:
+    name: Tarpaulin on Linux - Latest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Install libxcb
+        run: sudo apt-get update; sudo apt-get install --no-install-recommends libxcb-shape0-dev libxcb-xfixes0-dev
+        if: runner.os == 'linux'
+
+      - name: Run cargo-tarpaulin
+        uses: actions-rs/tarpaulin@v0.1
+        with:
+          version: '0.15.0'
+          args: '--ignore-tests --out Lcov -- --test-threads 1'
+
+      - name: Upload to Coveralls
+        uses: coverallsapp/github-action@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path-to-lcov: './lcov.info'
