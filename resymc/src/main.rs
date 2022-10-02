@@ -389,3 +389,78 @@ impl ResymcApp {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::*;
+
+    use tempdir::TempDir;
+
+    const TEST_PDB_FILE_PATH: &str = "../resym_core/tests/data/test.pdb";
+
+    #[test]
+    fn list_types_command_invalid_pdb_path() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::new();
+        // The command should fail
+        assert!(app
+            .list_types_command(
+                pdb_path,
+                "resym_test::StructTest".to_string(),
+                false,
+                false,
+                None,
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn list_types_command_stdio_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FILE_PATH);
+        // The command should succeed
+        assert!(app
+            .list_types_command(
+                pdb_path,
+                "resym_test::StructTest".to_string(),
+                false,
+                false,
+                None,
+            )
+            .is_ok());
+    }
+
+    #[test]
+    fn list_types_command_file_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FILE_PATH);
+        let tmp_dir =
+            TempDir::new("list_types_command_file_successful").expect("TempDir creation failed");
+        let output_path = tmp_dir.path().join("output.txt");
+        // The command should succeed
+        assert!(app
+            .list_types_command(
+                pdb_path,
+                "resym_test::ClassWithNestedDeclarationsTest".to_string(),
+                false,
+                false,
+                Some(output_path.clone()),
+            )
+            .is_ok());
+
+        // Check output file's content
+        let output = fs::read_to_string(output_path).expect("Failed to read output file");
+        assert_eq!(
+            output,
+            concat!(
+                "resym_test::ClassWithNestedDeclarationsTest::NestEnum\n",
+                "resym_test::ClassWithNestedDeclarationsTest\n",
+                "resym_test::ClassWithNestedDeclarationsTest::NestedUnion\n",
+                "resym_test::ClassWithNestedDeclarationsTest::NestedClass\n",
+                "resym_test::ClassWithNestedDeclarationsTest::NestedStruct\n"
+            )
+        );
+    }
+}
