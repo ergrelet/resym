@@ -56,7 +56,7 @@ pub struct BaseClass {
 pub struct Class<'p> {
     pub kind: pdb::ClassKind,
     pub name: String,
-    pub size: u16,
+    pub size: u64,
     pub base_classes: Vec<BaseClass>,
     pub fields: Vec<Field<'p>>,
     pub static_fields: Vec<StaticField<'p>>,
@@ -260,7 +260,7 @@ impl<'p> Class<'p> {
                     type_left,
                     type_right,
                     name: data.name,
-                    offset: data.offset as u32,
+                    offset: data.offset,
                     size: type_size,
                     access,
                 });
