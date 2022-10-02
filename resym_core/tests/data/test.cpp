@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 
 namespace resym_test {
 
@@ -337,6 +338,11 @@ union UnionAccessTest {
   int public2;
 };
 
+struct BigOffsetsStruct {
+  char a[65536];
+  char b[65536];
+};
+
 }  // namespace resym_test
 
 int main() {
@@ -364,4 +370,5 @@ int main() {
   StructAccessTest access_test1{};
   ClassAccessTest access_test2{};
   UnionAccessTest access_test3{};
+  auto big_offsets = std::make_unique<BigOffsetsStruct>();
 }
