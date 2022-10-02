@@ -11,6 +11,7 @@
 - Fix incorrect reconstruction of class/struct and union destructors (@TrinityDevelopers)
 - Fix "File" menu not closing when clicking a button (@mrexodia)
 - Fix field offsets and struct/classes/unions sizes being truncated when greater than 2^16 (@xarkes)
+- Fix the `list` command not outputting new lines in output files in `resymc` (@xarkes)
 
 ## [0.2.0] - 2022-05-22
 ### Added
