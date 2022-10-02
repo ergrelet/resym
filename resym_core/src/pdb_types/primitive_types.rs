@@ -2,7 +2,7 @@ use std::{fmt, str::FromStr};
 
 use anyhow::{anyhow, Result};
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum PrimitiveReconstructionFlavor {
     Portable,
     Microsoft,
@@ -23,7 +23,7 @@ impl FromStr for PrimitiveReconstructionFlavor {
 }
 
 /// An error returned when parsing a `PrimitiveReconstructionFlavor` from a string fails.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsePrimitiveFlavorError {}
 
 impl fmt::Display for ParsePrimitiveFlavorError {

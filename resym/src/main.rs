@@ -159,7 +159,7 @@ impl eframe::App for ResymApp {
 }
 
 // Utility associated functions and methods
-impl<'p> ResymApp {
+impl ResymApp {
     fn new(cc: &eframe::CreationContext<'_>, logger: &'static MemoryLogger) -> Result<Self> {
         let (tx_ui, rx_ui) = crossbeam_channel::unbounded::<FrontendCommand>();
         let frontend_controller = Arc::new(EguiFrontendController::new(

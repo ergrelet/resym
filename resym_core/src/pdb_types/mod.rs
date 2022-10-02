@@ -687,10 +687,10 @@ fn find_unnamed_unions_in_struct(fields: &[Field]) -> Vec<Range<usize>> {
     let mut unions_found: Vec<Range<usize>> = vec![];
     // Temporary map of unions and fields that'll be used to compute the list
     // of unnamed unions which are in the struct.
-    let mut unions_found_temp: BTreeMap<u16, (Range<usize>, u16)> = BTreeMap::new();
+    let mut unions_found_temp: BTreeMap<u64, (Range<usize>, u64)> = BTreeMap::new();
 
     // Discover unions
-    let mut curr_union_offset_range: Range<u16> = Range::default();
+    let mut curr_union_offset_range: Range<u64> = Range::default();
     for (i, field) in fields.iter().enumerate() {
         // Check if the field is located inside of the union we're processing
         if curr_union_offset_range.contains(&field.offset) {
@@ -699,10 +699,10 @@ fn find_unnamed_unions_in_struct(fields: &[Field]) -> Vec<Range<usize>> {
                 .unwrap();
             union_info.0.end = i + 1;
             // Update the union's size
-            union_info.1 = std::cmp::max(union_info.1, field.size as u16);
+            union_info.1 = std::cmp::max(union_info.1, field.size as u64);
             curr_union_offset_range.end = std::cmp::max(
                 curr_union_offset_range.end,
-                field.offset + field.size as u16,
+                field.offset + field.size as u64,
             );
         } else {
             match unions_found_temp.get_mut(&field.offset) {
@@ -713,17 +713,17 @@ fn find_unnamed_unions_in_struct(fields: &[Field]) -> Vec<Range<usize>> {
                     // as well as the current union's end
                     for previous_field in &fields[union_info.0.clone()] {
                         // Update the union's size
-                        union_info.1 = std::cmp::max(union_info.1, previous_field.size as u16);
+                        union_info.1 = std::cmp::max(union_info.1, previous_field.size as u64);
                         curr_union_offset_range.end = std::cmp::max(
                             curr_union_offset_range.end,
-                            previous_field.offset + previous_field.size as u16,
+                            previous_field.offset + previous_field.size as u64,
                         );
                     }
                 }
                 None => {
                     unions_found_temp.insert(
                         field.offset,
-                        (Range { start: i, end: i }, field.size as u16),
+                        (Range { start: i, end: i }, field.size as u64),
                     );
                 }
             }
@@ -798,8 +798,8 @@ fn find_unnamed_structs_in_unions(fields: &[Field]) -> Vec<Range<usize>> {
     let mut structs_found: Vec<Range<usize>> = vec![];
 
     let field_count = fields.len();
-    let union_offset: u16 = fields[0].offset;
-    let mut previous_field_offset: u16 = fields[0].offset;
+    let union_offset = fields[0].offset;
+    let mut previous_field_offset = fields[0].offset;
     for (i, field) in fields.iter().enumerate() {
         // The field offset is lower than the offset of the previous field,
         // "close" the struct

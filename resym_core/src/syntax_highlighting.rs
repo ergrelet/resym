@@ -1,4 +1,4 @@
-#[derive(Clone, Copy, Hash, PartialEq)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub enum SyntectTheme {
     Base16EightiesDark,
     Base16MochaDark,
@@ -34,7 +34,7 @@ impl SyntectTheme {
     }
 }
 
-#[derive(Clone, Hash, PartialEq)]
+#[derive(Clone, Hash, PartialEq, Eq)]
 pub struct CodeTheme {
     pub dark_mode: bool,
     pub syntect_theme: SyntectTheme,

@@ -15,7 +15,7 @@ use super::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Union<'p> {
     pub name: String,
-    pub size: u32,
+    pub size: u64,
     pub fields: Vec<Field<'p>>,
     pub static_fields: Vec<StaticField<'p>>,
     pub instance_methods: Vec<Method<'p>>,

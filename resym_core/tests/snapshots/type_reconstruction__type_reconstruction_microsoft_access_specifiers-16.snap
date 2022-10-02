@@ -1,0 +1,10 @@
+---
+source: resym_core/tests/type_reconstruction.rs
+expression: reconstructed_type
+---
+
+struct resym_test::BigOffsetsStruct { /* Size=0x20000 */
+  /* 0x0000 */ public: CHAR a[65536];
+  /* 0x10000 */ public: CHAR b[65536];
+};
+
