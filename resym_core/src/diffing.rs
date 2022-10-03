@@ -1,9 +1,13 @@
-use anyhow::{anyhow, Result};
 use similar::{ChangeTag, TextDiff};
 
 use std::fmt::Write;
 
-use crate::{pdb_file::PdbFile, pdb_types::PrimitiveReconstructionFlavor, PKG_VERSION};
+use crate::{
+    error::{Result, ResymCoreError},
+    pdb_file::PdbFile,
+    pdb_types::PrimitiveReconstructionFlavor,
+    PKG_VERSION,
+};
 
 pub type DiffChange = ChangeTag;
 pub type DiffIndices = (Option<usize>, Option<usize>);
@@ -57,7 +61,7 @@ pub fn diff_type_by_name(
             .unwrap_or_default();
         if reconstructed_type_from_tmp.is_empty() && reconstructed_type_to_tmp.is_empty() {
             // Make it obvious an error occured
-            return Err(anyhow!("Type not found"));
+            return Err(ResymCoreError::TypeNameNotFoundError(type_name.to_owned()));
         }
         reconstructed_type_from.push_str(&reconstructed_type_from_tmp);
         reconstructed_type_to.push_str(&reconstructed_type_to_tmp);

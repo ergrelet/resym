@@ -1,7 +1,5 @@
 use std::fmt;
 
-use anyhow::{anyhow, Result};
-
 use super::{
     class::Class,
     enumeration::Enum,
@@ -11,6 +9,7 @@ use super::{
     resolve_complete_type_index, type_name, type_size, DataFormatConfiguration, Field, Method,
     TypeForwarder, TypeSet,
 };
+use crate::error::{Result, ResymCoreError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Union<'p> {
@@ -295,14 +294,18 @@ impl<'p> Union<'p> {
                             data.method_list,
                             other
                         );
-                        return Err(anyhow!("unexpected type in Class::add_field()"));
+                        return Err(ResymCoreError::InvalidParameterError(
+                            "unexpected type in Class::add_field()".to_string(),
+                        ));
                     }
                 }
             }
 
             ref other => {
                 log::error!("trying to Union::add_field(): {:?}", other);
-                return Err(anyhow!("unexpected type in Union::add_field()"));
+                return Err(ResymCoreError::InvalidParameterError(
+                    "unexpected type in Union::add_field()".to_string(),
+                ));
             }
         }
 

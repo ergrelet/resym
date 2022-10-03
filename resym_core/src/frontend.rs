@@ -1,6 +1,4 @@
-use anyhow::Result;
-
-use crate::{backend::PDBSlot, diffing::DiffedType};
+use crate::{backend::PDBSlot, diffing::DiffedType, error::Result};
 
 pub type TypeList = Vec<(String, pdb::TypeIndex)>;
 

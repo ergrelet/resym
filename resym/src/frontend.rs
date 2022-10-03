@@ -1,7 +1,9 @@
-use anyhow::Result;
 use crossbeam_channel::{Receiver, Sender};
 use eframe::egui;
-use resym_core::frontend::{FrontendCommand, FrontendController};
+use resym_core::{
+    frontend::{FrontendCommand, FrontendController},
+    Result, ResymCoreError,
+};
 
 /// This struct enables the backend to communicate with us (the frontend)
 pub struct EguiFrontendController {
@@ -13,7 +15,9 @@ pub struct EguiFrontendController {
 impl FrontendController for EguiFrontendController {
     /// Used by the backend to send us commands and trigger a UI update
     fn send_command(&self, command: FrontendCommand) -> Result<()> {
-        self.tx_ui.send(command)?;
+        self.tx_ui
+            .send(command)
+            .map_err(|err| ResymCoreError::CrossbeamError(err.to_string()))?;
         // Force the UI backend to call our app's update function on the other end
         self.egui_ctx.request_repaint();
         Ok(())

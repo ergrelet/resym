@@ -9,8 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::ops::Range;
 
-use anyhow::{anyhow, Result};
-
+use crate::error::{Result, ResymCoreError};
 use class::Class;
 use enumeration::Enum;
 use field::{Field, FieldAccess};
@@ -328,7 +327,9 @@ pub fn argument_list<'p>(
             }
             Ok(args)
         }
-        _ => Err(anyhow!("argument list of non-argument-list type")),
+        _ => Err(ResymCoreError::InvalidParameterError(
+            "argument list of non-argument-list type".to_owned(),
+        )),
     }
 }
 

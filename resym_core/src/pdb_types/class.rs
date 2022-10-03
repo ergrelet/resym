@@ -1,6 +1,4 @@
-use std::fmt;
-
-use anyhow::{anyhow, Result};
+use std::{ascii::AsciiExt, fmt};
 
 use super::{
     enumeration::Enum,
@@ -9,7 +7,7 @@ use super::{
     primitive_types::PrimitiveReconstructionFlavor,
     resolve_complete_type_index, type_name, type_size,
     union::Union,
-    DataFormatConfiguration, Field, Method, TypeForwarder, TypeSet,
+    DataFormatConfiguration, Field, Method, Result, ResymCoreError, TypeForwarder, TypeSet,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -339,7 +337,9 @@ impl<'p> Class<'p> {
                             data.method_list,
                             other
                         );
-                        return Err(anyhow!("unexpected type in Class::add_field()"));
+                        return Err(ResymCoreError::InvalidParameterError(
+                            "unexpected type in Class::add_field()".to_string(),
+                        ));
                     }
                 }
             }
@@ -400,7 +400,9 @@ impl<'p> Class<'p> {
 
             ref other => {
                 log::error!("trying to Class::add_field(): {:?}", other);
-                return Err(anyhow!("unexpected type in Class::add_field()"));
+                return Err(ResymCoreError::InvalidParameterError(
+                    "unexpected type in Class::add_field()".to_string(),
+                ));
             }
         }
 

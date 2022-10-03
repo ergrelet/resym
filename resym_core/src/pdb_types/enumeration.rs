@@ -1,8 +1,7 @@
 use std::fmt;
 
-use anyhow::Result;
-
 use super::TypeSet;
+use crate::error::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Enum<'p> {

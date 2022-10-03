@@ -1,6 +1,6 @@
-use std::{fmt, str::FromStr};
+use std::str::FromStr;
 
-use anyhow::{anyhow, Result};
+use crate::error::{Result, ResymCoreError};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum PrimitiveReconstructionFlavor {
@@ -10,25 +10,15 @@ pub enum PrimitiveReconstructionFlavor {
 }
 
 impl FromStr for PrimitiveReconstructionFlavor {
-    type Err = ParsePrimitiveFlavorError;
+    type Err = ResymCoreError;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "portable" => Ok(PrimitiveReconstructionFlavor::Portable),
             "ms" | "msft" | "microsoft" => Ok(PrimitiveReconstructionFlavor::Microsoft),
             "raw" => Ok(PrimitiveReconstructionFlavor::Raw),
-            _ => Err(ParsePrimitiveFlavorError {}),
+            _ => Err(ResymCoreError::ParsePrimitiveFlavorError(s.to_owned())),
         }
-    }
-}
-
-/// An error returned when parsing a `PrimitiveReconstructionFlavor` from a string fails.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ParsePrimitiveFlavorError {}
-
-impl fmt::Display for ParsePrimitiveFlavorError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        "provided string was not recognized as a valid flavor".fmt(f)
     }
 }
 
@@ -93,7 +83,7 @@ fn primitive_kind_as_str_portable(
         // cases of legitimate "NoType" occurences?
         pdb::PrimitiveKind::NoType => Ok("..."),
 
-        _ => Err(anyhow!(format!(
+        _ => Err(ResymCoreError::NotImplementedError(format!(
             "/* FIXME: Unhandled primitive kind: '{:?}' */ void",
             primitive_kind
         ))),
@@ -157,7 +147,7 @@ fn primitive_kind_as_str_microsoft(
         // cases of legitimate "NoType" occurences?
         pdb::PrimitiveKind::NoType => Ok("..."),
 
-        _ => Err(anyhow!(format!(
+        _ => Err(ResymCoreError::NotImplementedError(format!(
             "/* FIXME: Unhandled primitive kind: '{:?}' */ void",
             primitive_kind
         ))),
@@ -198,7 +188,7 @@ fn primitive_kind_as_str_raw(
         // cases of legitimate "NoType" occurences?
         pdb::PrimitiveKind::NoType => Ok("..."),
 
-        _ => Err(anyhow!(format!(
+        _ => Err(ResymCoreError::NotImplementedError(format!(
             "/* FIXME: Unhandled primitive kind: '{:?}' */ void",
             primitive_kind
         ))),

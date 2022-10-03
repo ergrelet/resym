@@ -9,7 +9,7 @@ exclude = [
 
 [dependencies]
 pdb = "0.8"
-anyhow = "1.0"
+thiserror = "1.0"
 log = "0.4"
 rayon = "1.5"
 crossbeam-channel = "0.5"

@@ -1,4 +1,3 @@
-use anyhow::{anyhow, Result};
 use dashmap::DashMap;
 use pdb::FallibleIterator;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -10,6 +9,7 @@ use std::{
     sync::Arc,
 };
 
+use crate::error::{Result, ResymCoreError};
 use crate::pdb_types::{
     self, is_unnamed_type, DataFormatConfiguration, PrimitiveReconstructionFlavor,
 };
@@ -216,7 +216,7 @@ impl<'p> PdbFile<'p> {
         }
 
         if type_index == pdb::TypeIndex::default() {
-            Err(anyhow!("type not found"))
+            Err(ResymCoreError::TypeNameNotFoundError(type_name.to_owned()))
         } else {
             self.reconstruct_type_by_type_index_internal(
                 &type_finder,

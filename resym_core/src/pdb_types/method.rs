@@ -1,9 +1,8 @@
-use anyhow::{anyhow, Result};
-
 use super::{
     argument_list, field::FieldAccess, primitive_types::PrimitiveReconstructionFlavor, type_name,
     TypeForwarder, TypeSet,
 };
+use crate::error::{Result, ResymCoreError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Method<'p> {
@@ -73,7 +72,9 @@ impl<'p> Method<'p> {
 
             other => {
                 log::error!("other: {:?}", other);
-                Err(anyhow!("Unhandled type data"))
+                Err(ResymCoreError::NotImplementedError(
+                    "Unhandled type data".to_owned(),
+                ))
             }
         }
     }

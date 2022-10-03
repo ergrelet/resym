@@ -1,4 +1,3 @@
-use anyhow::Result;
 use crossbeam_channel::{Receiver, Sender};
 use rayon::{
     iter::{IntoParallelRefIterator, ParallelIterator},
@@ -14,6 +13,7 @@ use std::{
 
 use crate::{
     diffing::diff_type_by_name,
+    error::{Result, ResymCoreError},
     frontend::FrontendCommand,
     frontend::FrontendController,
     pdb_file::PdbFile,
@@ -98,7 +98,9 @@ impl Backend {
     }
 
     pub fn send_command(&self, command: BackendCommand) -> Result<()> {
-        Ok(self.tx_worker.send(command)?)
+        self.tx_worker
+            .send(command)
+            .map_err(|err| ResymCoreError::CrossbeamError(err.to_string()))
     }
 }
 

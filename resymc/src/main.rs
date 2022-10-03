@@ -264,7 +264,7 @@ impl ResymcApp {
             self.frontend_controller.rx_ui.recv()?
         {
             match reconstructed_type_result {
-                Err(err) => Err(err),
+                Err(err) => Err(err.into()),
                 Ok(reconstructed_type) => {
                     // Dump output
                     if let Some(output_file_path) = output_file_path {
@@ -353,7 +353,7 @@ impl ResymcApp {
             self.frontend_controller.rx_ui.recv()?
         {
             match reconstructed_type_diff_result {
-                Err(err) => Err(err),
+                Err(err) => Err(err.into()),
                 Ok(reconstructed_type_diff) => {
                     // Dump output
                     if let Some(output_file_path) = output_file_path {

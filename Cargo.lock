@@ -1549,7 +1549,6 @@ dependencies = [
 name = "resym_core"
 version = "0.2.0"
 dependencies = [
- "anyhow",
  "crossbeam-channel",
  "dashmap",
  "insta",
@@ -1559,6 +1558,7 @@ dependencies = [
  "rayon",
  "regex",
  "similar",
+ "thiserror",
 ]
 
 [[package]]
