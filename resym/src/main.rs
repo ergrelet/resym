@@ -479,12 +479,12 @@ impl ResymApp {
         egui::ScrollArea::both()
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                const LINE_NUMBER_DIGIT_WIDTH: usize = 10;
+                const LINE_NUMBER_DIGIT_WIDTH: u32 = 10;
                 let (num_colums, min_column_width) = if self.settings.print_line_numbers {
                     match self.current_mode {
                         ResymAppMode::Comparing(_, _, last_line_number, ..) => {
                             // Compute the columns' sizes from the number of digits
-                            let char_count = int_log10(last_line_number);
+                            let char_count = last_line_number.checked_ilog10().unwrap_or(1) + 1;
                             let line_number_width = (char_count * LINE_NUMBER_DIGIT_WIDTH) as f32;
 
                             // Old index + new index + code editor
@@ -492,7 +492,7 @@ impl ResymApp {
                         }
                         ResymAppMode::Browsing(_, last_line_number, _) => {
                             // Compute the columns' sizes from the number of digits
-                            let char_count = int_log10(last_line_number);
+                            let char_count = last_line_number.checked_ilog10().unwrap_or(1) + 1;
                             let line_number_width = (char_count * LINE_NUMBER_DIGIT_WIDTH) as f32;
 
                             // Line numbers + code editor
@@ -642,25 +642,4 @@ impl ResymApp {
             Some((&["*.pdb"], "PDB files (*.pdb)")),
         )
     }
-}
-
-// FIXME: Replace with `checked_log10` once it's stabilized.
-fn int_log10<T>(mut i: T) -> usize
-where
-    T: std::ops::DivAssign + std::cmp::PartialOrd + From<u8> + Copy,
-{
-    let zero = T::from(0);
-    if i == zero {
-        return 1;
-    }
-
-    let mut len = 0;
-    let ten = T::from(10);
-
-    while i > zero {
-        i /= ten;
-        len += 1;
-    }
-
-    len
 }
