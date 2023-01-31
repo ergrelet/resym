@@ -59,14 +59,14 @@ impl<'p> Enum<'p> {
                 "  {} = {},",
                 value.name.to_string(),
                 match value.value {
-                    pdb::Variant::U8(v) => format!("0x{:02x}", v),
-                    pdb::Variant::U16(v) => format!("0x{:04x}", v),
-                    pdb::Variant::U32(v) => format!("0x{:08x}", v),
-                    pdb::Variant::U64(v) => format!("0x{:16x}", v),
-                    pdb::Variant::I8(v) => format!("{}", v),
-                    pdb::Variant::I16(v) => format!("{}", v),
-                    pdb::Variant::I32(v) => format!("{}", v),
-                    pdb::Variant::I64(v) => format!("{}", v),
+                    pdb::Variant::U8(v) => format!("0x{v:02x}"),
+                    pdb::Variant::U16(v) => format!("0x{v:04x}"),
+                    pdb::Variant::U32(v) => format!("0x{v:08x}"),
+                    pdb::Variant::U64(v) => format!("0x{v:16x}"),
+                    pdb::Variant::I8(v) => format!("{v}"),
+                    pdb::Variant::I16(v) => format!("{v}"),
+                    pdb::Variant::I32(v) => format!("{v}"),
+                    pdb::Variant::I64(v) => format!("{v}"),
                 }
             )?;
         }

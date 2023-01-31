@@ -68,9 +68,9 @@ fn test_type_reconstruction_internal(
                 reconstruct_dependencies,
                 print_access_specifiers,
             )
-            .expect(format!("reconstruct type: {}", test_case_type_name).as_str());
+            .unwrap_or_else(|_| panic!("reconstruct type: {test_case_type_name}"));
 
-        let snapshot_name = format!("{}-{}", test_name, i);
+        let snapshot_name = format!("{test_name}-{i}");
         insta::assert_snapshot!(snapshot_name, reconstructed_type);
     }
 }

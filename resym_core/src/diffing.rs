@@ -80,7 +80,7 @@ pub fn diff_type_by_name(
                 ChangeTag::Delete => "-",
                 ChangeTag::Equal => " ",
             };
-            write!(&mut diff_data, "{}{}", prefix, change)?;
+            write!(&mut diff_data, "{prefix}{change}")?;
         }
     }
 

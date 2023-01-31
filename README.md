@@ -1,4 +1,4 @@
-# resym [![License](https://img.shields.io/badge/license-Apache--2.0_OR_MIT-blue.svg)](https://img.shields.io/badge/license-Apache--2.0_OR_MIT-blue.svg) [![rustc 1.60.0](https://img.shields.io/badge/rust-1.60.0%2B-orange.svg)](https://img.shields.io/badge/rust-1.60.0%2B-orange.svg) [![Build Status](https://github.com/ergrelet/resym/workflows/Tests/badge.svg?branch=master)](https://github.com/ergrelet/resym/actions?query=workflow%3ATests) [![Coverage Status](https://coveralls.io/repos/github/ergrelet/resym/badge.svg?branch=master)](https://coveralls.io/github/ergrelet/resym?branch=master)
+# resym [![License](https://img.shields.io/badge/license-Apache--2.0_OR_MIT-blue.svg)](https://img.shields.io/badge/license-Apache--2.0_OR_MIT-blue.svg) [![rustc 1.66.0](https://img.shields.io/badge/rust-1.66.0%2B-orange.svg)](https://img.shields.io/badge/rust-1.66.0%2B-orange.svg) [![Build Status](https://github.com/ergrelet/resym/workflows/Tests/badge.svg?branch=master)](https://github.com/ergrelet/resym/actions?query=workflow%3ATests) [![Coverage Status](https://coveralls.io/repos/github/ergrelet/resym/badge.svg?branch=master)](https://coveralls.io/github/ergrelet/resym?branch=master)
 
 `resym` is a utility that allows browsing and extracting types from PDB files.
 
@@ -7,11 +7,11 @@ Inspired by [PDBRipper](https://github.com/horsicq/PDBRipper) and
 
 ## Key Features
 
-* Cross-platform
-* GUI and CLI versions available
-* C and C++ types reconstruction
-* C and C++ types diff generation (between two PDBs)
-* Decent performance, even on huge PDB files
+- Cross-platform
+- GUI and CLI versions available
+- C and C++ types reconstruction
+- C and C++ types diff generation (between two PDBs)
+- Decent performance, even on huge PDB files
 
 ## Know limitations
 
@@ -33,7 +33,7 @@ On **Ubuntu**, you might need to install: `libxcb-shape0-dev` and `libxcb-xfixes
 
 ```
 # Optional: install rust
-$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh 
+$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 $ git clone https://github.com/ergrelet/resym.git
 $ cd resym; cargo build --release
@@ -44,6 +44,7 @@ $ ./target/release/resym
 
 If you want to use the GUI version, simply run the `resym` executable.  
 A CLI version (named `resymc`) is also available:
+
 ```
 resymc 0.2.0
 resymc is a utility that allows browsing and extracting types from PDB files.

@@ -70,7 +70,7 @@ impl<'p> PdbFile<'p> {
 
                         // Rename anonymous tags to something unique
                         if is_unnamed_type(&class_name) {
-                            class_name = format!("_unnamed_{}", type_index);
+                            class_name = format!("_unnamed_{type_index}");
                         }
                         self.complete_type_list.push((class_name, type_index));
                     }
@@ -86,7 +86,7 @@ impl<'p> PdbFile<'p> {
 
                         // Rename anonymous tags to something unique
                         if is_unnamed_type(&class_name) {
-                            class_name = format!("_unnamed_{}", type_index);
+                            class_name = format!("_unnamed_{type_index}");
                         }
                         self.complete_type_list.push((class_name, type_index));
                     }
@@ -102,7 +102,7 @@ impl<'p> PdbFile<'p> {
 
                         // Rename anonymous tags to something unique
                         if is_unnamed_type(&class_name) {
-                            class_name = format!("_unnamed_{}", type_index);
+                            class_name = format!("_unnamed_{type_index}");
                         }
                         self.complete_type_list.push((class_name, type_index));
                     }
@@ -157,7 +157,7 @@ impl<'p> PdbFile<'p> {
                             // Rename anonymous tags to something unique
                             let class_name = data.name.to_string();
                             if is_unnamed_type(&class_name) {
-                                if type_name == format!("_unnamed_{}", item_type_index) {
+                                if type_name == format!("_unnamed_{item_type_index}") {
                                     type_index = item_type_index;
                                 }
                             } else if class_name == type_name {
@@ -177,7 +177,7 @@ impl<'p> PdbFile<'p> {
                             // Rename anonymous tags to something unique
                             let union_name = data.name.to_string();
                             if is_unnamed_type(&union_name) {
-                                if type_name == format!("_unnamed_{}", item_type_index) {
+                                if type_name == format!("_unnamed_{item_type_index}") {
                                     type_index = item_type_index;
                                 }
                             } else if data.name.to_string() == type_name {
@@ -197,7 +197,7 @@ impl<'p> PdbFile<'p> {
                             // Rename anonymous tags to something unique
                             let enum_name = data.name.to_string();
                             if is_unnamed_type(&enum_name) {
-                                if type_name == format!("_unnamed_{}", item_type_index) {
+                                if type_name == format!("_unnamed_{item_type_index}") {
                                     type_index = item_type_index;
                                 }
                             } else if data.name.to_string() == type_name {

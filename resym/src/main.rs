@@ -258,7 +258,7 @@ impl ResymApp {
                             let last_line_number = 1 + reconstructed_type.lines().count();
                             let line_numbers =
                                 (1..last_line_number).fold(String::default(), |mut acc, e| {
-                                    let _r = writeln!(&mut acc, "{}", e);
+                                    let _r = writeln!(&mut acc, "{e}");
                                     acc
                                 });
                             self.current_mode = ResymAppMode::Browsing(

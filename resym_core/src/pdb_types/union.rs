@@ -64,7 +64,7 @@ impl<'p> Union<'p> {
                 let name_str = data.name.to_string();
                 // Rename unnamed anonymous tags to something unique
                 let name = if is_unnamed_type(&name_str) {
-                    format!("_unnamed_{}", type_index)
+                    format!("_unnamed_{type_index}")
                 } else {
                     name_str.into_owned()
                 };
@@ -104,7 +104,7 @@ impl<'p> Union<'p> {
                 let name_str = data.name.to_string();
                 // Rename unnamed anonymous tags to something unique
                 let name = if is_unnamed_type(&name_str) {
-                    format!("_unnamed_{}", type_index)
+                    format!("_unnamed_{type_index}")
                 } else {
                     name_str.into_owned()
                 };
@@ -136,7 +136,7 @@ impl<'p> Union<'p> {
                 let name_str = data.name.to_string();
                 // Rename unnamed anonymous tags to something unique
                 let name = if is_unnamed_type(&name_str) {
-                    format!("_unnamed_{}", type_index)
+                    format!("_unnamed_{type_index}")
                 } else {
                     name_str.into_owned()
                 };

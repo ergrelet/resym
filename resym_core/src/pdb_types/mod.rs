@@ -25,8 +25,8 @@ pub type TypeSet = BTreeSet<pdb::TypeIndex>;
 pub type TypeForwarder = dashmap::DashMap<pdb::TypeIndex, pdb::TypeIndex>;
 
 /// Return a pair of strings representing the given `type_index`.
-pub fn type_name<'p>(
-    type_finder: &pdb::TypeFinder<'p>,
+pub fn type_name(
+    type_finder: &pdb::TypeFinder,
     type_forwarder: &TypeForwarder,
     type_index: pdb::TypeIndex,
     primitive_flavor: &PrimitiveReconstructionFlavor,
@@ -45,7 +45,7 @@ pub fn type_name<'p>(
             // Rename unnamed anonymous tags to something unique
             let name = data.name.to_string();
             if is_unnamed_type(&name) {
-                let name = format!("_unnamed_{}", type_index);
+                let name = format!("_unnamed_{type_index}");
                 (name, String::default())
             } else {
                 (name.into_owned(), String::default())
@@ -57,7 +57,7 @@ pub fn type_name<'p>(
             // Rename unnamed anonymous tags to something unique
             let name = data.name.to_string();
             if is_unnamed_type(&name) {
-                let name = format!("_unnamed_{}", type_index);
+                let name = format!("_unnamed_{type_index}");
                 (name, String::default())
             } else {
                 (name.into_owned(), String::default())
@@ -81,9 +81,9 @@ pub fn type_name<'p>(
                 needed_types,
             )?;
             if data.attributes.is_reference() {
-                (format!("{}&", type_left), type_right)
+                (format!("{type_left}&"), type_right)
             } else {
-                (format!("{}*", type_left), type_right)
+                (format!("{type_left}*"), type_right)
             }
         }
 
@@ -100,9 +100,9 @@ pub fn type_name<'p>(
             )?;
 
             if data.constant {
-                (format!("const {}", type_left), type_right)
+                (format!("const {type_left}"), type_right)
             } else if data.volatile {
-                (format!("volatile {}", type_left), type_right)
+                (format!("volatile {type_left}"), type_right)
             } else {
                 // ?
                 (type_left, type_right)
@@ -146,7 +146,7 @@ pub fn type_name<'p>(
             // Note: Dimensions are collected in reverse order so we have to use
             // a reverse iterator
             for dim in dimensions.iter().rev() {
-                dimensions_str = format!("{}[{}]", dimensions_str, dim);
+                dimensions_str = format!("{dimensions_str}[{dim}]");
             }
 
             (base_name, dimensions_str)
@@ -191,7 +191,7 @@ pub fn type_name<'p>(
             )?;
 
             (
-                format!("{}{} (", ret_type_left, ret_type_right),
+                format!("{ret_type_left}{ret_type_right} ("),
                 format!(")({})", arg_list.join(", ")),
             )
         }
@@ -226,7 +226,7 @@ pub fn type_name<'p>(
             )?;
 
             (
-                format!("{}{} ({}::", ret_type_left, ret_type_right, class_type_left),
+                format!("{ret_type_left}{ret_type_right} ({class_type_left}::"),
                 format!(")({})", arg_list.join(", ")),
             )
         }
@@ -246,8 +246,8 @@ pub fn type_name<'p>(
     Ok((type_left, type_right))
 }
 
-fn array_base_name<'p>(
-    type_finder: &pdb::TypeFinder<'p>,
+fn array_base_name(
+    type_finder: &pdb::TypeFinder,
     type_forwarder: &TypeForwarder,
     type_index: pdb::TypeIndex,
     primitive_flavor: &PrimitiveReconstructionFlavor,
@@ -303,8 +303,8 @@ fn array_base_name<'p>(
     }
 }
 
-pub fn argument_list<'p>(
-    type_finder: &pdb::TypeFinder<'p>,
+pub fn argument_list(
+    type_finder: &pdb::TypeFinder,
     type_forwarder: &TypeForwarder,
     type_index: pdb::TypeIndex,
     primitive_flavor: &PrimitiveReconstructionFlavor,
@@ -499,7 +499,7 @@ impl<'p> Data<'p> {
                 let name_str = data.name.to_string();
                 // Rename unnamed anonymous tags to something unique
                 let name = if is_unnamed_type(&name_str) {
-                    format!("_unnamed_{}", type_index)
+                    format!("_unnamed_{type_index}")
                 } else {
                     name_str.into_owned()
                 };
@@ -558,7 +558,7 @@ impl<'p> Data<'p> {
                 let name_str = data.name.to_string();
                 // Rename unnamed anonymous tags to something unique
                 let name = if is_unnamed_type(&name_str) {
-                    format!("_unnamed_{}", type_index)
+                    format!("_unnamed_{type_index}")
                 } else {
                     name_str.into_owned()
                 };
@@ -596,7 +596,7 @@ impl<'p> Data<'p> {
                 let name_str = data.name.to_string();
                 // Rename unnamed anonymous tags to something unique
                 let name = if is_unnamed_type(&name_str) {
-                    format!("_unnamed_{}", type_index)
+                    format!("_unnamed_{type_index}")
                 } else {
                     name_str.into_owned()
                 };

@@ -280,7 +280,7 @@ fn reconstruct_type_by_index_command(
     )?;
     if print_header {
         let file_header = generate_file_header(pdb_file, primitives_flavor, true);
-        Ok(format!("{}{}", file_header, data))
+        Ok(format!("{file_header}{data}"))
     } else {
         Ok(data)
     }
@@ -302,7 +302,7 @@ fn reconstruct_type_by_name_command(
     )?;
     if print_header {
         let file_header = generate_file_header(pdb_file, primitives_flavor, true);
-        Ok(format!("{}{}", file_header, data))
+        Ok(format!("{file_header}{data}"))
     } else {
         Ok(data)
     }

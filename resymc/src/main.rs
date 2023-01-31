@@ -216,7 +216,7 @@ impl ResymcApp {
                 }
             } else {
                 for (type_name, _) in type_list {
-                    println!("{}", type_name);
+                    println!("{type_name}");
                 }
             }
             Ok(())
@@ -276,10 +276,10 @@ impl ResymcApp {
                         if let Some(colorized_reconstructed_type) =
                             highlight_code(&theme, &reconstructed_type, LANGUAGE_SYNTAX, None)
                         {
-                            println!("{}", colorized_reconstructed_type);
+                            println!("{colorized_reconstructed_type}");
                         }
                     } else {
-                        println!("{}", reconstructed_type);
+                        println!("{reconstructed_type}");
                     }
                     Ok(())
                 }
@@ -376,7 +376,7 @@ impl ResymcApp {
                             LANGUAGE_SYNTAX,
                             Some(line_descriptions),
                         ) {
-                            println!("{}", colorized_reconstructed_type);
+                            println!("{colorized_reconstructed_type}");
                         }
                     } else {
                         println!("{}", reconstructed_type_diff.data);

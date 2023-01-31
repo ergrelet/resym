@@ -84,8 +84,7 @@ fn primitive_kind_as_str_portable(
         pdb::PrimitiveKind::NoType => Ok("..."),
 
         _ => Err(ResymCoreError::NotImplementedError(format!(
-            "/* FIXME: Unhandled primitive kind: '{:?}' */ void",
-            primitive_kind
+            "/* FIXME: Unhandled primitive kind: '{primitive_kind:?}' */ void"
         ))),
     };
 
@@ -148,8 +147,7 @@ fn primitive_kind_as_str_microsoft(
         pdb::PrimitiveKind::NoType => Ok("..."),
 
         _ => Err(ResymCoreError::NotImplementedError(format!(
-            "/* FIXME: Unhandled primitive kind: '{:?}' */ void",
-            primitive_kind
+            "/* FIXME: Unhandled primitive kind: '{primitive_kind:?}' */ void"
         ))),
     };
 
@@ -189,8 +187,7 @@ fn primitive_kind_as_str_raw(
         pdb::PrimitiveKind::NoType => Ok("..."),
 
         _ => Err(ResymCoreError::NotImplementedError(format!(
-            "/* FIXME: Unhandled primitive kind: '{:?}' */ void",
-            primitive_kind
+            "/* FIXME: Unhandled primitive kind: '{primitive_kind:?}' */ void"
         ))),
     };
 
