@@ -6,8 +6,8 @@ edition = "2021"
 [dependencies]
 resym_core = { version = "0.2", path = "../resym_core" }
 
-eframe = { version = "0.18", features = ["persistence"] }
-tinyfiledialogs = "3.0"
+eframe = { version = "0.20", features = ["persistence"] }
+tinyfiledialogs = "3.9"
 serde = "1.0"
 syntect = "5.0"
 anyhow = "1.0"

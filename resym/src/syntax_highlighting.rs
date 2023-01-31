@@ -140,7 +140,7 @@ impl CodeHighlighter {
                 let underline = if underline {
                     egui::Stroke::new(1.0, text_color)
                 } else {
-                    egui::Stroke::none()
+                    egui::Stroke::NONE
                 };
                 job.sections.push(LayoutSection {
                     leading_space: 0.0,

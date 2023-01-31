@@ -40,6 +40,8 @@ fn main() -> Result<()> {
         native_options,
         Box::new(|cc| Box::new(ResymApp::new(cc, logger).expect("application creation"))),
     );
+
+    Ok(())
 }
 
 /// Struct that represents our GUI application.
@@ -359,7 +361,7 @@ impl ResymApp {
                 }
                 if ui.button("Exit").clicked() {
                     ui.close_menu();
-                    frame.quit();
+                    frame.close();
                 }
             });
         });
@@ -433,7 +435,7 @@ impl ResymApp {
         let num_rows = self.console_content.len();
         ScrollArea::vertical()
             .auto_shrink([false, false])
-            .stick_to_bottom()
+            .stick_to_bottom(true)
             .show_rows(ui, row_height, num_rows, |ui, row_range| {
                 for row_index in row_range {
                     ui.add(
