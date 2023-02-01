@@ -147,11 +147,43 @@ impl eframe::App for ResymApp {
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            // The central panel the region left after adding TopPanel's and SidePanel's
-            ui.label(if let ResymAppMode::Comparing(..) = self.current_mode {
-                "Differences between reconstructed type(s) - C++"
-            } else {
-                "Reconstructed type(s) - C++"
+            ui.horizontal(|ui| {
+                // The central panel the region left after adding TopPanel's and SidePanel's
+                // Put the label on the left
+                ui.label(if let ResymAppMode::Comparing(..) = self.current_mode {
+                    "Differences between reconstructed type(s) - C++"
+                } else {
+                    "Reconstructed type(s) - C++"
+                });
+
+                // Start displaying buttons from the right
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                    if let ResymAppMode::Browsing(_, _, ref reconstructed_type) = self.current_mode
+                    {
+                        // Save button
+                        if ui.button("💾  Save As...").clicked() {
+                            let file_path_opt = tinyfiledialogs::save_file_dialog_with_filter(
+                                "Save content to file",
+                                "",
+                                &["*.c", "*.cc", "*.cpp", "*.cxx", "*.h", "*.hpp", "*.hxx"],
+                                "C/C++ Source File (*.c;*.cc;*.cpp;*.cxx;*.h;*.hpp;*.hxx)",
+                            );
+                            if let Some(file_path) = file_path_opt {
+                                let write_result = std::fs::write(&file_path, reconstructed_type);
+                                match write_result {
+                                    Ok(()) => log::info!(
+                                        "Reconstructed content has been saved to '{file_path}'."
+                                    ),
+                                    Err(err) => {
+                                        log::error!(
+                                            "Failed to write reconstructed content to file: {err}"
+                                        );
+                                    }
+                                }
+                            }
+                        };
+                    }
+                });
             });
             ui.add_space(4.0);
 
