@@ -94,6 +94,9 @@ impl eframe::App for ResymApp {
         self.update_settings_window(ctx);
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            // Process keyboard shortcuts, if any
+            self.consume_keyboard_shortcuts(ui);
+
             // The top panel is often a good place for a menu bar
             self.update_menu_bar(ui, frame);
         });
@@ -158,38 +161,11 @@ impl eframe::App for ResymApp {
 
                 // Start displaying buttons from the right
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
-                    if let ResymAppMode::Browsing(_, _, ref reconstructed_type) = self.current_mode
-                    {
-                        /// Keyboard shortcut for saving reconstructed content
-                        const CTRL_S_SHORTCUT: egui::KeyboardShortcut = egui::KeyboardShortcut {
-                            modifiers: egui::Modifiers::CTRL,
-                            key: egui::Key::S,
-                        };
-
+                    if let ResymAppMode::Browsing(..) = self.current_mode {
                         // Save button and Ctrl+S shortcut handling
-                        if ui.button("💾  Save (Ctrl+S)").clicked()
-                            || ui.input_mut().consume_shortcut(&CTRL_S_SHORTCUT)
-                        {
-                            let file_path_opt = tinyfiledialogs::save_file_dialog_with_filter(
-                                "Save content to file",
-                                "",
-                                &["*.c", "*.cc", "*.cpp", "*.cxx", "*.h", "*.hpp", "*.hxx"],
-                                "C/C++ Source File (*.c;*.cc;*.cpp;*.cxx;*.h;*.hpp;*.hxx)",
-                            );
-                            if let Some(file_path) = file_path_opt {
-                                let write_result = std::fs::write(&file_path, reconstructed_type);
-                                match write_result {
-                                    Ok(()) => log::info!(
-                                        "Reconstructed content has been saved to '{file_path}'."
-                                    ),
-                                    Err(err) => {
-                                        log::error!(
-                                            "Failed to write reconstructed content to file: {err}"
-                                        );
-                                    }
-                                }
-                            }
-                        };
+                        if ui.button("💾  Save (Ctrl+S)").clicked() {
+                            self.start_save_reconstruted_content();
+                        }
                     }
                 });
             });
@@ -230,6 +206,26 @@ impl ResymApp {
             frontend_controller,
             backend,
         })
+    }
+
+    fn consume_keyboard_shortcuts(&mut self, ui: &mut egui::Ui) {
+        /// Keyboard shortcut for opening files
+        const CTRL_O_SHORTCUT: egui::KeyboardShortcut = egui::KeyboardShortcut {
+            modifiers: egui::Modifiers::CTRL,
+            key: egui::Key::O,
+        };
+        if ui.input_mut().consume_shortcut(&CTRL_O_SHORTCUT) {
+            self.start_open_pdb_file(PDB_MAIN_SLOT);
+        }
+
+        /// Keyboard shortcut for saving reconstructed content
+        const CTRL_S_SHORTCUT: egui::KeyboardShortcut = egui::KeyboardShortcut {
+            modifiers: egui::Modifiers::CTRL,
+            key: egui::Key::S,
+        };
+        if ui.input_mut().consume_shortcut(&CTRL_S_SHORTCUT) {
+            self.start_save_reconstruted_content();
+        }
     }
 
     fn process_ui_commands(&mut self) {
@@ -367,16 +363,9 @@ impl ResymApp {
     fn update_menu_bar(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| {
-                if ui.button("Open PDB file").clicked() {
+                if ui.button("Open PDB file (Ctrl+O)").clicked() {
                     ui.close_menu();
-                    if let Some(file_path) = Self::select_pdb_file() {
-                        if let Err(err) = self
-                            .backend
-                            .send_command(BackendCommand::LoadPDB(PDB_MAIN_SLOT, file_path.into()))
-                        {
-                            log::error!("Failed to load the PDB file: {}", err);
-                        }
-                    }
+                    self.start_open_pdb_file(PDB_MAIN_SLOT);
                 }
                 if ui
                     .add_enabled(
@@ -386,14 +375,7 @@ impl ResymApp {
                     .clicked()
                 {
                     ui.close_menu();
-                    if let Some(file_path) = Self::select_pdb_file() {
-                        if let Err(err) = self
-                            .backend
-                            .send_command(BackendCommand::LoadPDB(PDB_DIFF_SLOT, file_path.into()))
-                        {
-                            log::error!("Failed to load the PDB file: {}", err);
-                        }
-                    }
+                    self.start_open_pdb_file(PDB_DIFF_SLOT);
                 }
                 if ui.button("Settings").clicked() {
                     ui.close_menu();
@@ -675,11 +657,41 @@ impl ResymApp {
             });
     }
 
-    fn select_pdb_file() -> Option<String> {
-        open_file_dialog(
+    /// Function invoked on `Open PDB File` or when the Ctrl+O shortcut is used
+    fn start_open_pdb_file(&mut self, pdb_slot: PDBSlot) {
+        let file_path_opt = open_file_dialog(
             "Select a PDB file",
             "",
             Some((&["*.pdb"], "PDB files (*.pdb)")),
-        )
+        );
+        if let Some(file_path) = file_path_opt {
+            if let Err(err) = self
+                .backend
+                .send_command(BackendCommand::LoadPDB(pdb_slot, file_path.into()))
+            {
+                log::error!("Failed to load the PDB file: {err}");
+            }
+        }
+    }
+
+    /// Function invoked on 'Save' or when the Ctrl+S shortcut is used
+    fn start_save_reconstruted_content(&self) {
+        if let ResymAppMode::Browsing(_, _, ref reconstructed_type) = self.current_mode {
+            let file_path_opt = tinyfiledialogs::save_file_dialog_with_filter(
+                "Save content to file",
+                "",
+                &["*.c", "*.cc", "*.cpp", "*.cxx", "*.h", "*.hpp", "*.hxx"],
+                "C/C++ Source File (*.c;*.cc;*.cpp;*.cxx;*.h;*.hpp;*.hxx)",
+            );
+            if let Some(file_path) = file_path_opt {
+                let write_result = std::fs::write(&file_path, reconstructed_type);
+                match write_result {
+                    Ok(()) => log::info!("Reconstructed content has been saved to '{file_path}'."),
+                    Err(err) => {
+                        log::error!("Failed to write reconstructed content to file: {err}");
+                    }
+                }
+            }
+        }
     }
 }
