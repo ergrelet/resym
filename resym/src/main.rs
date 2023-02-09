@@ -160,8 +160,16 @@ impl eframe::App for ResymApp {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                     if let ResymAppMode::Browsing(_, _, ref reconstructed_type) = self.current_mode
                     {
-                        // Save button
-                        if ui.button("💾  Save As...").clicked() {
+                        /// Keyboard shortcut for saving reconstructed content
+                        const CTRL_S_SHORTCUT: egui::KeyboardShortcut = egui::KeyboardShortcut {
+                            modifiers: egui::Modifiers::CTRL,
+                            key: egui::Key::S,
+                        };
+
+                        // Save button and Ctrl+S shortcut handling
+                        if ui.button("💾  Save (Ctrl+S)").clicked()
+                            || ui.input_mut().consume_shortcut(&CTRL_S_SHORTCUT)
+                        {
                             let file_path_opt = tinyfiledialogs::save_file_dialog_with_filter(
                                 "Save content to file",
                                 "",
