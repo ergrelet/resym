@@ -3,6 +3,8 @@
 ## [Unreleased]
 ### Added
 - Allow switching between different primitive type representations
+- Add a "Save" button to easily save reconstructed types into files.
+- Add keyboard shortcuts for opening PDB files and saving reconstructed types (Ctrl+O and Ctrl+S respectively)
 
 ### Fixed
 - Reconstruct access specifiers for base classes (@TrinityDevelopers)
