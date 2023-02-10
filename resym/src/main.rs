@@ -501,7 +501,7 @@ impl ResymApp {
         egui::ScrollArea::both()
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                const LINE_NUMBER_DIGIT_WIDTH: u32 = 10;
+                const LINE_NUMBER_DIGIT_WIDTH: u32 = 14;
                 let (num_colums, min_column_width) = if self.settings.print_line_numbers {
                     match self.current_mode {
                         ResymAppMode::Comparing(_, _, last_line_number, ..) => {
@@ -546,11 +546,13 @@ impl ResymApp {
                                 if self.settings.print_line_numbers {
                                     ui.add(
                                         egui::TextEdit::multiline(&mut line_numbers_old.as_str())
+                                            .font(egui::FontId::monospace(14.0))
                                             .interactive(false)
                                             .desired_width(min_column_width),
                                     );
                                     ui.add(
                                         egui::TextEdit::multiline(&mut line_numbers_new.as_str())
+                                            .font(egui::FontId::monospace(14.0))
                                             .interactive(false)
                                             .desired_width(min_column_width),
                                     );
@@ -569,6 +571,7 @@ impl ResymApp {
                                 if self.settings.print_line_numbers {
                                     ui.add(
                                         egui::TextEdit::multiline(&mut line_numbers.as_str())
+                                            .font(egui::FontId::monospace(14.0))
                                             .interactive(false)
                                             .desired_width(min_column_width),
                                     );
