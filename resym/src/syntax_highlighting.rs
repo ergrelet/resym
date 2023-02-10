@@ -13,27 +13,25 @@ pub fn highlight_code(
     ctx: &egui::Context,
     theme: &CodeTheme,
     code: &str,
-    language: &str,
     enabled: bool,
     line_descriptions: Option<&LineDescriptions>,
 ) -> LayoutJob {
     impl
         egui::util::cache::ComputerMut<
-            (&CodeTheme, &str, &str, bool, Option<&LineDescriptions>),
+            (&CodeTheme, &str, bool, Option<&LineDescriptions>),
             LayoutJob,
         > for CodeHighlighter
     {
         fn compute(
             &mut self,
-            (theme, code, lang, enabled, line_descriptions): (
+            (theme, code, enabled, line_descriptions): (
                 &CodeTheme,
-                &str,
                 &str,
                 bool,
                 Option<&LineDescriptions>,
             ),
         ) -> LayoutJob {
-            self.highlight(theme, code, lang, enabled, line_descriptions)
+            self.highlight(theme, code, enabled, line_descriptions)
         }
     }
 
@@ -41,7 +39,7 @@ pub fn highlight_code(
 
     let mut memory = ctx.memory();
     let highlight_cache = memory.caches.cache::<HighlightCache<'_>>();
-    highlight_cache.get((theme, code, language, enabled, line_descriptions))
+    highlight_cache.get((theme, code, enabled, line_descriptions))
 }
 
 struct CodeHighlighter {
@@ -63,16 +61,15 @@ impl CodeHighlighter {
         &self,
         theme: &CodeTheme,
         code: &str,
-        lang: &str,
         enabled: bool,
         line_descriptions: Option<&LineDescriptions>,
     ) -> LayoutJob {
-        self.highlight_impl(theme, code, lang, enabled, line_descriptions)
+        self.highlight_impl(theme, code, enabled, line_descriptions)
             .unwrap_or_else(|| {
                 // Fallback:
                 LayoutJob::simple(
                     code.into(),
-                    egui::FontId::monospace(14.0),
+                    egui::FontId::monospace(theme.font_size as f32),
                     if theme.dark_mode {
                         egui::Color32::LIGHT_GRAY
                     } else {
@@ -87,7 +84,6 @@ impl CodeHighlighter {
         &self,
         theme: &CodeTheme,
         text: &str,
-        language: &str,
         enabled: bool,
         line_descriptions: Option<&LineDescriptions>,
     ) -> Option<LayoutJob> {
@@ -100,11 +96,11 @@ impl CodeHighlighter {
 
         let syntax = self
             .ps
-            .find_syntax_by_name(language)
-            .or_else(|| self.ps.find_syntax_by_extension(language))?;
+            .find_syntax_by_name(&theme.language_syntax)
+            .or_else(|| self.ps.find_syntax_by_extension(&theme.language_syntax))?;
 
-        let theme = theme.syntect_theme.syntect_key_name();
-        let mut h = HighlightLines::new(syntax, &self.ts.themes[theme]);
+        let theme_name = theme.syntect_theme.syntect_key_name();
+        let mut h = HighlightLines::new(syntax, &self.ts.themes[theme_name]);
 
         use egui::text::{LayoutSection, TextFormat};
 
@@ -147,7 +143,7 @@ impl CodeHighlighter {
                     byte_range: as_byte_range(text, range),
                     format: TextFormat {
                         background: bg_color,
-                        font_id: egui::FontId::monospace(14.0),
+                        font_id: egui::FontId::monospace(theme.font_size as f32),
                         color: text_color,
                         italics,
                         underline,

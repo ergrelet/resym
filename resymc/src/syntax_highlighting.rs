@@ -32,11 +32,10 @@ const COLOR_GREEN: Color = Color {
 pub fn highlight_code(
     theme: &CodeTheme,
     code: &str,
-    language: &str,
     line_descriptions: Option<LineDescriptions>,
 ) -> Option<String> {
     let highlighter = CodeHighlighter::default();
-    highlighter.highlight(theme, code, language, line_descriptions)
+    highlighter.highlight(theme, code, &theme.language_syntax, line_descriptions)
 }
 
 struct CodeHighlighter {

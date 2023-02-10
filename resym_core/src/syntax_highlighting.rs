@@ -38,26 +38,32 @@ impl SyntectTheme {
 pub struct CodeTheme {
     pub dark_mode: bool,
     pub syntect_theme: SyntectTheme,
+    pub font_size: u16,
+    pub language_syntax: String,
 }
 
 impl Default for CodeTheme {
     fn default() -> Self {
-        Self::dark()
+        Self::dark(14, "cpp".to_string())
     }
 }
 
 impl CodeTheme {
-    pub fn dark() -> Self {
+    pub fn dark(font_size: u16, language_syntax: String) -> Self {
         Self {
             dark_mode: true,
             syntect_theme: SyntectTheme::Base16MochaDark,
+            font_size,
+            language_syntax,
         }
     }
 
-    pub fn light() -> Self {
+    pub fn light(font_size: u16, language_syntax: String) -> Self {
         Self {
             dark_mode: false,
             syntect_theme: SyntectTheme::Base16OceanLight,
+            font_size,
+            language_syntax,
         }
     }
 }

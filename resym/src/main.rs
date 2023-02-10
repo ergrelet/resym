@@ -470,11 +470,12 @@ impl ResymApp {
     }
 
     fn update_code_view(&mut self, ui: &mut egui::Ui) {
+        const FONT_SIZE: u16 = 14;
         const LANGUAGE_SYNTAX: &str = "cpp";
         let theme = if self.settings.use_light_theme {
-            CodeTheme::light()
+            CodeTheme::light(FONT_SIZE, LANGUAGE_SYNTAX.to_string())
         } else {
-            CodeTheme::dark()
+            CodeTheme::dark(FONT_SIZE, LANGUAGE_SYNTAX.to_string())
         };
 
         let line_desc =
@@ -490,7 +491,6 @@ impl ResymApp {
                 ui.ctx(),
                 &theme,
                 string,
-                LANGUAGE_SYNTAX,
                 self.settings.enable_syntax_hightlighting,
                 line_desc,
             );
@@ -501,7 +501,7 @@ impl ResymApp {
         egui::ScrollArea::both()
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                const LINE_NUMBER_DIGIT_WIDTH: u32 = 14;
+                const LINE_NUMBER_DIGIT_WIDTH: u32 = FONT_SIZE as u32;
                 let (num_colums, min_column_width) = if self.settings.print_line_numbers {
                     match self.current_mode {
                         ResymAppMode::Comparing(_, _, last_line_number, ..) => {
@@ -546,13 +546,13 @@ impl ResymApp {
                                 if self.settings.print_line_numbers {
                                     ui.add(
                                         egui::TextEdit::multiline(&mut line_numbers_old.as_str())
-                                            .font(egui::FontId::monospace(14.0))
+                                            .font(egui::FontId::monospace(FONT_SIZE as f32))
                                             .interactive(false)
                                             .desired_width(min_column_width),
                                     );
                                     ui.add(
                                         egui::TextEdit::multiline(&mut line_numbers_new.as_str())
-                                            .font(egui::FontId::monospace(14.0))
+                                            .font(egui::FontId::monospace(FONT_SIZE as f32))
                                             .interactive(false)
                                             .desired_width(min_column_width),
                                     );
@@ -571,7 +571,7 @@ impl ResymApp {
                                 if self.settings.print_line_numbers {
                                     ui.add(
                                         egui::TextEdit::multiline(&mut line_numbers.as_str())
-                                            .font(egui::FontId::monospace(14.0))
+                                            .font(egui::FontId::monospace(FONT_SIZE as f32))
                                             .interactive(false)
                                             .desired_width(min_column_width),
                                     );

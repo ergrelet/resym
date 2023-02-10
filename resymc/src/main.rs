@@ -271,10 +271,9 @@ impl ResymcApp {
                         let mut output_file = File::create(output_file_path)?;
                         output_file.write_all(reconstructed_type.as_bytes())?;
                     } else if highlight_syntax {
-                        const LANGUAGE_SYNTAX: &str = "cpp";
-                        let theme = CodeTheme::dark();
+                        let theme = CodeTheme::default();
                         if let Some(colorized_reconstructed_type) =
-                            highlight_code(&theme, &reconstructed_type, LANGUAGE_SYNTAX, None)
+                            highlight_code(&theme, &reconstructed_type, None)
                         {
                             println!("{colorized_reconstructed_type}");
                         }
@@ -360,8 +359,7 @@ impl ResymcApp {
                         let mut output_file = File::create(output_file_path)?;
                         output_file.write_all(reconstructed_type_diff.data.as_bytes())?;
                     } else if highlight_syntax {
-                        const LANGUAGE_SYNTAX: &str = "cpp";
-                        let theme = CodeTheme::dark();
+                        let theme = CodeTheme::default();
                         let line_descriptions =
                             reconstructed_type_diff
                                 .metadata
@@ -373,7 +371,6 @@ impl ResymcApp {
                         if let Some(colorized_reconstructed_type) = highlight_code(
                             &theme,
                             &reconstructed_type_diff.data,
-                            LANGUAGE_SYNTAX,
                             Some(line_descriptions),
                         ) {
                             println!("{colorized_reconstructed_type}");
