@@ -470,12 +470,11 @@ impl ResymApp {
     }
 
     fn update_code_view(&mut self, ui: &mut egui::Ui) {
-        const FONT_SIZE: u16 = 14;
         const LANGUAGE_SYNTAX: &str = "cpp";
         let theme = if self.settings.use_light_theme {
-            CodeTheme::light(FONT_SIZE, LANGUAGE_SYNTAX.to_string())
+            CodeTheme::light(self.settings.font_size, LANGUAGE_SYNTAX.to_string())
         } else {
-            CodeTheme::dark(FONT_SIZE, LANGUAGE_SYNTAX.to_string())
+            CodeTheme::dark(self.settings.font_size, LANGUAGE_SYNTAX.to_string())
         };
 
         let line_desc =
@@ -501,13 +500,14 @@ impl ResymApp {
         egui::ScrollArea::both()
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                const LINE_NUMBER_DIGIT_WIDTH: u32 = FONT_SIZE as u32;
+                // TODO(ergrelet): see if there's a better way to compute this width.
+                let line_number_digit_width = self.settings.font_size as u32;
                 let (num_colums, min_column_width) = if self.settings.print_line_numbers {
                     match self.current_mode {
                         ResymAppMode::Comparing(_, _, last_line_number, ..) => {
                             // Compute the columns' sizes from the number of digits
                             let char_count = last_line_number.checked_ilog10().unwrap_or(1) + 1;
-                            let line_number_width = (char_count * LINE_NUMBER_DIGIT_WIDTH) as f32;
+                            let line_number_width = (char_count * line_number_digit_width) as f32;
 
                             // Old index + new index + code editor
                             (3, line_number_width)
@@ -515,7 +515,7 @@ impl ResymApp {
                         ResymAppMode::Browsing(_, last_line_number, _) => {
                             // Compute the columns' sizes from the number of digits
                             let char_count = last_line_number.checked_ilog10().unwrap_or(1) + 1;
-                            let line_number_width = (char_count * LINE_NUMBER_DIGIT_WIDTH) as f32;
+                            let line_number_width = (char_count * line_number_digit_width) as f32;
 
                             // Line numbers + code editor
                             (2, line_number_width)
@@ -546,13 +546,17 @@ impl ResymApp {
                                 if self.settings.print_line_numbers {
                                     ui.add(
                                         egui::TextEdit::multiline(&mut line_numbers_old.as_str())
-                                            .font(egui::FontId::monospace(FONT_SIZE as f32))
+                                            .font(egui::FontId::monospace(
+                                                self.settings.font_size as f32,
+                                            ))
                                             .interactive(false)
                                             .desired_width(min_column_width),
                                     );
                                     ui.add(
                                         egui::TextEdit::multiline(&mut line_numbers_new.as_str())
-                                            .font(egui::FontId::monospace(FONT_SIZE as f32))
+                                            .font(egui::FontId::monospace(
+                                                self.settings.font_size as f32,
+                                            ))
                                             .interactive(false)
                                             .desired_width(min_column_width),
                                     );
@@ -571,7 +575,9 @@ impl ResymApp {
                                 if self.settings.print_line_numbers {
                                     ui.add(
                                         egui::TextEdit::multiline(&mut line_numbers.as_str())
-                                            .font(egui::FontId::monospace(FONT_SIZE as f32))
+                                            .font(egui::FontId::monospace(
+                                                self.settings.font_size as f32,
+                                            ))
                                             .interactive(false)
                                             .desired_width(min_column_width),
                                     );
@@ -598,13 +604,29 @@ impl ResymApp {
             .auto_sized()
             .collapsible(false)
             .show(ctx, |ui| {
+                const INTER_SECTION_SPACING: f32 = 10.0;
                 ui.label("Theme");
                 // Show radio-buttons to switch between light and dark mode.
                 ui.horizontal(|ui| {
                     ui.selectable_value(&mut self.settings.use_light_theme, true, "☀ Light");
                     ui.selectable_value(&mut self.settings.use_light_theme, false, "🌙 Dark");
                 });
-                ui.add_space(5.0);
+                ui.label(
+                    egui::RichText::new("Font size")
+                        .color(ui.style().visuals.widgets.inactive.text_color()),
+                );
+                egui::ComboBox::from_id_source("font_size")
+                    .selected_text(format!("{}", self.settings.font_size))
+                    .show_ui(ui, |ui| {
+                        for font_size in 8..=20 {
+                            ui.selectable_value(
+                                &mut self.settings.font_size,
+                                font_size,
+                                font_size.to_string(),
+                            );
+                        }
+                    });
+                ui.add_space(INTER_SECTION_SPACING);
 
                 ui.label("Search");
                 ui.checkbox(
@@ -615,7 +637,7 @@ impl ResymApp {
                     &mut self.settings.search_use_regex,
                     "Enable regular expressions",
                 );
-                ui.add_space(5.0);
+                ui.add_space(INTER_SECTION_SPACING);
 
                 ui.label("Type reconstruction");
                 ui.checkbox(

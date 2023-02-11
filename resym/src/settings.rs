@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 pub struct ResymAppSettings {
     pub use_light_theme: bool,
+    pub font_size: u16,
     pub search_case_insensitive: bool,
     pub search_use_regex: bool,
     pub enable_syntax_hightlighting: bool,
@@ -20,6 +21,7 @@ impl Default for ResymAppSettings {
     fn default() -> Self {
         Self {
             use_light_theme: false,
+            font_size: 14,
             search_case_insensitive: true,
             search_use_regex: false,
             enable_syntax_hightlighting: true,
