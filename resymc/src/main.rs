@@ -22,6 +22,7 @@ const PDB_MAIN_SLOT: PDBSlot = 0;
 const PDB_DIFF_TO_SLOT: PDBSlot = 1;
 
 fn main() -> Result<()> {
+    env_logger::init();
     let app = ResymcApp::new()?;
 
     // Process command and options
