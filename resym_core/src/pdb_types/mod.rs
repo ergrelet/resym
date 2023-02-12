@@ -163,7 +163,13 @@ pub fn type_name(
                 primitive_flavor,
                 needed_types,
             )?;
-            (type_left, format!("{} : {}", type_right, data.length))
+            (
+                type_left,
+                format!(
+                    "{} : {} /* BitPos={} */",
+                    type_right, data.length, data.position
+                ),
+            )
         }
 
         pdb::TypeData::Procedure(data) => {
