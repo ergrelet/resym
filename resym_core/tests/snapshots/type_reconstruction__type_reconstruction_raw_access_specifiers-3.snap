@@ -4,10 +4,9 @@ expression: reconstructed_type
 ---
 
 struct resym_test::BitFieldsTest2 { /* Size=0x2 */
-  /* 0x0000 */ public: unsigned char b1 : 3;
-  union {
-    /* 0x0001 */ public: unsigned char b2 : 6;
-    /* 0x0001 */ public: unsigned char b3 : 2;
-  };
+  /* 0x0000 */ public: unsigned char b1 : 3; /* BitPos=0 */
+  /* 0x0000 */ unsigned char : 0; /* BitPos=3 */
+  /* 0x0001 */ public: unsigned char b2 : 6; /* BitPos=0 */
+  /* 0x0001 */ public: unsigned char b3 : 2; /* BitPos=6 */
 };
 

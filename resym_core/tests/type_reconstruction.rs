@@ -21,6 +21,11 @@ const TEST_CASES: &[&str] = &[
     "resym_test::SpecializedInterfaceImplClass",
     "resym_test::ClassWithRefsAndStaticsTest",
     "resym_test::BigOffsetsStruct",
+    "resym_test::BitFieldsTest3",
+    "resym_test::BitFieldsTest4",
+    "resym_test::BitFieldsTest5",
+    "resym_test::BitFieldsTest6",
+    "resym_test::BitFieldsTest7",
 ];
 
 #[test]

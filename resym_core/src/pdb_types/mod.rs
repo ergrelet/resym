@@ -163,13 +163,7 @@ pub fn type_name(
                 primitive_flavor,
                 needed_types,
             )?;
-            (
-                type_left,
-                format!(
-                    "{} : {} /* BitPos={} */",
-                    type_right, data.length, data.position
-                ),
-            )
+            (type_left, format!("{} : {}", type_right, data.length))
         }
 
         pdb::TypeData::Procedure(data) => {
@@ -337,6 +331,19 @@ pub fn argument_list(
             "argument list of non-argument-list type".to_owned(),
         )),
     }
+}
+
+/// Return the type's offset in bits, if the type is a bitfield.
+pub fn type_bitfield_info(
+    type_finder: &pdb::TypeFinder,
+    type_index: pdb::TypeIndex,
+) -> Result<Option<(u8, u8)>> {
+    let bitfield_info = match type_finder.find(type_index)?.parse()? {
+        pdb::TypeData::Bitfield(data) => Some((data.position, data.length)),
+        _ => None,
+    };
+
+    Ok(bitfield_info)
 }
 
 /// Return the type's size in bytes.
@@ -662,13 +669,52 @@ fn fmt_struct_fields_recursive(
     let unions_found = find_unnamed_unions_in_struct(fields);
     // Write fields into the `Formatter`
     let indentation = "  ".repeat(depth);
+    let mut last_field: Option<&Field> = None;
     for union_range in unions_found {
         // Fields out of unnamed unions are represented by "empty" unions
         if union_range.is_empty() {
             let field = &fields[union_range.start];
+
+            // Check if we need to add padding, following a bit-field member
+            if let Some((field_bit_offset, _)) = field.bitfield_info {
+                if let Some(last_field) = last_field {
+                    if let Some((last_bit_offset, last_bit_size)) = last_field.bitfield_info {
+                        let potential_padding_bit_offset = last_bit_offset + last_bit_size;
+                        if field.offset == last_field.offset {
+                            // Padding within the same allocation unit
+                            let bit_offset_delta = field_bit_offset - potential_padding_bit_offset;
+                            // Add padding if needed
+                            if bit_offset_delta > 0 {
+                                writeln!(
+                                    f,
+                                    "{}/* {:#06x} */ {} : {}; /* BitPos={} */",
+                                    &indentation,
+                                    last_field.offset,
+                                    last_field.type_left,
+                                    bit_offset_delta,
+                                    potential_padding_bit_offset
+                                )?;
+                            }
+                        } else {
+                            // Padding in the previous field
+                            // FIXME(ergrelet): 0-bit padding is used systematically when we should only emit it when
+                            // needed. It's not incorrect but might produce less elegant output.
+                            writeln!(
+                                f,
+                                "{}/* {:#06x} */ {} : 0; /* BitPos={} */",
+                                &indentation,
+                                last_field.offset,
+                                last_field.type_left,
+                                potential_padding_bit_offset
+                            )?;
+                        }
+                    }
+                }
+            }
+
             writeln!(
                 f,
-                "{}/* {:#06x} */ {}{} {}{};",
+                "{}/* {:#06x} */ {}{} {}{};{}",
                 &indentation,
                 field.offset,
                 if fmt_configuration.print_access_specifiers {
@@ -679,11 +725,18 @@ fn fmt_struct_fields_recursive(
                 field.type_left,
                 field.name.to_string(),
                 field.type_right,
+                if let Some((bit_position, _)) = field.bitfield_info {
+                    format!(" /* BitPos={bit_position} */")
+                } else {
+                    String::default()
+                }
             )?;
+            last_field = Some(field);
         } else {
             writeln!(f, "{}union {{", &indentation)?;
             fmt_union_fields_recursive(fmt_configuration, &fields[union_range], depth + 1, f)?;
             writeln!(f, "{}}};", &indentation)?;
+            last_field = None;
         }
     }
 
@@ -694,7 +747,7 @@ fn find_unnamed_unions_in_struct(fields: &[Field]) -> Vec<Range<usize>> {
     let mut unions_found: Vec<Range<usize>> = vec![];
     // Temporary map of unions and fields that'll be used to compute the list
     // of unnamed unions which are in the struct.
-    let mut unions_found_temp: BTreeMap<u64, (Range<usize>, u64)> = BTreeMap::new();
+    let mut unions_found_temp: BTreeMap<(u64, u8), (Range<usize>, u64)> = BTreeMap::new();
 
     // Discover unions
     let mut curr_union_offset_range: Range<u64> = Range::default();
@@ -702,7 +755,7 @@ fn find_unnamed_unions_in_struct(fields: &[Field]) -> Vec<Range<usize>> {
         // Check if the field is located inside of the union we're processing
         if curr_union_offset_range.contains(&field.offset) {
             let union_info = unions_found_temp
-                .get_mut(&curr_union_offset_range.start)
+                .get_mut(&(curr_union_offset_range.start, 0))
                 .unwrap();
             union_info.0.end = i + 1;
             // Update the union's size
@@ -712,7 +765,9 @@ fn find_unnamed_unions_in_struct(fields: &[Field]) -> Vec<Range<usize>> {
                 field.offset + field.size as u64,
             );
         } else {
-            match unions_found_temp.get_mut(&field.offset) {
+            match unions_found_temp
+                .get_mut(&(field.offset, field.bitfield_info.unwrap_or_default().0))
+            {
                 Some(union_info) => {
                     union_info.0.end = i + 1;
                     curr_union_offset_range.start = field.offset;
@@ -729,7 +784,7 @@ fn find_unnamed_unions_in_struct(fields: &[Field]) -> Vec<Range<usize>> {
                 }
                 None => {
                     unions_found_temp.insert(
-                        field.offset,
+                        (field.offset, field.bitfield_info.unwrap_or_default().0),
                         (Range { start: i, end: i }, field.size as u64),
                     );
                 }
@@ -779,7 +834,7 @@ fn fmt_union_fields_recursive(
             let field = &fields[struct_range.start];
             writeln!(
                 f,
-                "{}/* {:#06x} */ {}{} {}{};",
+                "{}/* {:#06x} */ {}{} {}{};{}",
                 &indentation,
                 field.offset,
                 if fmt_configuration.print_access_specifiers {
@@ -790,6 +845,11 @@ fn fmt_union_fields_recursive(
                 field.type_left,
                 field.name.to_string(),
                 field.type_right,
+                if let Some((bit_position, _)) = field.bitfield_info {
+                    format!(" /* BitPos={bit_position} */")
+                } else {
+                    String::default()
+                }
             )?;
         } else {
             writeln!(f, "{}struct {{", &indentation)?;
@@ -807,10 +867,14 @@ fn find_unnamed_structs_in_unions(fields: &[Field]) -> Vec<Range<usize>> {
     let field_count = fields.len();
     let union_offset = fields[0].offset;
     let mut previous_field_offset = fields[0].offset;
+    let mut previous_field_bit_offset = fields[0].bitfield_info.unwrap_or_default().0;
     for (i, field) in fields.iter().enumerate() {
-        // The field offset is lower than the offset of the previous field,
-        // "close" the struct
-        if previous_field_offset > field.offset {
+        // The field offset is lower than the offset of the previous field
+        // -> "close" the struct
+        if previous_field_offset > field.offset
+            || (field.offset == previous_field_offset
+                && previous_field_bit_offset > field.bitfield_info.unwrap_or_default().0)
+        {
             if let Some(last_found_struct_range) = structs_found.pop() {
                 // "Merge" previous field with the struct
                 structs_found.push(Range {
@@ -823,7 +887,10 @@ fn find_unnamed_structs_in_unions(fields: &[Field]) -> Vec<Range<usize>> {
         else if i == field_count - 1 {
             if let Some(last_found_struct_range) = structs_found.pop() {
                 // Declare a new struct only if its length is greater than 1.
-                if i > last_found_struct_range.start && field.offset != previous_field_offset {
+                if i > last_found_struct_range.start
+                    && (field.offset != previous_field_offset
+                        || field.bitfield_info.unwrap_or_default().0 != previous_field_bit_offset)
+                {
                     // "Merge" previous field with the struct
                     structs_found.push(Range {
                         start: last_found_struct_range.start,
@@ -836,11 +903,12 @@ fn find_unnamed_structs_in_unions(fields: &[Field]) -> Vec<Range<usize>> {
         }
 
         // Regular field, may be the beginning of a struct
-        if field.offset == union_offset {
+        if field.offset == union_offset && field.bitfield_info.unwrap_or_default().0 == 0 {
             structs_found.push(Range { start: i, end: i });
         }
 
         previous_field_offset = field.offset;
+        previous_field_bit_offset = field.bitfield_info.unwrap_or_default().0;
     }
 
     structs_found

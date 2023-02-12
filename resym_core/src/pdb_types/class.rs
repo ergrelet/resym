@@ -5,7 +5,7 @@ use super::{
     field::{FieldAccess, StaticField},
     fmt_struct_fields_recursive, is_unnamed_type,
     primitive_types::PrimitiveReconstructionFlavor,
-    resolve_complete_type_index, type_name, type_size,
+    resolve_complete_type_index, type_bitfield_info, type_name, type_size,
     union::Union,
     DataFormatConfiguration, Field, Method, Result, ResymCoreError, TypeForwarder, TypeSet,
 };
@@ -251,6 +251,7 @@ impl<'p> Class<'p> {
                     primitive_flavor,
                     needed_types,
                 )?;
+                let type_bitfield_info = type_bitfield_info(type_finder, complete_type_index)?;
                 let type_size = type_size(type_finder, complete_type_index)?;
                 let access = FieldAccess::from_field_attribute(data.attributes.access());
 
@@ -260,6 +261,7 @@ impl<'p> Class<'p> {
                     name: data.name,
                     offset: data.offset,
                     size: type_size,
+                    bitfield_info: type_bitfield_info,
                     access,
                 });
             }

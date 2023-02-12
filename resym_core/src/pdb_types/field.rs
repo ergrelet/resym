@@ -5,8 +5,13 @@ pub struct Field<'p> {
     pub type_left: String,
     pub type_right: String,
     pub name: pdb::RawString<'p>,
+    /// Offset of the field in bytes within the current struct/union.
     pub offset: u64,
+    /// Size of the field in bytes.
     pub size: usize,
+    /// Offset and size of the field in bits, within the current type's size (0 means LSB).
+    /// Present only for bitfield members.
+    pub bitfield_info: Option<(u8, u8)>,
     pub access: FieldAccess,
 }
 

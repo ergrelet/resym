@@ -53,9 +53,9 @@ struct ArrayTest {
 };
 
 struct BitFieldsTest1 {
-  uint32_t b1 : 1;
-  uint32_t b2 : 1;
-  uint32_t b3 : 30;
+  uint32_t b1 : 1;   // Bit offset: 0
+  uint32_t b2 : 1;   // Bit offset: 1
+  uint32_t b3 : 30;  // Bit offset: 2
 };
 
 struct BitFieldsTest2 {
@@ -64,10 +64,47 @@ struct BitFieldsTest2 {
   // 5 bits: unused
   // 6 bits: value of b2
   // 2 bits: value of b3
-  unsigned char b1 : 3;
-  unsigned char : 0;  // start a new byte
-  unsigned char b2 : 6;
-  unsigned char b3 : 2;
+  unsigned char b1 : 3;  // Bit offset: 0
+  unsigned char : 0;     // start a new byte
+  unsigned char b2 : 6;  // Bit offset: 0
+  unsigned char b3 : 2;  // Bit offset: 6
+};
+
+union BitFieldsTest3 {
+  uint32_t b1 : 1;   // Bit offset: 0
+  uint32_t b2 : 1;   // Bit offset: 0
+  uint32_t b3 : 30;  // Bit offset: 0
+};
+
+union BitFieldsTest4 {
+  struct {
+    uint16_t b1 : 1;   // Bit offset: 0
+    uint16_t b2 : 5;   // Bit offset: 1
+    uint16_t b3 : 10;  // Bit offset: 6
+  };
+};
+
+struct BitFieldsTest5 {
+  union {
+    uint16_t b1 : 1;   // Bit offset: 0
+    uint16_t b2 : 5;   // Bit offset: 0
+    uint16_t b3 : 10;  // Bit offset: 0
+  };
+};
+
+struct BitFieldsTest6 {
+  // will usually occupy 2 bytes:
+  // 3 bits: value of b1
+  // 2 bits: unused
+  // 6 bits: value of b2
+  // 2 bits: value of b3
+  // 3 bits: unused
+  uint16_t b1 : 3, : 2, b2 : 6, b3 : 2;
+};
+
+struct BitFieldsTest7 {
+  uint16_t b1 : 3;  // Bit offset: 0
+  uint32_t b2 : 3;  // Bit offset: 0
 };
 
 union UnionTest {
@@ -352,6 +389,11 @@ int main() {
   ArrayTest array_test{};
   BitFieldsTest1 bit_fields_test1{};
   BitFieldsTest2 bit_fields_test2{};
+  BitFieldsTest3 bit_fields_test3{};
+  BitFieldsTest4 bit_fields_test4{};
+  BitFieldsTest5 bit_fields_test5{};
+  BitFieldsTest6 bit_fields_test6{};
+  BitFieldsTest7 bit_fields_test7{};
   UnionTest union_test{};
   StructTest struct_test{};
   EnumTest1 enum_test1{};
