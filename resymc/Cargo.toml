@@ -2,6 +2,7 @@
 name = "resymc"
 version = "0.2.0"
 edition = "2021"
+rust-version = "1.67"
 
 [dependencies]
 resym_core = { version = "0.2", path = "../resym_core" }
