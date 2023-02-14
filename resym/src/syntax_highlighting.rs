@@ -37,9 +37,10 @@ pub fn highlight_code(
 
     type HighlightCache<'a> = egui::util::cache::FrameCache<LayoutJob, CodeHighlighter>;
 
-    let mut memory = ctx.memory();
-    let highlight_cache = memory.caches.cache::<HighlightCache<'_>>();
-    highlight_cache.get((theme, code, enabled, line_descriptions))
+    ctx.memory_mut(|memory| {
+        let highlight_cache = memory.caches.cache::<HighlightCache<'_>>();
+        highlight_cache.get((theme, code, enabled, line_descriptions))
+    })
 }
 
 struct CodeHighlighter {

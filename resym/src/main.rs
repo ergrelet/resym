@@ -4,7 +4,7 @@ mod frontend;
 mod settings;
 mod syntax_highlighting;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use eframe::egui::{self, ScrollArea, TextStyle};
 use memory_logger::blocking::MemoryLogger;
 use resym_core::{
@@ -39,9 +39,8 @@ fn main() -> Result<()> {
         PKG_NAME,
         native_options,
         Box::new(|cc| Box::new(ResymApp::new(cc, logger).expect("application creation"))),
-    );
-
-    Ok(())
+    )
+    .map_err(|err| anyhow!("eframe::run_native failed: {err}"))
 }
 
 /// Struct that represents our GUI application.
@@ -214,18 +213,22 @@ impl ResymApp {
             modifiers: egui::Modifiers::CTRL,
             key: egui::Key::O,
         };
-        if ui.input_mut().consume_shortcut(&CTRL_O_SHORTCUT) {
-            self.start_open_pdb_file(PDB_MAIN_SLOT);
-        }
+        ui.input_mut(|input_state| {
+            if input_state.consume_shortcut(&CTRL_O_SHORTCUT) {
+                self.start_open_pdb_file(PDB_MAIN_SLOT);
+            }
+        });
 
         /// Keyboard shortcut for saving reconstructed content
         const CTRL_S_SHORTCUT: egui::KeyboardShortcut = egui::KeyboardShortcut {
             modifiers: egui::Modifiers::CTRL,
             key: egui::Key::S,
         };
-        if ui.input_mut().consume_shortcut(&CTRL_S_SHORTCUT) {
-            self.start_save_reconstruted_content();
-        }
+        ui.input_mut(|input_state| {
+            if input_state.consume_shortcut(&CTRL_S_SHORTCUT) {
+                self.start_save_reconstruted_content();
+            }
+        });
     }
 
     fn process_ui_commands(&mut self) {
@@ -493,7 +496,7 @@ impl ResymApp {
                 self.settings.enable_syntax_hightlighting,
                 line_desc,
             );
-            ui.fonts().layout_job(layout_job)
+            ui.fonts(|fonts| fonts.layout_job(layout_job))
         };
 
         // Type dump area
