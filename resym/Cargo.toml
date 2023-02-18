@@ -3,6 +3,13 @@ name = "resym"
 version = "0.2.0"
 edition = "2021"
 rust-version = "1.67"
+build = "build.rs"
+
+[package.metadata.winres]
+ProductName = "resym"
+ProductVersion = "0.2.0"
+FileDescription = "Cross-platform tool that allows browsing and extracting C and C++ type declarations from PDB files."
+LegalCopyright = "Copyright © resym developers"
 
 [dependencies]
 resym_core = { version = "0.2", path = "../resym_core" }
@@ -15,3 +22,7 @@ anyhow = "1.0"
 log = "0.4"
 memory_logger = { version = "0.1", features = ["blocking"] }
 crossbeam-channel = "0.5"
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"
+image = "0.24"
