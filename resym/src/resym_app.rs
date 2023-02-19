@@ -484,7 +484,7 @@ impl ResymApp {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 // TODO(ergrelet): see if there's a better way to compute this width.
-                let line_number_digit_width = self.settings.font_size as u32;
+                let line_number_digit_width = 2 + self.settings.font_size as u32;
                 let (num_colums, min_column_width) = if self.settings.print_line_numbers {
                     match self.current_mode {
                         ResymAppMode::Comparing(_, _, last_line_number, ..) => {
