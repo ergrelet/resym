@@ -1,0 +1,115 @@
+name: Build releases
+on:
+  push:
+    tags:
+      - v[0-9]+.*
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-cross-linux:
+    runs-on: ubuntu-latest
+    env:
+      RUST_BACKTRACE: full
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-musl
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          target: ${{ matrix.target }}
+          toolchain: stable
+          default: true
+          override: true
+      - name: Install cross
+        run: cargo install cross
+      - name: Build ${{ matrix.target }}
+        timeout-minutes: 120
+        run: |
+          cross build --release --target ${{ matrix.target }} &&
+          mv target/${{ matrix.target }}/release/resym target/${{ matrix.target }}/release/resym-${{ matrix.target }}
+          mv target/${{ matrix.target }}/release/resymc target/${{ matrix.target }}/release/resymc-${{ matrix.target }}
+
+      - name: Upload Github Assets
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: |
+            target/${{ matrix.target }}/release/resym-${{ matrix.target }}
+            target/${{ matrix.target }}/release/resymc-${{ matrix.target }}
+
+  build-macos:
+    runs-on: macos-latest
+    env:
+      RUST_BACKTRACE: full
+    strategy:
+      matrix:
+        target:
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          target: ${{ matrix.target }}
+          toolchain: stable
+          default: true
+          override: true
+      - name: Build release
+        shell: bash
+        run: |
+          cargo build --release --target ${{ matrix.target }} &&
+          mv target/${{ matrix.target }}/release/resym target/${{ matrix.target }}/release/resym-${{ matrix.target }}
+          mv target/${{ matrix.target }}/release/resymc target/${{ matrix.target }}/release/resymc-${{ matrix.target }}
+
+      - name: Upload Github Assets
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: |
+            target/${{ matrix.target }}/release/resym-${{ matrix.target }}
+            target/${{ matrix.target }}/release/resymc-${{ matrix.target }}
+  build-windows:
+    runs-on: windows-latest
+    env:
+      RUST_BACKTRACE: full
+    strategy:
+      matrix:
+        target:
+          - x86_64-pc-windows-msvc
+          - aarch64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          target: ${{ matrix.target }}
+          toolchain: stable
+          default: true
+          override: true
+      - name: Build release
+        shell: bash
+        run: |
+          cargo build --release --target ${{ matrix.target }} &&
+          mv target/${{ matrix.target }}/release/resym.exe target/${{ matrix.target }}/release/resym-${{ matrix.target }}.exe
+          mv target/${{ matrix.target }}/release/resymc.exe target/${{ matrix.target }}/release/resymc-${{ matrix.target }}.exe
+
+      - name: Upload Github Assets
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: |
+            target/${{ matrix.target }}/release/resym-${{ matrix.target }}.exe
+            target/${{ matrix.target }}/release/resymc-${{ matrix.target }}.exe
