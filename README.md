@@ -57,9 +57,10 @@ FLAGS:
     -V, --version    Prints version information
 
 SUBCOMMANDS:
-    diff    Compute diff for a type between two given PDB files
-    dump    Dump type from a given PDB file
-    help    Prints this message or the help of the given subcommand(s)
-    list    List types from a given PDB file
+    diff        Compute diff for a type between two given PDB files
+    dump        Dump type from a given PDB file
+    dump-all    Dump all types from a given PDB file
+    help        Prints this message or the help of the given subcommand(s)
+    list        List types from a given PDB file
 
 ```

@@ -5,9 +5,10 @@
 ### Added
 
 - Allow switching between different primitive type representations
-- Add a "Save" button to easily save reconstructed types into files.
+- Add a "Save" button to easily save reconstructed types into files
 - Add keyboard shortcuts for opening PDB files and saving reconstructed types (Ctrl+O and Ctrl+S respectively)
 - Allow changing the editor's font size via the settings menu
+- Add a `dump-all` command to `resymc`, which dumps all types in a given PDB file (proposal by @xarkes)
 
 ### Fixed
 
