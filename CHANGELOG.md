@@ -20,6 +20,7 @@
 - Fix field offsets and struct/classes/unions sizes being truncated when greater than 2^16 (@xarkes)
 - Fix the `list` command not outputting new lines in output files in `resymc` (@xarkes)
 - Fix incorrect reconstruction of bitfields as unions
+- Reconstruct C++20's **char8_t** primitive type
 
 ## [0.2.0] - 2022-05-22
 
