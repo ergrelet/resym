@@ -37,12 +37,26 @@ On **Ubuntu**, you might need to install: `libxcb-shape0-dev` and `libxcb-xfixes
 
 ```
 # Optional: install rust
-$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-$ git clone https://github.com/ergrelet/resym.git
-$ cd resym; cargo build --release
-$ ./target/release/resym
+git clone https://github.com/ergrelet/resym.git
+cd resym; cargo build --release
+./target/release/resym
 ```
+
+## How to Install
+
+If you have Rust installed, you can easily install resym with `cargo`:
+
+```
+cargo install --git https://github.com/ergrelet/resym --tag v0.3.0
+```
+
+After that, you can invoke `resym` and `resymc` from anywhere, through the
+command-line.
+
+Keep in mind that you need to have the required dependencies installed for
+`resym` to run properly. Check out the user documentation for more details.
 
 ## How to Use
 
@@ -50,7 +64,7 @@ If you want to use the GUI version, simply run the `resym` executable.
 A CLI version (named `resymc`) is also available:
 
 ```
-resymc 0.2.0
+resymc 0.3.0
 resymc is a utility that allows browsing and extracting types from PDB files.
 
 USAGE:

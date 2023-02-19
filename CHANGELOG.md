@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2023-02-19
+
 ### Added
 
 - Allow switching between different primitive type representations

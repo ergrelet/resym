@@ -1,18 +1,18 @@
 [package]
 name = "resym"
-version = "0.2.0"
+version.workspace = true
 edition = "2021"
 rust-version = "1.67"
 build = "build.rs"
 
 [package.metadata.winres]
 ProductName = "resym"
-ProductVersion = "0.2.0"
+ProductVersion = "0.3.0"
 FileDescription = "Cross-platform tool that allows browsing and extracting C and C++ type declarations from PDB files."
 LegalCopyright = "Copyright © resym developers"
 
 [dependencies]
-resym_core = { version = "0.2", path = "../resym_core" }
+resym_core = { version = "0.3", path = "../resym_core" }
 
 eframe = { version = "0.21", features = ["persistence"] }
 tinyfiledialogs = "3.9"

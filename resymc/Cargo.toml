@@ -1,11 +1,11 @@
 [package]
 name = "resymc"
-version = "0.2.0"
+version.workspace = true
 edition = "2021"
 rust-version = "1.67"
 
 [dependencies]
-resym_core = { version = "0.2", path = "../resym_core" }
+resym_core = { version = "0.3", path = "../resym_core" }
 
 structopt = { version = "0.3", default-features = false }
 syntect = "5.0"

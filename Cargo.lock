@@ -2190,7 +2190,7 @@ dependencies = [
 
 [[package]]
 name = "resym"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "crossbeam-channel",
@@ -2207,7 +2207,7 @@ dependencies = [
 
 [[package]]
 name = "resym_core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "crossbeam-channel",
  "dashmap",
@@ -2223,7 +2223,7 @@ dependencies = [
 
 [[package]]
 name = "resymc"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "crossbeam-channel",
