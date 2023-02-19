@@ -52,10 +52,27 @@ fn main() -> Result<()> {
             highlight_syntax,
         } => app.dump_types_command(
             pdb_path,
-            type_name,
+            Some(type_name),
             primitive_types_flavor.unwrap_or(PrimitiveReconstructionFlavor::Portable),
             print_header,
             print_dependencies,
+            print_access_specifiers,
+            highlight_syntax,
+            output_file_path,
+        ),
+        ResymOptions::DumpAll {
+            pdb_path,
+            output_file_path,
+            primitive_types_flavor,
+            print_header,
+            print_access_specifiers,
+            highlight_syntax,
+        } => app.dump_types_command(
+            pdb_path,
+            None,
+            primitive_types_flavor.unwrap_or(PrimitiveReconstructionFlavor::Portable),
+            print_header,
+            false,
             print_access_specifiers,
             highlight_syntax,
             output_file_path,
@@ -122,6 +139,25 @@ enum ResymOptions {
         /// Print declarations of referenced types
         #[structopt(short = "d", long)]
         print_dependencies: bool,
+        /// Print C++ access specifiers
+        #[structopt(short = "a", long)]
+        print_access_specifiers: bool,
+        /// Highlight C++ output
+        #[structopt(short = "H", long)]
+        highlight_syntax: bool,
+    },
+    /// Dump all types from a given PDB file
+    DumpAll {
+        /// Path to the PDB file
+        pdb_path: PathBuf,
+        /// Path of the output file
+        output_file_path: Option<PathBuf>,
+        /// Representation of primitive types
+        #[structopt(short = "f", long)]
+        primitive_types_flavor: Option<PrimitiveReconstructionFlavor>,
+        /// Print header
+        #[structopt(short = "h", long)]
+        print_header: bool,
         /// Print C++ access specifiers
         #[structopt(short = "a", long)]
         print_access_specifiers: bool,
@@ -230,7 +266,7 @@ impl ResymcApp {
     fn dump_types_command(
         &self,
         pdb_path: PathBuf,
-        type_name: String,
+        type_name: Option<String>,
         primitive_types_flavor: PrimitiveReconstructionFlavor,
         print_header: bool,
         print_dependencies: bool,
@@ -251,15 +287,25 @@ impl ResymcApp {
         }
 
         // Queue a request for the backend to reconstruct the given type
-        self.backend
-            .send_command(BackendCommand::ReconstructTypeByName(
-                PDB_MAIN_SLOT,
-                type_name,
-                primitive_types_flavor,
-                print_header,
-                print_dependencies,
-                print_access_specifiers,
-            ))?;
+        if let Some(type_name) = type_name {
+            self.backend
+                .send_command(BackendCommand::ReconstructTypeByName(
+                    PDB_MAIN_SLOT,
+                    type_name,
+                    primitive_types_flavor,
+                    print_header,
+                    print_dependencies,
+                    print_access_specifiers,
+                ))?;
+        } else {
+            self.backend
+                .send_command(BackendCommand::ReconstructAllTypes(
+                    PDB_MAIN_SLOT,
+                    primitive_types_flavor,
+                    print_header,
+                    print_access_specifiers,
+                ))?;
+        }
         // Wait for the backend to finish filtering types
         if let FrontendCommand::ReconstructTypeResult(reconstructed_type_result) =
             self.frontend_controller.rx_ui.recv()?

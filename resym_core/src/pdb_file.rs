@@ -221,7 +221,7 @@ impl<'p> PdbFile<'p> {
             self.reconstruct_type_by_type_index_internal(
                 &type_finder,
                 type_index,
-                &primitives_flavor,
+                primitives_flavor,
                 reconstruct_dependencies,
                 print_access_specifiers,
             )
@@ -231,7 +231,7 @@ impl<'p> PdbFile<'p> {
     pub fn reconstruct_type_by_type_index(
         &self,
         type_index: pdb::TypeIndex,
-        primitives_flavor: &PrimitiveReconstructionFlavor,
+        primitives_flavor: PrimitiveReconstructionFlavor,
         reconstruct_dependencies: bool,
         print_access_specifiers: bool,
     ) -> Result<String> {
@@ -257,7 +257,7 @@ impl<'p> PdbFile<'p> {
         &self,
         type_finder: &pdb::TypeFinder,
         type_index: pdb::TypeIndex,
-        primitives_flavor: &PrimitiveReconstructionFlavor,
+        primitives_flavor: PrimitiveReconstructionFlavor,
         reconstruct_dependencies: bool,
         print_access_specifiers: bool,
     ) -> Result<String> {
@@ -272,7 +272,7 @@ impl<'p> PdbFile<'p> {
             type_finder,
             &self.forwarder_to_complete_type,
             type_index,
-            primitives_flavor,
+            &primitives_flavor,
             &mut needed_types,
         )?;
 
@@ -298,7 +298,7 @@ impl<'p> PdbFile<'p> {
                         type_finder,
                         &self.forwarder_to_complete_type,
                         needed_type_index,
-                        primitives_flavor,
+                        &primitives_flavor,
                         &mut needed_types,
                     )?;
 
@@ -313,6 +313,54 @@ impl<'p> PdbFile<'p> {
 
         let mut reconstruction_output = String::new();
         dependencies_data.reconstruct(&fmt_configuration, &mut reconstruction_output)?;
+        type_data.reconstruct(&fmt_configuration, &mut reconstruction_output)?;
+        Ok(reconstruction_output)
+    }
+
+    pub fn reconstruct_all_types(
+        &self,
+        primitives_flavor: PrimitiveReconstructionFlavor,
+        print_access_specifiers: bool,
+    ) -> Result<String> {
+        let mut type_data = pdb_types::Data::new();
+
+        let mut type_finder = self.type_information.finder();
+        {
+            // Populate our `TypeFinder`
+            let mut type_iter = self.type_information.iter();
+            while (type_iter.next()?).is_some() {
+                type_finder.update(&type_iter);
+            }
+
+            // Add the requested types
+            type_iter = self.type_information.iter();
+            while let Some(item) = type_iter.next()? {
+                let mut needed_types = pdb_types::TypeSet::new();
+                let type_index = item.index();
+                let result = type_data.add(
+                    &type_finder,
+                    &self.forwarder_to_complete_type,
+                    type_index,
+                    &primitives_flavor,
+                    &mut needed_types,
+                );
+                if let Err(err) = result {
+                    match err {
+                        ResymCoreError::PdbError(err) => {
+                            // Ignore this kind of error since some particular PDB features might not be supported.
+                            // This allows the recontruction to go through with the correctly reconstructed types.
+                            log::warn!("Failed to reconstruct type with index {type_index}: {err}")
+                        }
+                        _ => return Err(err),
+                    }
+                }
+            }
+        }
+
+        let fmt_configuration = DataFormatConfiguration {
+            print_access_specifiers,
+        };
+        let mut reconstruction_output = String::new();
         type_data.reconstruct(&fmt_configuration, &mut reconstruction_output)?;
         Ok(reconstruction_output)
     }

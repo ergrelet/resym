@@ -46,6 +46,8 @@ pub enum BackendCommand {
         bool,
         bool,
     ),
+    /// Reconstruct all types found in a given PDB.
+    ReconstructAllTypes(PDBSlot, PrimitiveReconstructionFlavor, bool, bool),
     /// Retrieve a list of types that match the given filter for a given PDB.
     UpdateTypeFilter(PDBSlot, String, bool, bool),
     /// Retrieve a list of types that match the given filter for multiple PDBs
@@ -185,6 +187,25 @@ fn worker_thread_routine(
                 }
             }
 
+            BackendCommand::ReconstructAllTypes(
+                pdb_slot,
+                primitives_flavor,
+                print_header,
+                print_access_specifiers,
+            ) => {
+                if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
+                    let reconstructed_type_result = reconstruct_all_types_command(
+                        pdb_file,
+                        primitives_flavor,
+                        print_header,
+                        print_access_specifiers,
+                    );
+                    frontend_controller.send_command(FrontendCommand::ReconstructTypeResult(
+                        reconstructed_type_result,
+                    ))?;
+                }
+            }
+
             BackendCommand::UpdateTypeFilter(
                 pdb_slot,
                 search_filter,
@@ -274,7 +295,7 @@ fn reconstruct_type_by_index_command(
 ) -> Result<String> {
     let data = pdb_file.reconstruct_type_by_type_index(
         type_index,
-        &primitives_flavor,
+        primitives_flavor,
         reconstruct_dependencies,
         print_access_specifiers,
     )?;
@@ -300,6 +321,21 @@ fn reconstruct_type_by_name_command(
         reconstruct_dependencies,
         print_access_specifiers,
     )?;
+    if print_header {
+        let file_header = generate_file_header(pdb_file, primitives_flavor, true);
+        Ok(format!("{file_header}{data}"))
+    } else {
+        Ok(data)
+    }
+}
+
+fn reconstruct_all_types_command(
+    pdb_file: &PdbFile,
+    primitives_flavor: PrimitiveReconstructionFlavor,
+    print_header: bool,
+    print_access_specifiers: bool,
+) -> Result<String> {
+    let data = pdb_file.reconstruct_all_types(primitives_flavor, print_access_specifiers)?;
     if print_header {
         let file_header = generate_file_header(pdb_file, primitives_flavor, true);
         Ok(format!("{file_header}{data}"))
