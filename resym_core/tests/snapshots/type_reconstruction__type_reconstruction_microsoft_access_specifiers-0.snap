@@ -7,6 +7,7 @@ struct resym_test::PrimitiveTypesTest { /* Size=0x70 */
   /* 0x0000 */ public: BOOLEAN b1;
   /* 0x0001 */ public: CHAR c1;
   /* 0x0002 */ public: UCHAR c2;
+  /* 0x0003 */ public: char8_t c3;
   /* 0x0004 */ public: char16_t c4;
   /* 0x0008 */ public: char32_t c5;
   /* 0x000c */ public: WCHAR w1;

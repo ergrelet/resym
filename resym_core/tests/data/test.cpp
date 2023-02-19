@@ -14,7 +14,7 @@ struct PrimitiveTypesTest {
   // Chars
   char c1;
   unsigned char c2;
-  // char8_t c3; // TODO: Not handled by the `pdb` crate
+  char8_t c3;
   char16_t c4;
   char32_t c5;
   wchar_t w1;

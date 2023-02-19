@@ -60,6 +60,7 @@ fn primitive_kind_as_str_portable(
         pdb::PrimitiveKind::WChar => Ok("wchar_t"),
         pdb::PrimitiveKind::RChar16 => Ok("char16_t"),
         pdb::PrimitiveKind::RChar32 => Ok("char32_t"),
+        pdb::PrimitiveKind::Char8 => Ok("char8_t"),
 
         pdb::PrimitiveKind::I8 => Ok("int8_t"),
         pdb::PrimitiveKind::U8 => Ok("uint8_t"),
@@ -111,6 +112,7 @@ fn primitive_kind_as_str_microsoft(
         pdb::PrimitiveKind::WChar => Ok(if indirection { "PWCHAR" } else { "WCHAR" }),
         pdb::PrimitiveKind::RChar16 => Ok(if indirection { "char16_t*" } else { "char16_t" }),
         pdb::PrimitiveKind::RChar32 => Ok(if indirection { "char32_t*" } else { "char32_t" }),
+        pdb::PrimitiveKind::Char8 => Ok(if indirection { "char8_t*" } else { "char8_t" }),
 
         pdb::PrimitiveKind::I16 | pdb::PrimitiveKind::Short => {
             Ok(if indirection { "PSHORT" } else { "SHORT" })
@@ -165,6 +167,7 @@ fn primitive_kind_as_str_raw(
         pdb::PrimitiveKind::WChar => Ok("wchar_t"),
         pdb::PrimitiveKind::RChar16 => Ok("char16_t"),
         pdb::PrimitiveKind::RChar32 => Ok("char32_t"),
+        pdb::PrimitiveKind::Char8 => Ok("char8_t"),
 
         pdb::PrimitiveKind::I16 | pdb::PrimitiveKind::Short => Ok("short"),
         pdb::PrimitiveKind::U16 | pdb::PrimitiveKind::UShort => Ok("unsigned short"),
