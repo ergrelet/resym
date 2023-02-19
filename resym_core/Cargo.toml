@@ -9,7 +9,7 @@ exclude = [
 ]
 
 [dependencies]
-pdb = "0.8"
+pdb = { git = "https://github.com/ergrelet/pdb", branch = "0.8.0-resym" }
 thiserror = "1.0"
 log = "0.4"
 rayon = "1.5"

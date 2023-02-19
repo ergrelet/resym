@@ -1872,8 +1872,7 @@ checksum = "d01a5bd0424d00070b0098dd17ebca6f961a959dead1dbcbbbc1d1cd8d3deeba"
 [[package]]
 name = "pdb"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82040a392923abe6279c00ab4aff62d5250d1c8555dc780e4b02783a7aa74863"
+source = "git+https://github.com/ergrelet/pdb?branch=0.8.0-resym#b51abd394fdac8447274e5f79ac6d1c7b4c43b15"
 dependencies = [
  "fallible-iterator",
  "scroll",
