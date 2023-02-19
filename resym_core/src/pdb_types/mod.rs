@@ -639,7 +639,7 @@ impl<'p> Data<'p> {
             }
 
             // ignore
-            other => log::error!("warning: don't know how to add {:?}", other),
+            other => log::warn!("don't know how to add {:?}", other),
         }
 
         Ok(())
