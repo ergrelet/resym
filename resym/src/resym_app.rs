@@ -152,6 +152,24 @@ impl eframe::App for ResymApp {
 
             self.update_code_view(ui);
         });
+
+        ctx.input(|i| {
+            // Handle dropped files
+            if !i.raw.dropped_files.is_empty() {
+                // Allow dropping 1 file (to just view it), or 2 files to diff them
+                let slots = [PDB_MAIN_SLOT, PDB_DIFF_SLOT];
+                for (slot, file) in slots.iter().zip(i.raw.dropped_files.iter()) {
+                    if let Some(file_path) = &file.path {
+                        if let Err(err) = self
+                            .backend
+                            .send_command(BackendCommand::LoadPDB(*slot, file_path.into()))
+                        {
+                            log::error!("Failed to load the PDB file: {err}");
+                        }
+                    }
+                }
+            }
+        });
     }
 }
 
