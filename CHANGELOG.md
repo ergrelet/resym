@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Allow opening a PDB file and diffing two PDB files using drag and drop (@learn-more)
+
 ## [0.3.0] - 2023-02-19
 
 ### Added
