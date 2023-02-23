@@ -7,12 +7,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v1
-      - uses: actions-rs/toolchain@v1
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           profile: minimal
           components: clippy, rustfmt
           override: true
+
+      - name: Install libxcb and libgtk
+        run: sudo apt-get update; sudo apt-get install --no-install-recommends libxcb-shape0-dev libxcb-xfixes0-dev libgtk-3-dev
+        if: runner.os == 'linux'
+
       - name: Run clippy
         run: make lint

@@ -1,5 +1,10 @@
 #[cfg(windows)]
 fn main() {
+    let target = std::env::var("TARGET").unwrap();
+    if target.contains("wasm") {
+        return;
+    }
+
     // Convert ICO to raw pixels at build time. This avoids adding the `image` crate in `resym`
     // only to display an icon.
     let icon_bytes_path = std::path::Path::new(concat!(

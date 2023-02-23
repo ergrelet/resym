@@ -5,6 +5,8 @@
 ### Added
 
 - Allow opening a PDB file and diffing two PDB files using drag and drop (@learn-more)
+- Add support for the `wasm32-unknown-unknown` target
+- Publish a web version of `resym` from the `main` branch automatically
 
 ### Changed
 

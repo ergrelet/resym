@@ -1,4 +1,6 @@
 use crossbeam_channel::{Receiver, Sender};
+#[cfg(target_arch = "wasm32")]
+use instant::Instant;
 #[cfg(feature = "rayon")]
 use rayon::{
     iter::{IntoParallelRefIterator, ParallelIterator},
@@ -6,14 +8,20 @@ use rayon::{
     ThreadPool,
 };
 
-#[cfg(not(feature = "rayon"))]
-use std::thread::JoinHandle;
+#[cfg(all(not(feature = "rayon"), not(target_arch = "wasm32")))]
+use std::thread::{self, JoinHandle};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    path::PathBuf,
+    io,
     sync::Arc,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use std::{fs, path::PathBuf, time::Instant};
+#[cfg(all(not(feature = "rayon"), target_arch = "wasm32"))]
+use wasm_thread::{self as thread, JoinHandle};
 
+#[cfg(target_arch = "wasm32")]
+use crate::pdb_file::PDBData;
 use crate::{
     cond_par_iter, cond_sort_by,
     diffing::diff_type_by_name,
@@ -29,7 +37,14 @@ pub type PDBSlot = usize;
 
 pub enum BackendCommand {
     /// Load a PDB file given its path as a `PathBuf`.
+    #[cfg(not(target_arch = "wasm32"))]
     LoadPDB(PDBSlot, PathBuf),
+    /// Load a PDB file given its name and content as a `Vec<u8>`.
+    #[cfg(target_arch = "wasm32")]
+    LoadPDBFromVec(PDBSlot, String, Vec<u8>),
+    /// Load a PDB file given its name and content as an `Arc<[u8]>`.
+    #[cfg(target_arch = "wasm32")]
+    LoadPDBFromArray(PDBSlot, String, Arc<[u8]>),
     /// Unload a PDB file given its slot.
     UnloadPDB(PDBSlot),
     /// Reconstruct a type given its type index for a given PDB.
@@ -116,7 +131,7 @@ impl Backend {
         let (tx_worker, rx_worker) = crossbeam_channel::unbounded::<BackendCommand>();
 
         // Start a new thread
-        let worker_thread = std::thread::spawn(move || {
+        let worker_thread = thread::spawn(move || {
             let exit_result = worker_thread_routine(rx_worker, frontend_controller.as_ref());
             if let Err(err) = exit_result {
                 log::error!("Background thread aborted: {}", err);
@@ -143,9 +158,13 @@ fn worker_thread_routine(
     rx_worker: Receiver<BackendCommand>,
     frontend_controller: &impl FrontendController,
 ) -> Result<()> {
-    let mut pdb_files: BTreeMap<PDBSlot, PdbFile> = BTreeMap::new();
+    #[cfg(target_arch = "wasm32")]
+    let mut pdb_files: BTreeMap<PDBSlot, PdbFile<io::Cursor<PDBData>>> = BTreeMap::new();
+    #[cfg(not(target_arch = "wasm32"))]
+    let mut pdb_files: BTreeMap<PDBSlot, PdbFile<fs::File>> = BTreeMap::new();
     while let Ok(command) = rx_worker.recv() {
         match command {
+            #[cfg(not(target_arch = "wasm32"))]
             BackendCommand::LoadPDB(pdb_slot, pdb_file_path) => {
                 log::info!("Loading a new PDB file ...");
                 match PdbFile::load_from_file(&pdb_file_path) {
@@ -154,11 +173,47 @@ fn worker_thread_routine(
                     Ok(loaded_pdb_file) => {
                         frontend_controller
                             .send_command(FrontendCommand::LoadPDBResult(Ok(pdb_slot)))?;
-                        pdb_files.insert(pdb_slot, loaded_pdb_file);
+                        if let Some(pdb_file) = pdb_files.insert(pdb_slot, loaded_pdb_file) {
+                            log::info!("'{}' has been unloaded.", pdb_file.file_path.display());
+                        }
                         log::info!(
                             "'{}' has been loaded successfully!",
                             pdb_file_path.display()
                         );
+                    }
+                }
+            }
+
+            #[cfg(target_arch = "wasm32")]
+            BackendCommand::LoadPDBFromVec(pdb_slot, pdb_name, pdb_data) => {
+                log::info!("Loading a new PDB file ...");
+                match PdbFile::load_from_bytes_as_vec(pdb_name.clone(), pdb_data) {
+                    Err(err) => frontend_controller
+                        .send_command(FrontendCommand::LoadPDBResult(Err(err)))?,
+                    Ok(loaded_pdb_file) => {
+                        frontend_controller
+                            .send_command(FrontendCommand::LoadPDBResult(Ok(pdb_slot)))?;
+                        if let Some(pdb_file) = pdb_files.insert(pdb_slot, loaded_pdb_file) {
+                            log::info!("'{}' has been unloaded.", pdb_file.file_path.display());
+                        }
+                        log::info!("'{}' has been loaded successfully!", pdb_name);
+                    }
+                }
+            }
+
+            #[cfg(target_arch = "wasm32")]
+            BackendCommand::LoadPDBFromArray(pdb_slot, pdb_name, pdb_data) => {
+                log::info!("Loading a new PDB file ...");
+                match PdbFile::load_from_bytes_as_array(pdb_name.clone(), pdb_data) {
+                    Err(err) => frontend_controller
+                        .send_command(FrontendCommand::LoadPDBResult(Err(err)))?,
+                    Ok(loaded_pdb_file) => {
+                        frontend_controller
+                            .send_command(FrontendCommand::LoadPDBResult(Ok(pdb_slot)))?;
+                        if let Some(pdb_file) = pdb_files.insert(pdb_slot, loaded_pdb_file) {
+                            log::info!("'{}' has been unloaded.", pdb_file.file_path.display());
+                        }
+                        log::info!("'{}' has been loaded successfully!", pdb_name);
                     }
                 }
             }
@@ -316,14 +371,17 @@ fn worker_thread_routine(
     Ok(())
 }
 
-fn reconstruct_type_by_index_command(
-    pdb_file: &PdbFile,
+fn reconstruct_type_by_index_command<'p, T>(
+    pdb_file: &PdbFile<'p, T>,
     type_index: pdb::TypeIndex,
     primitives_flavor: PrimitiveReconstructionFlavor,
     print_header: bool,
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
-) -> Result<String> {
+) -> Result<String>
+where
+    T: io::Seek + io::Read + 'p,
+{
     let data = pdb_file.reconstruct_type_by_type_index(
         type_index,
         primitives_flavor,
@@ -338,14 +396,17 @@ fn reconstruct_type_by_index_command(
     }
 }
 
-fn reconstruct_type_by_name_command(
-    pdb_file: &PdbFile,
+fn reconstruct_type_by_name_command<'p, T>(
+    pdb_file: &PdbFile<'p, T>,
     type_name: &str,
     primitives_flavor: PrimitiveReconstructionFlavor,
     print_header: bool,
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
-) -> Result<String> {
+) -> Result<String>
+where
+    T: io::Seek + io::Read + 'p,
+{
     let data = pdb_file.reconstruct_type_by_name(
         type_name,
         primitives_flavor,
@@ -360,12 +421,15 @@ fn reconstruct_type_by_name_command(
     }
 }
 
-fn reconstruct_all_types_command(
-    pdb_file: &PdbFile,
+fn reconstruct_all_types_command<'p, T>(
+    pdb_file: &PdbFile<'p, T>,
     primitives_flavor: PrimitiveReconstructionFlavor,
     print_header: bool,
     print_access_specifiers: bool,
-) -> Result<String> {
+) -> Result<String>
+where
+    T: io::Seek + io::Read + 'p,
+{
     let data = pdb_file.reconstruct_all_types(primitives_flavor, print_access_specifiers)?;
     if print_header {
         let file_header = generate_file_header(pdb_file, primitives_flavor, true);
@@ -375,11 +439,14 @@ fn reconstruct_all_types_command(
     }
 }
 
-fn generate_file_header(
-    pdb_file: &PdbFile,
+fn generate_file_header<T>(
+    pdb_file: &PdbFile<T>,
     primitives_flavor: PrimitiveReconstructionFlavor,
     include_header_files: bool,
-) -> String {
+) -> String
+where
+    T: io::Seek + io::Read,
+{
     format!(
         concat!(
             "//\n",
@@ -401,14 +468,17 @@ fn generate_file_header(
     )
 }
 
-fn update_type_filter_command(
-    pdb_file: &PdbFile,
+fn update_type_filter_command<T>(
+    pdb_file: &PdbFile<T>,
     search_filter: &str,
     case_insensitive_search: bool,
     use_regex: bool,
     sort_by_index: bool,
-) -> Vec<(String, pdb::TypeIndex)> {
-    let filter_start = std::time::Instant::now();
+) -> Vec<(String, pdb::TypeIndex)>
+where
+    T: io::Seek + io::Read,
+{
+    let filter_start = Instant::now();
 
     let mut filtered_type_list = if search_filter.is_empty() {
         // No need to filter

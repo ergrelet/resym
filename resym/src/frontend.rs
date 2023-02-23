@@ -9,6 +9,7 @@ use resym_core::{
 pub struct EguiFrontendController {
     pub rx_ui: Receiver<FrontendCommand>,
     tx_ui: Sender<FrontendCommand>,
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     egui_ctx: egui::Context,
 }
 
@@ -18,8 +19,12 @@ impl FrontendController for EguiFrontendController {
         self.tx_ui
             .send(command)
             .map_err(|err| ResymCoreError::CrossbeamError(err.to_string()))?;
-        // Force the UI backend to call our app's update function on the other end
+
+        // Force the UI backend to call our app's update function on the other end.
+        // Note(ergrelet): not available for wasm32 targets (multi-threading is limited).
+        #[cfg(not(target_arch = "wasm32"))]
         self.egui_ctx.request_repaint();
+
         Ok(())
     }
 }

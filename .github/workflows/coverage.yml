@@ -16,18 +16,18 @@ jobs:
           toolchain: stable
           override: true
 
-      - name: Install libxcb
-        run: sudo apt-get update; sudo apt-get install --no-install-recommends libxcb-shape0-dev libxcb-xfixes0-dev
+      - name: Install libxcb and libgtk
+        run: sudo apt-get update; sudo apt-get install --no-install-recommends libxcb-shape0-dev libxcb-xfixes0-dev libgtk-3-dev
         if: runner.os == 'linux'
 
       - name: Run cargo-tarpaulin
         uses: actions-rs/tarpaulin@v0.1
         with:
-          version: '0.15.0'
-          args: '--ignore-tests --out Lcov -- --test-threads 1'
+          version: "0.15.0"
+          args: "--ignore-tests --out Lcov -- --test-threads 1"
 
       - name: Upload to Coveralls
         uses: coverallsapp/github-action@master
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          path-to-lcov: './lcov.info'
+          path-to-lcov: "./lcov.info"

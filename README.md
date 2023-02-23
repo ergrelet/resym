@@ -2,12 +2,14 @@
 
 `resym` is a utility that allows browsing and extracting types from PDB files.
 
+👉 [Click to run the web version](https://ergrelet.github.io/resym/) 👈
+
 Inspired by [PDBRipper](https://github.com/horsicq/PDBRipper) and
 [pdbex](https://github.com/wbenny/pdbex).
 
 ## Key Features
 
-- Cross-platform
+- Cross-platform (native and web)
 - GUI and CLI versions available
 - C and C++ types reconstruction
 - C and C++ types diff generation (between two PDBs)
@@ -16,33 +18,6 @@ Inspired by [PDBRipper](https://github.com/horsicq/PDBRipper) and
 ## Screenshot
 
 <img src="./docs/static/resym_screenshot.png" alt="Screenshot of resym">
-
-## Know limitations
-
-The GUI version might struggle to display huge outputs (>20 MB). Disabling
-syntax highlighting (or dependency reconstruction altogether) will help, but
-generally the CLI version is more suited when dumping types with a huge amount
-of dependencies.
-
-## Why Another PDB Dumper?
-
-I often need to extract and analyze C++ types from 1GB+ PDB files comfortably,
-in an interactive manner, but I haven't been able to find a tool that ticks all
-the boxes for me so far, so this my shot at making that tool.  
-So if you're in the same boat, this tool might be of some use to you.
-
-## How to Build
-
-On **Ubuntu**, you might need to install: `libxcb-shape0-dev` and `libxcb-xfixes0-dev`.
-
-```
-# Optional: install rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-git clone https://github.com/ergrelet/resym.git
-cd resym; cargo build --release
-./target/release/resym
-```
 
 ## How to Install
 
@@ -82,3 +57,31 @@ SUBCOMMANDS:
     list        List types from a given PDB file
 
 ```
+
+## How to Build
+
+On **Ubuntu**, you might need to install: `libxcb-shape0-dev` and `libxcb-xfixes0-dev`.
+
+```
+git clone https://github.com/ergrelet/resym.git && cd resym
+cargo build --release
+./target/release/resym
+```
+
+## Know limitations
+
+The GUI version might struggle to display huge outputs (>20 MB). Disabling
+syntax highlighting (or dependency reconstruction altogether) will help, but
+generally the CLI version is more suited when dumping types with a huge amount
+of dependencies.
+
+The web version cannot handle PDB files larger than ~2.1 GB due to how files
+are accessed and the 32-bit limitations of `wasm32` targets. This might change
+in the future with `wasm64`/`memory64` support.
+
+## Why Another PDB Dumper?
+
+I often need to extract and analyze C++ types from 1GB+ PDB files comfortably,
+in an interactive manner, but I haven't been able to find a tool that ticks all
+the boxes for me so far, so this my shot at making that tool.  
+So if you're in the same boat, this tool might be of some use to you.

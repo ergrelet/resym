@@ -8,15 +8,19 @@ use resym_core::{
     pdb_types::PrimitiveReconstructionFlavor,
     syntax_highlighting::CodeTheme,
 };
-use tinyfiledialogs::open_file_dialog;
 
 use std::fmt::Write;
+#[cfg(target_arch = "wasm32")]
+use std::{cell::RefCell, rc::Rc};
 use std::{sync::Arc, vec};
 
 use crate::{
     frontend::EguiFrontendController, settings::ResymAppSettings,
-    syntax_highlighting::highlight_code, PKG_NAME, PKG_VERSION,
+    syntax_highlighting::highlight_code,
 };
+
+const PKG_NAME: &str = env!("CARGO_PKG_NAME");
+const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Slot for the single PDB or for the PDB we're diffing from
 const PDB_MAIN_SLOT: PDBSlot = 0;
@@ -36,6 +40,10 @@ pub struct ResymApp {
     settings: ResymAppSettings,
     frontend_controller: Arc<EguiFrontendController>,
     backend: Backend,
+    /// Field used by wasm32 targets used to store PDB file information
+    /// temporarily when selecting a PDB file to open.
+    #[cfg(target_arch = "wasm32")]
+    open_pdb_data: Rc<RefCell<Option<(PDBSlot, String, Vec<u8>)>>>,
 }
 
 #[derive(PartialEq)]
@@ -58,6 +66,11 @@ impl eframe::App for ResymApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        // For wasm32 targets, we cannot block in the UI thread so we have to
+        // check for PDB file opening results manually in an non-blocking way.
+        #[cfg(target_arch = "wasm32")]
+        self.process_open_pdb_file_result();
+
         // Process incoming commands, if any
         self.process_ui_commands();
 
@@ -139,9 +152,12 @@ impl eframe::App for ResymApp {
                 });
 
                 // Start displaying buttons from the right
+                #[cfg_attr(target_arch = "wasm32", allow(unused_variables))]
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                     if let ResymAppMode::Browsing(..) = self.current_mode {
-                        // Save button and Ctrl+S shortcut handling
+                        // Save button handling
+                        // Note: not available on wasm32
+                        #[cfg(not(target_arch = "wasm32"))]
                         if ui.button("💾  Save (Ctrl+S)").clicked() {
                             self.start_save_reconstruted_content();
                         }
@@ -153,23 +169,14 @@ impl eframe::App for ResymApp {
             self.update_code_view(ui);
         });
 
-        ctx.input(|i| {
-            // Handle dropped files
-            if !i.raw.dropped_files.is_empty() {
-                // Allow dropping 1 file (to just view it), or 2 files to diff them
-                let slots = [PDB_MAIN_SLOT, PDB_DIFF_SLOT];
-                for (slot, file) in slots.iter().zip(i.raw.dropped_files.iter()) {
-                    if let Some(file_path) = &file.path {
-                        if let Err(err) = self
-                            .backend
-                            .send_command(BackendCommand::LoadPDB(*slot, file_path.into()))
-                        {
-                            log::error!("Failed to load the PDB file: {err}");
-                        }
-                    }
-                }
-            }
-        });
+        self.handle_drag_and_drop(ctx);
+
+        // Request the backend to repaint after a few milliseconds, in case some UI
+        // components have been updated, without consuming too much CPU.
+        // Note(ergrelet): this is a workaround for the fact that we can't trigger
+        // a repaint from another thread for wasm32 targets.
+        #[cfg(target_arch = "wasm32")]
+        ctx.request_repaint_after(std::time::Duration::from_secs_f32(0.2));
     }
 }
 
@@ -202,6 +209,8 @@ impl ResymApp {
             settings,
             frontend_controller,
             backend,
+            #[cfg(target_arch = "wasm32")]
+            open_pdb_data: Rc::new(RefCell::new(None)),
         })
     }
 
@@ -218,10 +227,14 @@ impl ResymApp {
         });
 
         /// Keyboard shortcut for saving reconstructed content
+        #[cfg(not(target_arch = "wasm32"))]
         const CTRL_S_SHORTCUT: egui::KeyboardShortcut = egui::KeyboardShortcut {
             modifiers: egui::Modifiers::CTRL,
             key: egui::Key::S,
         };
+        // Ctrl+S shortcut handling
+        // Note: not available on wasm32
+        #[cfg(not(target_arch = "wasm32"))]
         ui.input_mut(|input_state| {
             if input_state.consume_shortcut(&CTRL_S_SHORTCUT) {
                 self.start_save_reconstruted_content();
@@ -361,6 +374,7 @@ impl ResymApp {
         }
     }
 
+    #[cfg_attr(target_arch = "wasm32", allow(unused_variables))]
     fn update_menu_bar(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| {
@@ -382,6 +396,7 @@ impl ResymApp {
                     ui.close_menu();
                     self.settings_wnd_open = true;
                 }
+                #[cfg(not(target_arch = "wasm32"))]
                 if ui.button("Exit").clicked() {
                     ui.close_menu();
                     frame.close();
@@ -684,40 +699,109 @@ impl ResymApp {
     }
 
     /// Function invoked on `Open PDB File` or when the Ctrl+O shortcut is used
+    #[cfg(not(target_arch = "wasm32"))]
     fn start_open_pdb_file(&mut self, pdb_slot: PDBSlot) {
-        let file_path_opt = open_file_dialog(
-            "Select a PDB file",
-            "",
-            Some((&["*.pdb"], "PDB files (*.pdb)")),
-        );
+        let file_path_opt = rfd::FileDialog::new()
+            .add_filter("PDB files (*.pdb)", &["pdb"])
+            .pick_file();
         if let Some(file_path) = file_path_opt {
             if let Err(err) = self
                 .backend
-                .send_command(BackendCommand::LoadPDB(pdb_slot, file_path.into()))
+                .send_command(BackendCommand::LoadPDB(pdb_slot, file_path))
             {
                 log::error!("Failed to load the PDB file: {err}");
             }
         }
     }
 
+    #[cfg(target_arch = "wasm32")]
+    fn start_open_pdb_file(&mut self, pdb_slot: PDBSlot) {
+        let open_pdb_data = std::rc::Rc::clone(&self.open_pdb_data);
+        wasm_bindgen_futures::spawn_local(async move {
+            let file_opt = rfd::AsyncFileDialog::new()
+                .add_filter("PDB files (*.pdb)", &["pdb"])
+                .pick_file()
+                .await;
+            if let Some(file) = file_opt {
+                *open_pdb_data.borrow_mut() = Some((pdb_slot, file.file_name(), file.read().await));
+            }
+        });
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn process_open_pdb_file_result(&self) {
+        if let Some((pdb_slot, pdb_name, pdb_bytes)) = self.open_pdb_data.borrow_mut().take() {
+            if let Err(err) = self.backend.send_command(BackendCommand::LoadPDBFromVec(
+                pdb_slot, pdb_name, pdb_bytes,
+            )) {
+                log::error!("Failed to load the PDB file: {err}");
+            }
+        }
+    }
+
     /// Function invoked on 'Save' or when the Ctrl+S shortcut is used
+    #[cfg(not(target_arch = "wasm32"))]
     fn start_save_reconstruted_content(&self) {
         if let ResymAppMode::Browsing(_, _, ref reconstructed_type) = self.current_mode {
-            let file_path_opt = tinyfiledialogs::save_file_dialog_with_filter(
-                "Save content to file",
-                "",
-                &["*.c", "*.cc", "*.cpp", "*.cxx", "*.h", "*.hpp", "*.hxx"],
-                "C/C++ Source File (*.c;*.cc;*.cpp;*.cxx;*.h;*.hpp;*.hxx)",
-            );
+            let file_path_opt = rfd::FileDialog::new()
+                .add_filter(
+                    "C/C++ Source File (*.c;*.cc;*.cpp;*.cxx;*.h;*.hpp;*.hxx)",
+                    &["c", "cc", "cpp", "cxx", "h", "hpp", "hxx"],
+                )
+                .save_file();
             if let Some(file_path) = file_path_opt {
                 let write_result = std::fs::write(&file_path, reconstructed_type);
                 match write_result {
-                    Ok(()) => log::info!("Reconstructed content has been saved to '{file_path}'."),
+                    Ok(()) => log::info!(
+                        "Reconstructed content has been saved to '{}'.",
+                        file_path.display()
+                    ),
                     Err(err) => {
                         log::error!("Failed to write reconstructed content to file: {err}");
                     }
                 }
             }
         }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn handle_drag_and_drop(&self, ctx: &egui::Context) {
+        ctx.input(|i| {
+            // Handle dropped files
+            if !i.raw.dropped_files.is_empty() {
+                // Allow dropping 1 file (to just view it), or 2 files to diff them
+                let slots = [PDB_MAIN_SLOT, PDB_DIFF_SLOT];
+                for (slot, file) in slots.iter().zip(i.raw.dropped_files.iter()) {
+                    if let Some(file_path) = &file.path {
+                        if let Err(err) = self
+                            .backend
+                            .send_command(BackendCommand::LoadPDB(*slot, file_path.into()))
+                        {
+                            log::error!("Failed to load the PDB file: {err}");
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn handle_drag_and_drop(&self, ctx: &egui::Context) {
+        ctx.input(|i| {
+            // Handle dropped files
+            if !i.raw.dropped_files.is_empty() {
+                // Allow dropping 1 file (to just view it), or 2 files to diff them
+                let slots = [PDB_MAIN_SLOT, PDB_DIFF_SLOT];
+                for (slot, file) in slots.iter().zip(i.raw.dropped_files.iter()) {
+                    if let Some(file_bytes) = file.bytes.clone() {
+                        if let Err(err) = self.backend.send_command(
+                            BackendCommand::LoadPDBFromArray(*slot, file.name.clone(), file_bytes),
+                        ) {
+                            log::error!("Failed to load the PDB file: {err}");
+                        }
+                    }
+                }
+            }
+        });
     }
 }

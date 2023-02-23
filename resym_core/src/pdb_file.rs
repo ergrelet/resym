@@ -1,14 +1,13 @@
 use dashmap::DashMap;
+#[cfg(target_arch = "wasm32")]
+use instant::Instant;
 use pdb::FallibleIterator;
 #[cfg(feature = "rayon")]
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
-use std::{
-    collections::BTreeSet,
-    fs::File,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{collections::BTreeSet, io, path::PathBuf, sync::Arc};
+#[cfg(not(target_arch = "wasm32"))]
+use std::{fs::File, path::Path, time::Instant};
 
 use crate::{
     cond_par_iter,
@@ -16,17 +15,40 @@ use crate::{
     pdb_types::{self, is_unnamed_type, DataFormatConfiguration, PrimitiveReconstructionFlavor},
 };
 
-pub struct PdbFile<'p> {
+/// Wrapper for different buffer types processed by wasm32 targets
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, Debug)]
+pub enum PDBData {
+    Vec(Vec<u8>),
+    SharedArray(Arc<[u8]>),
+}
+
+#[cfg(target_arch = "wasm32")]
+impl AsRef<[u8]> for PDBData {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            PDBData::Vec(vec) => &vec,
+            PDBData::SharedArray(shared_array) => shared_array,
+        }
+    }
+}
+
+pub struct PdbFile<'p, T>
+where
+    T: io::Seek + io::Read + 'p,
+{
     pub complete_type_list: Vec<(String, pdb::TypeIndex)>,
     pub forwarder_to_complete_type: Arc<DashMap<pdb::TypeIndex, pdb::TypeIndex>>,
     pub machine_type: pdb::MachineType,
     pub type_information: pdb::TypeInformation<'p>,
     pub file_path: PathBuf,
-    _pdb: pdb::PDB<'p, File>,
+    _pdb: pdb::PDB<'p, T>,
 }
 
-impl<'p> PdbFile<'p> {
-    pub fn load_from_file(pdb_file_path: &Path) -> Result<PdbFile<'p>> {
+#[cfg(not(target_arch = "wasm32"))]
+impl<'p> PdbFile<'p, File> {
+    /// Create `PdbFile` from an `std::path::Path`
+    pub fn load_from_file(pdb_file_path: &Path) -> Result<PdbFile<'p, File>> {
         let file = File::open(pdb_file_path)?;
         let mut pdb = pdb::PDB::open(file)?;
         let type_information = pdb.type_information()?;
@@ -44,12 +66,66 @@ impl<'p> PdbFile<'p> {
 
         Ok(pdb_file)
     }
+}
 
+#[cfg(target_arch = "wasm32")]
+impl<'p> PdbFile<'p, io::Cursor<PDBData>> {
+    /// Create `PdbFile` from a `String` and a `Vec<u8>`
+    pub fn load_from_bytes_as_vec(
+        pdb_file_name: String,
+        pdb_file_data: Vec<u8>,
+    ) -> Result<PdbFile<'p, io::Cursor<PDBData>>> {
+        let reader = io::Cursor::new(PDBData::Vec(pdb_file_data));
+        let mut pdb = pdb::PDB::open(reader)?;
+        let type_information = pdb.type_information()?;
+        let machine_type = pdb.debug_information()?.machine_type()?;
+
+        let mut pdb_file = PdbFile {
+            complete_type_list: vec![],
+            forwarder_to_complete_type: Arc::new(DashMap::default()),
+            machine_type,
+            type_information,
+            file_path: pdb_file_name.into(),
+            _pdb: pdb,
+        };
+        pdb_file.load_symbols()?;
+
+        Ok(pdb_file)
+    }
+
+    /// Create `PdbFile` from a `String` and a `Arc<[u8]>`
+    pub fn load_from_bytes_as_array(
+        pdb_file_name: String,
+        pdb_file_data: Arc<[u8]>,
+    ) -> Result<PdbFile<'p, io::Cursor<PDBData>>> {
+        let reader = io::Cursor::new(PDBData::SharedArray(pdb_file_data));
+        let mut pdb = pdb::PDB::open(reader)?;
+        let type_information = pdb.type_information()?;
+        let machine_type = pdb.debug_information()?.machine_type()?;
+
+        let mut pdb_file = PdbFile {
+            complete_type_list: vec![],
+            forwarder_to_complete_type: Arc::new(DashMap::default()),
+            machine_type,
+            type_information,
+            file_path: pdb_file_name.into(),
+            _pdb: pdb,
+        };
+        pdb_file.load_symbols()?;
+
+        Ok(pdb_file)
+    }
+}
+
+impl<'p, T> PdbFile<'p, T>
+where
+    T: io::Seek + io::Read + 'p,
+{
     fn load_symbols(&mut self) -> Result<()> {
         // Build the list of complete types
         let complete_symbol_map: DashMap<String, pdb::TypeIndex> = DashMap::default();
         let mut forwarders = vec![];
-        let pdb_start = std::time::Instant::now();
+        let pdb_start = Instant::now();
 
         let mut type_finder = self.type_information.finder();
         let mut type_info_iter = self.type_information.iter();
@@ -115,7 +191,7 @@ impl<'p> PdbFile<'p> {
         log::debug!("PDB loading took {} ms", pdb_start.elapsed().as_millis());
 
         // Resolve forwarder references to their corresponding complete type, in parallel
-        let fwd_start = std::time::Instant::now();
+        let fwd_start = Instant::now();
         cond_par_iter!(forwarders).for_each(|(fwd_name, fwd_type_id)| {
             if let Some(complete_type_index) = complete_symbol_map.get(fwd_name) {
                 self.forwarder_to_complete_type
@@ -288,7 +364,7 @@ impl<'p> PdbFile<'p> {
         // Add all the needed types iteratively until we're done
         let mut dependencies_data = pdb_types::Data::new();
         let mut processed_types = BTreeSet::from([type_index]);
-        let dep_start = std::time::Instant::now();
+        let dep_start = Instant::now();
         loop {
             // Get the first element in needed_types without holding an immutable borrow
             let first = needed_types.difference(&processed_types).next().copied();

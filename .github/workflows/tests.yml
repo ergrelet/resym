@@ -8,15 +8,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           profile: minimal
           override: true
-      - name: Install libxcb
-        run: sudo apt-get update; sudo apt-get install --no-install-recommends libxcb-shape0-dev libxcb-xfixes0-dev
+
+      - name: Install libxcb and libgtk
+        run: sudo apt-get update; sudo apt-get install --no-install-recommends libxcb-shape0-dev libxcb-xfixes0-dev libgtk-3-dev
         if: runner.os == 'linux'
+
       - name: Test
         run: make test
 
@@ -47,8 +52,10 @@ jobs:
           toolchain: 1.67.0
           profile: minimal
           override: true
-      - name: Install libxcb
-        run: sudo apt-get update; sudo apt-get install --no-install-recommends libxcb-shape0-dev libxcb-xfixes0-dev
+
+      - name: Install libxcb and libgtk
+        run: sudo apt-get update; sudo apt-get install --no-install-recommends libxcb-shape0-dev libxcb-xfixes0-dev libgtk-3-dev
         if: runner.os == 'linux'
+
       - name: Test
         run: make test

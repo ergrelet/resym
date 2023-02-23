@@ -14,8 +14,32 @@ jobs:
           profile: minimal
           override: true
 
-      - name: Build --all-features
-        run: cargo build --all-features
+      - name: Build Windows --all-features
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --all-targets --all-features
 
-      - name: Build --no-default-features
-        run: cargo build --no-default-features
+      - name: Build Windows --no-default-features
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --all-targets --no-default-features
+
+  build-latest-wasm32:
+    name: Build wasm32 - Latest
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          target: wasm32-unknown-unknown
+          override: true
+
+      - name: Build wasm32
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --no-default-features --target wasm32-unknown-unknown -p resym --lib

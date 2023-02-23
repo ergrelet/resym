@@ -1,0 +1,45 @@
+name: Deploy Web Application
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build-and-deploy-resym-web:
+    name: Build resym-web
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2022-12-12
+          profile: minimal
+          target: wasm32-unknown-unknown
+          override: true
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: "latest"
+
+      - name: Build resym-web
+        run: .\scripts\build_resym_web.bat
+
+      - name: Prepare resym-web deployment
+        run: |
+          cd .\resym\pkg\
+          rm .gitignore
+          git init
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add *.html *.js *.wasm snippets\
+          git commit -m 'Deploy resym-web'
+
+      - name: Force push to destination branch
+        uses: ad-m/github-push-action@v0.6.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: resym-web
+          force: true
+          directory: ./resym/pkg/

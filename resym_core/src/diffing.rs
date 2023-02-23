@@ -1,6 +1,10 @@
+#[cfg(target_arch = "wasm32")]
+use instant::Instant;
 use similar::{ChangeTag, TextDiff};
 
-use std::fmt::Write;
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
+use std::{fmt::Write, io};
 
 use crate::{
     error::{Result, ResymCoreError},
@@ -23,16 +27,19 @@ pub struct DiffLine {
     pub line: String,
 }
 
-pub fn diff_type_by_name(
-    pdb_file_from: &PdbFile,
-    pdb_file_to: &PdbFile,
+pub fn diff_type_by_name<'p, T>(
+    pdb_file_from: &PdbFile<'p, T>,
+    pdb_file_to: &PdbFile<'p, T>,
     type_name: &str,
     primitives_flavor: PrimitiveReconstructionFlavor,
     print_header: bool,
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
-) -> Result<DiffedType> {
-    let diff_start = std::time::Instant::now();
+) -> Result<DiffedType>
+where
+    T: io::Seek + io::Read + 'p,
+{
+    let diff_start = Instant::now();
     // Prepend header if needed
     let (mut reconstructed_type_from, mut reconstructed_type_to) = if print_header {
         let diff_header = generate_diff_header(pdb_file_from, pdb_file_to);
@@ -92,7 +99,13 @@ pub fn diff_type_by_name(
     })
 }
 
-fn generate_diff_header(pdb_file_from: &PdbFile, pdb_file_to: &PdbFile) -> String {
+fn generate_diff_header<'p, T>(
+    pdb_file_from: &PdbFile<'p, T>,
+    pdb_file_to: &PdbFile<'p, T>,
+) -> String
+where
+    T: io::Seek + io::Read + 'p,
+{
     format!(
         concat!(
             "//\n",

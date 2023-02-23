@@ -4,12 +4,18 @@ version.workspace = true
 edition = "2021"
 rust-version = "1.67"
 build = "build.rs"
+default-run = "resym"
 
 [package.metadata.winres]
 ProductName = "resym"
 ProductVersion = "0.3.0"
 FileDescription = "Cross-platform tool that allows browsing and extracting C and C++ type declarations from PDB files."
 LegalCopyright = "Copyright © resym developers"
+
+[lib]
+name = "resym_web"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["rayon"]
@@ -20,13 +26,20 @@ rayon = ["resym_core/rayon"]
 resym_core = { version = "0.3", path = "../resym_core", default-features = false }
 
 eframe = { version = "0.21", features = ["persistence"] }
-tinyfiledialogs = "3.9"
 serde = "1.0"
-syntect = "5.0"
 anyhow = "1.0"
 log = "0.4"
 memory_logger = { version = "0.1", features = ["blocking"] }
 crossbeam-channel = "0.5"
+rfd = "0.11"
+# Note(ergrelet): `fancy-regex` is less performant than `onig` at the moment
+# but is more portable (i.e., compiles to wasm32)
+syntect = { version = "5.0", default-features = false, features=["default-fancy"] }
+
+# Web:
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1"
+wasm-bindgen-futures = "0.4"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"
