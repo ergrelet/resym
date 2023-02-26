@@ -6,6 +6,10 @@
 
 - Allow opening a PDB file and diffing two PDB files using drag and drop (@learn-more)
 
+### Changed
+
+- `resym` and `resymc` can be built without `rayon` (but are still built with it by default)
+
 ## [0.3.0] - 2023-02-19
 
 ### Added
