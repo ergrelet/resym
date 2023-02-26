@@ -1,10 +1,6 @@
 name: Build
 
-on:
-  pull_request:
-  push:
-    branches:
-      - master
+on: [push]
 
 jobs:
   build-latest-windows:
@@ -17,11 +13,9 @@ jobs:
           toolchain: stable
           profile: minimal
           override: true
-      - name: Build
-        run: cargo build --release
-      - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: resym-win64
-          path: target/release/*.exe
-          retention-days: 3
+
+      - name: Build --all-features
+        run: cargo build --all-features
+
+      - name: Build --no-default-features
+        run: cargo build --no-default-features
