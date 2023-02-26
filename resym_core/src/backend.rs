@@ -1,10 +1,13 @@
 use crossbeam_channel::{Receiver, Sender};
+#[cfg(feature = "rayon")]
 use rayon::{
     iter::{IntoParallelRefIterator, ParallelIterator},
     slice::ParallelSliceMut,
     ThreadPool,
 };
 
+#[cfg(not(feature = "rayon"))]
+use std::thread::JoinHandle;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,
@@ -12,6 +15,7 @@ use std::{
 };
 
 use crate::{
+    cond_par_iter, cond_sort_by,
     diffing::diff_type_by_name,
     error::{Result, ResymCoreError},
     frontend::FrontendCommand,
@@ -69,10 +73,15 @@ pub enum BackendCommand {
 /// for the actual PDB processing (e.g., type listing and reconstruction).
 pub struct Backend {
     tx_worker: Sender<BackendCommand>,
-    _thread_pool: ThreadPool,
+    #[cfg(feature = "rayon")]
+    _worker_thread_pool: ThreadPool,
+    #[cfg(not(feature = "rayon"))]
+    _worker_thread: JoinHandle<()>,
 }
 
 impl Backend {
+    /// Backend creation with `rayon`
+    #[cfg(feature = "rayon")]
     pub fn new(
         frontend_controller: Arc<impl FrontendController + Send + Sync + 'static>,
     ) -> Result<Self> {
@@ -91,11 +100,33 @@ impl Backend {
                 log::error!("Background thread aborted: {}", err);
             }
         });
+        log::debug!("Background thread pool started");
+
+        Ok(Self {
+            tx_worker,
+            _worker_thread_pool: thread_pool,
+        })
+    }
+
+    /// Backend creation without `rayon`
+    #[cfg(not(feature = "rayon"))]
+    pub fn new(
+        frontend_controller: Arc<impl FrontendController + Send + Sync + 'static>,
+    ) -> Result<Self> {
+        let (tx_worker, rx_worker) = crossbeam_channel::unbounded::<BackendCommand>();
+
+        // Start a new thread
+        let worker_thread = std::thread::spawn(move || {
+            let exit_result = worker_thread_routine(rx_worker, frontend_controller.as_ref());
+            if let Err(err) = exit_result {
+                log::error!("Background thread aborted: {}", err);
+            }
+        });
         log::debug!("Background thread started");
 
         Ok(Self {
             tx_worker,
-            _thread_pool: thread_pool,
+            _worker_thread: worker_thread,
         })
     }
 
@@ -398,7 +429,7 @@ fn update_type_filter_command(
     if sort_by_index {
         // Order types by type index, so the order is deterministic
         // (i.e., independent from DashMap's hash function)
-        filtered_type_list.par_sort_by(|lhs, rhs| lhs.1.cmp(&rhs.1));
+        cond_sort_by!(filtered_type_list, |lhs, rhs| lhs.1.cmp(&rhs.1));
     }
 
     log::debug!(
@@ -421,8 +452,7 @@ fn filter_types_regex(
     {
         // In case of error, return an empty result
         Err(_) => vec![],
-        Ok(regex) => type_list
-            .par_iter()
+        Ok(regex) => cond_par_iter!(type_list)
             .filter(|r| regex.find(&r.0).is_some())
             .cloned()
             .collect(),
@@ -437,14 +467,12 @@ fn filter_types_regular(
 ) -> Vec<(String, pdb::TypeIndex)> {
     if case_insensitive_search {
         let search_filter = search_filter.to_lowercase();
-        type_list
-            .par_iter()
+        cond_par_iter!(type_list)
             .filter(|r| r.0.to_lowercase().contains(&search_filter))
             .cloned()
             .collect()
     } else {
-        type_list
-            .par_iter()
+        cond_par_iter!(type_list)
             .filter(|r| r.0.contains(search_filter))
             .cloned()
             .collect()

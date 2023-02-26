@@ -8,14 +8,19 @@ exclude = [
     "tests/snapshots/*",
 ]
 
+[features]
+default = ["rayon"]
+
+rayon = ["dep:rayon", "dep:num_cpus", "dashmap/rayon"]
+
 [dependencies]
 pdb = { git = "https://github.com/ergrelet/pdb", branch = "0.8.0-resym" }
 thiserror = "1.0"
 log = "0.4"
-rayon = "1.5"
+rayon = { version = "1.5", optional = true }
+num_cpus = { version = "1.13", optional = true }
 crossbeam-channel = "0.5"
-num_cpus = "1.13"
-dashmap = { version = "5.2", features = ["rayon"] }
+dashmap = { version = "5.2" }
 regex = "1.5"
 similar = "2.1"
 

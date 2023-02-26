@@ -18,6 +18,7 @@ pub enum ResymCoreError {
     PdbError(#[from] pdb::Error),
 
     /// Error reported from `rayon`.
+    #[cfg(feature = "rayon")]
     #[error("rayon error: {0}")]
     RayonError(#[from] rayon::ThreadPoolBuildError),
 

@@ -1,5 +1,6 @@
 use dashmap::DashMap;
 use pdb::FallibleIterator;
+#[cfg(feature = "rayon")]
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use std::{
@@ -9,9 +10,10 @@ use std::{
     sync::Arc,
 };
 
-use crate::error::{Result, ResymCoreError};
-use crate::pdb_types::{
-    self, is_unnamed_type, DataFormatConfiguration, PrimitiveReconstructionFlavor,
+use crate::{
+    cond_par_iter,
+    error::{Result, ResymCoreError},
+    pdb_types::{self, is_unnamed_type, DataFormatConfiguration, PrimitiveReconstructionFlavor},
 };
 
 pub struct PdbFile<'p> {
@@ -114,7 +116,7 @@ impl<'p> PdbFile<'p> {
 
         // Resolve forwarder references to their corresponding complete type, in parallel
         let fwd_start = std::time::Instant::now();
-        forwarders.par_iter().for_each(|(fwd_name, fwd_type_id)| {
+        cond_par_iter!(forwarders).for_each(|(fwd_name, fwd_type_id)| {
             if let Some(complete_type_index) = complete_symbol_map.get(fwd_name) {
                 self.forwarder_to_complete_type
                     .insert(*fwd_type_id, *complete_type_index);
