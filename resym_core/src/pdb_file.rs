@@ -5,7 +5,12 @@ use pdb::FallibleIterator;
 #[cfg(feature = "rayon")]
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
-use std::{collections::BTreeSet, io, path::PathBuf, sync::Arc};
+use std::{
+    collections::BTreeSet,
+    io::{self, Read, Seek},
+    path::PathBuf,
+    sync::Arc,
+};
 #[cfg(not(target_arch = "wasm32"))]
 use std::{fs::File, path::Path, time::Instant};
 
@@ -15,20 +20,30 @@ use crate::{
     pdb_types::{self, is_unnamed_type, DataFormatConfiguration, PrimitiveReconstructionFlavor},
 };
 
-/// Wrapper for different buffer types processed by wasm32 targets
-#[cfg(target_arch = "wasm32")]
-#[derive(Clone, Debug)]
-pub enum PDBData {
-    Vec(Vec<u8>),
-    SharedArray(Arc<[u8]>),
+/// Wrapper for different buffer types processed by `resym`
+#[derive(Debug)]
+pub enum PDBDataSource {
+    File(std::fs::File),
+    Vec(io::Cursor<Vec<u8>>),
+    SharedArray(io::Cursor<Arc<[u8]>>),
 }
 
-#[cfg(target_arch = "wasm32")]
-impl AsRef<[u8]> for PDBData {
-    fn as_ref(&self) -> &[u8] {
+impl Seek for PDBDataSource {
+    fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
         match self {
-            PDBData::Vec(vec) => &vec,
-            PDBData::SharedArray(shared_array) => shared_array,
+            PDBDataSource::File(file) => file.seek(pos),
+            PDBDataSource::Vec(vec) => vec.seek(pos),
+            PDBDataSource::SharedArray(array) => array.seek(pos),
+        }
+    }
+}
+
+impl Read for PDBDataSource {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self {
+            PDBDataSource::File(file) => file.read(buf),
+            PDBDataSource::Vec(vec) => vec.read(buf),
+            PDBDataSource::SharedArray(array) => array.read(buf),
         }
     }
 }
@@ -48,8 +63,8 @@ where
 #[cfg(not(target_arch = "wasm32"))]
 impl<'p> PdbFile<'p, File> {
     /// Create `PdbFile` from an `std::path::Path`
-    pub fn load_from_file(pdb_file_path: &Path) -> Result<PdbFile<'p, File>> {
-        let file = File::open(pdb_file_path)?;
+    pub fn load_from_file(pdb_file_path: &Path) -> Result<PdbFile<'p, PDBDataSource>> {
+        let file = PDBDataSource::File(File::open(pdb_file_path)?);
         let mut pdb = pdb::PDB::open(file)?;
         let type_information = pdb.type_information()?;
         let machine_type = pdb.debug_information()?.machine_type()?;
@@ -68,14 +83,13 @@ impl<'p> PdbFile<'p, File> {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
-impl<'p> PdbFile<'p, io::Cursor<PDBData>> {
+impl<'p> PdbFile<'p, PDBDataSource> {
     /// Create `PdbFile` from a `String` and a `Vec<u8>`
     pub fn load_from_bytes_as_vec(
         pdb_file_name: String,
         pdb_file_data: Vec<u8>,
-    ) -> Result<PdbFile<'p, io::Cursor<PDBData>>> {
-        let reader = io::Cursor::new(PDBData::Vec(pdb_file_data));
+    ) -> Result<PdbFile<'p, PDBDataSource>> {
+        let reader = PDBDataSource::Vec(io::Cursor::new(pdb_file_data));
         let mut pdb = pdb::PDB::open(reader)?;
         let type_information = pdb.type_information()?;
         let machine_type = pdb.debug_information()?.machine_type()?;
@@ -97,8 +111,8 @@ impl<'p> PdbFile<'p, io::Cursor<PDBData>> {
     pub fn load_from_bytes_as_array(
         pdb_file_name: String,
         pdb_file_data: Arc<[u8]>,
-    ) -> Result<PdbFile<'p, io::Cursor<PDBData>>> {
-        let reader = io::Cursor::new(PDBData::SharedArray(pdb_file_data));
+    ) -> Result<PdbFile<'p, PDBDataSource>> {
+        let reader = PDBDataSource::SharedArray(io::Cursor::new(pdb_file_data));
         let mut pdb = pdb::PDB::open(reader)?;
         let type_information = pdb.type_information()?;
         let machine_type = pdb.debug_information()?.machine_type()?;

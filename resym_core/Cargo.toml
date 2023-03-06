@@ -9,9 +9,10 @@ exclude = [
 ]
 
 [features]
-default = ["rayon"]
+default = ["rayon", "http"]
 
 rayon = ["dep:rayon", "dep:num_cpus", "dashmap/rayon"]
+http = ["dep:ehttp", "dep:url"]
 
 [dependencies]
 pdb = { git = "https://github.com/ergrelet/pdb", branch = "0.8.0-resym" }
@@ -23,6 +24,8 @@ crossbeam-channel = "0.5"
 dashmap = { version = "5.2" }
 regex = "1.5"
 similar = "2.1"
+ehttp = { version = "0.2", optional = true }
+url = { version = "2.3", optional = true }
 
 # Web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]

@@ -6,11 +6,12 @@ use resym_core::{
     frontend::FrontendCommand,
 };
 
-use std::fmt::Write;
 #[cfg(target_arch = "wasm32")]
 use std::{cell::RefCell, rc::Rc};
-use std::{sync::Arc, vec};
+use std::{fmt::Write, sync::Arc, vec};
 
+#[cfg(feature = "http")]
+use crate::ui_components::OpenURLComponent;
 use crate::{
     frontend::EguiFrontendController,
     mode::ResymAppMode,
@@ -24,11 +25,18 @@ use crate::{
 const PKG_NAME: &str = env!("CARGO_PKG_NAME");
 const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+#[derive(Clone, Copy)]
 pub enum ResymPDBSlots {
     /// Slot for the single PDB or for the PDB we're diffing from
     Main = 0,
     /// Slot used for the PDB we're diffing to
     Diff = 1,
+}
+
+impl Into<PDBSlot> for ResymPDBSlots {
+    fn into(self) -> PDBSlot {
+        self as PDBSlot
+    }
 }
 
 /// Struct that represents our GUI application.
@@ -40,6 +48,8 @@ pub struct ResymApp {
     code_view: CodeViewComponent,
     console: ConsoleComponent,
     settings: SettingsComponent,
+    #[cfg(feature = "http")]
+    open_url: OpenURLComponent,
     frontend_controller: Arc<EguiFrontendController>,
     backend: Backend,
     /// Field used by wasm32 targets to store PDB file information
@@ -71,6 +81,10 @@ impl eframe::App for ResymApp {
 
         // Update the "Settings" window if open
         self.settings.update(ctx);
+
+        // Update "Open URL" window if open
+        #[cfg(feature = "http")]
+        self.open_url.update(ctx, &self.backend);
 
         // Update the top panel (i.e, menu bar)
         self.update_top_panel(ctx, frame);
@@ -122,6 +136,8 @@ impl ResymApp {
             code_view: CodeViewComponent::new(),
             console: ConsoleComponent::new(logger),
             settings: SettingsComponent::new(app_settings),
+            #[cfg(feature = "http")]
+            open_url: OpenURLComponent::new(),
             frontend_controller,
             backend,
             #[cfg(target_arch = "wasm32")]
@@ -234,6 +250,19 @@ impl ResymApp {
             }
         });
 
+        /// Keyboard shortcut for opening URLs
+        #[cfg(feature = "http")]
+        const CTRL_L_SHORTCUT: egui::KeyboardShortcut = egui::KeyboardShortcut {
+            modifiers: egui::Modifiers::CTRL,
+            key: egui::Key::L,
+        };
+        #[cfg(feature = "http")]
+        ui.input_mut(|input_state| {
+            if input_state.consume_shortcut(&CTRL_L_SHORTCUT) {
+                self.open_url.open(ResymPDBSlots::Main);
+            }
+        });
+
         /// Keyboard shortcut for saving reconstructed content
         #[cfg(not(target_arch = "wasm32"))]
         const CTRL_S_SHORTCUT: egui::KeyboardShortcut = egui::KeyboardShortcut {
@@ -307,6 +336,20 @@ impl ResymApp {
                             {
                                 log::error!("Failed to update type filter value: {}", err);
                             }
+                        }
+                    }
+                },
+
+                FrontendCommand::LoadURLResult(result) => match result {
+                    Err(err) => {
+                        log::error!("Failed to load URL: {}", err);
+                    }
+                    Ok((pdb_slot, file_name, data)) => {
+                        if let Err(err) = self
+                            .backend
+                            .send_command(BackendCommand::LoadPDBFromVec(pdb_slot, file_name, data))
+                        {
+                            log::error!("Failed to load the PDB file: {err}");
                         }
                     }
                 },
@@ -391,16 +434,42 @@ impl ResymApp {
                     ui.close_menu();
                     self.start_open_pdb_file(ResymPDBSlots::Main as usize);
                 }
+
+                #[cfg(feature = "http")]
+                if ui.button("Open URL (Ctrl+L)").clicked() {
+                    ui.close_menu();
+                    self.open_url.open(ResymPDBSlots::Main);
+                }
+
+                // Separate "Open" from "Compare"
+                ui.separator();
+
                 if ui
                     .add_enabled(
                         matches!(self.current_mode, ResymAppMode::Browsing(..)),
-                        egui::Button::new("Compare with..."),
+                        egui::Button::new("Compare with file ..."),
                     )
                     .clicked()
                 {
                     ui.close_menu();
                     self.start_open_pdb_file(ResymPDBSlots::Diff as usize);
                 }
+
+                #[cfg(feature = "http")]
+                if ui
+                    .add_enabled(
+                        matches!(self.current_mode, ResymAppMode::Browsing(..)),
+                        egui::Button::new("Compare with URL ..."),
+                    )
+                    .clicked()
+                {
+                    ui.close_menu();
+                    self.open_url.open(ResymPDBSlots::Diff);
+                }
+
+                // Separate "Compare" from "Settings"
+                ui.separator();
+
                 if ui.button("Settings").clicked() {
                     ui.close_menu();
                     self.settings.open();
@@ -423,7 +492,7 @@ impl ResymApp {
         if let Some(file_path) = file_path_opt {
             if let Err(err) = self
                 .backend
-                .send_command(BackendCommand::LoadPDB(pdb_slot, file_path))
+                .send_command(BackendCommand::LoadPDBFromPath(pdb_slot, file_path))
             {
                 log::error!("Failed to load the PDB file: {err}");
             }
@@ -432,13 +501,15 @@ impl ResymApp {
 
     #[cfg(target_arch = "wasm32")]
     fn start_open_pdb_file(&mut self, pdb_slot: PDBSlot) {
-        let open_pdb_data = std::rc::Rc::clone(&self.open_pdb_data);
+        let open_pdb_data = self.open_pdb_data.clone();
         wasm_bindgen_futures::spawn_local(async move {
             let file_opt = rfd::AsyncFileDialog::new()
                 .add_filter("PDB files (*.pdb)", &["pdb"])
                 .pick_file()
                 .await;
             if let Some(file) = file_opt {
+                // We unwrap() the return value to assert that we are not expecting
+                // threads to ever fail while holding the lock.
                 *open_pdb_data.borrow_mut() = Some((pdb_slot, file.file_name(), file.read().await));
             }
         });
@@ -446,6 +517,8 @@ impl ResymApp {
 
     #[cfg(target_arch = "wasm32")]
     fn process_open_pdb_file_result(&self) {
+        // We unwrap() the return value to assert that we are not expecting
+        // threads to ever fail while holding the lock.
         if let Some((pdb_slot, pdb_name, pdb_bytes)) = self.open_pdb_data.borrow_mut().take() {
             if let Err(err) = self.backend.send_command(BackendCommand::LoadPDBFromVec(
                 pdb_slot, pdb_name, pdb_bytes,
@@ -491,7 +564,7 @@ impl ResymApp {
                     if let Some(file_path) = &file.path {
                         if let Err(err) = self
                             .backend
-                            .send_command(BackendCommand::LoadPDB(*slot, file_path.into()))
+                            .send_command(BackendCommand::LoadPDBFromPath(*slot, file_path.into()))
                         {
                             log::error!("Failed to load the PDB file: {err}");
                         }

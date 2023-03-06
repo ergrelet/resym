@@ -18,9 +18,10 @@ path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["rayon"]
+default = ["rayon", "http"]
 
 rayon = ["resym_core/rayon"]
+http = ["resym_core/http"]
 
 [dependencies]
 resym_core = { version = "0.3", path = "../resym_core", default-features = false }
