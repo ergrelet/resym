@@ -1,9 +1,11 @@
 #![windows_subsystem = "windows"]
 
 mod frontend;
+mod mode;
 mod resym_app;
 mod settings;
 mod syntax_highlighting;
+mod ui_components;
 
 use anyhow::{anyhow, Result};
 use memory_logger::blocking::MemoryLogger;

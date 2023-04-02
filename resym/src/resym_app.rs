@@ -1,12 +1,9 @@
 use anyhow::Result;
-use eframe::egui::{self, ScrollArea, TextStyle};
+use eframe::egui;
 use memory_logger::blocking::MemoryLogger;
 use resym_core::{
     backend::{Backend, BackendCommand, PDBSlot},
-    diffing::DiffChange,
-    frontend::{FrontendCommand, TypeList},
-    pdb_types::PrimitiveReconstructionFlavor,
-    syntax_highlighting::CodeTheme,
+    frontend::FrontendCommand,
 };
 
 use std::fmt::Write;
@@ -15,52 +12,47 @@ use std::{cell::RefCell, rc::Rc};
 use std::{sync::Arc, vec};
 
 use crate::{
-    frontend::EguiFrontendController, settings::ResymAppSettings,
-    syntax_highlighting::highlight_code,
+    frontend::EguiFrontendController,
+    mode::ResymAppMode,
+    settings::ResymAppSettings,
+    ui_components::{
+        CodeViewComponent, ConsoleComponent, SettingsComponent, TypeListComponent,
+        TypeSearchComponent,
+    },
 };
 
 const PKG_NAME: &str = env!("CARGO_PKG_NAME");
 const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Slot for the single PDB or for the PDB we're diffing from
-const PDB_MAIN_SLOT: PDBSlot = 0;
-/// Slot used for the PDB we're diffing to
-const PDB_DIFF_SLOT: PDBSlot = 1;
+pub enum ResymPDBSlots {
+    /// Slot for the single PDB or for the PDB we're diffing from
+    Main = 0,
+    /// Slot used for the PDB we're diffing to
+    Diff = 1,
+}
 
 /// Struct that represents our GUI application.
 /// It contains the whole application's context at all time.
 pub struct ResymApp {
-    logger: &'static MemoryLogger,
     current_mode: ResymAppMode,
-    filtered_type_list: TypeList,
-    selected_row: usize,
-    search_filter: String,
-    console_content: Vec<String>,
-    settings_wnd_open: bool,
-    settings: ResymAppSettings,
+    type_search: TypeSearchComponent,
+    type_list: TypeListComponent,
+    code_view: CodeViewComponent,
+    console: ConsoleComponent,
+    settings: SettingsComponent,
     frontend_controller: Arc<EguiFrontendController>,
     backend: Backend,
-    /// Field used by wasm32 targets used to store PDB file information
+    /// Field used by wasm32 targets to store PDB file information
     /// temporarily when selecting a PDB file to open.
     #[cfg(target_arch = "wasm32")]
     open_pdb_data: Rc<RefCell<Option<(PDBSlot, String, Vec<u8>)>>>,
-}
-
-#[derive(PartialEq)]
-enum ResymAppMode {
-    /// Mode in which the application starts
-    Idle,
-    /// This mode means we're browsing a single PDB file
-    Browsing(String, usize, String),
-    /// This mode means we're comparing two PDB files for differences
-    Comparing(String, String, usize, Vec<DiffChange>, String),
 }
 
 // GUI-related trait
 impl eframe::App for ResymApp {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         // Save settings on shutdown
-        eframe::set_value(storage, eframe::APP_KEY, &self.settings);
+        eframe::set_value(storage, eframe::APP_KEY, &self.settings.app_settings);
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.
@@ -74,17 +66,79 @@ impl eframe::App for ResymApp {
         // Process incoming commands, if any
         self.process_ui_commands();
 
-        // Update theme
-        let theme = if self.settings.use_light_theme {
+        // Update theme if needed
+        self.process_theme_update(ctx);
+
+        // Update the "Settings" window if open
+        self.settings.update(ctx);
+
+        // Update the top panel (i.e, menu bar)
+        self.update_top_panel(ctx, frame);
+
+        // Update the left side panel (i.e., the type search bar and the type list)
+        self.update_left_side_panel(ctx);
+
+        // Update the bottom panel (i.e., the console)
+        self.update_bottom_panel(ctx);
+
+        // Update the central panel (i.e., the code view)
+        self.update_central_panel(ctx);
+
+        // Process drag and drop messages, if any
+        self.handle_drag_and_drop(ctx);
+
+        // Request the backend to repaint after a few milliseconds, in case some UI
+        // components have been updated, without consuming too much CPU.
+        // Note(ergrelet): this is a workaround for the fact that we can't trigger
+        // a repaint from another thread for wasm32 targets.
+        #[cfg(target_arch = "wasm32")]
+        ctx.request_repaint_after(std::time::Duration::from_secs_f32(0.2));
+    }
+}
+
+// Utility associated functions and methods
+impl ResymApp {
+    pub fn new(cc: &eframe::CreationContext<'_>, logger: &'static MemoryLogger) -> Result<Self> {
+        let (tx_ui, rx_ui) = crossbeam_channel::unbounded::<FrontendCommand>();
+        let frontend_controller = Arc::new(EguiFrontendController::new(
+            tx_ui,
+            rx_ui,
+            cc.egui_ctx.clone(),
+        ));
+        let backend = Backend::new(frontend_controller.clone())?;
+
+        // Load settings on launch
+        let app_settings = if let Some(storage) = cc.storage {
+            eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()
+        } else {
+            ResymAppSettings::default()
+        };
+
+        log::info!("{} {}", PKG_NAME, PKG_VERSION);
+        Ok(Self {
+            current_mode: ResymAppMode::Idle,
+            type_search: TypeSearchComponent::new(),
+            type_list: TypeListComponent::new(),
+            code_view: CodeViewComponent::new(),
+            console: ConsoleComponent::new(logger),
+            settings: SettingsComponent::new(app_settings),
+            frontend_controller,
+            backend,
+            #[cfg(target_arch = "wasm32")]
+            open_pdb_data: Rc::new(RefCell::new(None)),
+        })
+    }
+
+    fn process_theme_update(&mut self, ctx: &egui::Context) {
+        let theme = if self.settings.app_settings.use_light_theme {
             egui::Visuals::light()
         } else {
             egui::Visuals::dark()
         };
         ctx.set_visuals(theme);
+    }
 
-        // Draw "Settings" window if open
-        self.update_settings_window(ctx);
-
+    fn update_top_panel(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             // Process keyboard shortcuts, if any
             self.consume_keyboard_shortcuts(ui);
@@ -92,7 +146,9 @@ impl eframe::App for ResymApp {
             // The top panel is often a good place for a menu bar
             self.update_menu_bar(ui, frame);
         });
+    }
 
+    fn update_left_side_panel(&mut self, ctx: &egui::Context) {
         egui::SidePanel::left("side_panel")
             .default_width(250.0)
             .width_range(100.0..=f32::INFINITY)
@@ -100,35 +156,26 @@ impl eframe::App for ResymApp {
                 ui.label("Search");
                 ui.add_space(4.0);
 
-                if ui.text_edit_singleline(&mut self.search_filter).changed() {
-                    // Update filtered list if filter has changed
-                    let result = if let ResymAppMode::Comparing(..) = self.current_mode {
-                        self.backend
-                            .send_command(BackendCommand::UpdateTypeFilterMerged(
-                                vec![PDB_MAIN_SLOT, PDB_DIFF_SLOT],
-                                self.search_filter.clone(),
-                                self.settings.search_case_insensitive,
-                                self.settings.search_use_regex,
-                            ))
-                    } else {
-                        self.backend.send_command(BackendCommand::UpdateTypeFilter(
-                            PDB_MAIN_SLOT,
-                            self.search_filter.clone(),
-                            self.settings.search_case_insensitive,
-                            self.settings.search_use_regex,
-                        ))
-                    };
-                    if let Err(err) = result {
-                        log::error!("Failed to update type filter value: {}", err);
-                    }
-                }
+                // Update the type search bar
+                self.type_search.update(
+                    &self.settings.app_settings,
+                    &self.current_mode,
+                    &self.backend,
+                    ui,
+                );
                 ui.add_space(4.0);
 
-                // Display list of type names
-                self.update_type_list(ui);
+                // Update the type list
+                self.type_list.update(
+                    &self.settings.app_settings,
+                    &self.current_mode,
+                    &self.backend,
+                    ui,
+                );
             });
+    }
 
-        // Bottom panel containing the console
+    fn update_bottom_panel(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::bottom("bottom_panel")
             .default_height(100.0)
             .show(ctx, |ui| {
@@ -137,10 +184,13 @@ impl eframe::App for ResymApp {
                     ui.label("Console");
                     ui.add_space(4.0);
 
-                    self.update_console(ui);
+                    // Update the console component
+                    self.console.update(ui);
                 });
             });
+    }
 
+    fn update_central_panel(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
                 // The central panel the region left after adding TopPanel's and SidePanel's
@@ -166,52 +216,10 @@ impl eframe::App for ResymApp {
             });
             ui.add_space(4.0);
 
-            self.update_code_view(ui);
+            // Update the code view component
+            self.code_view
+                .update(&self.settings.app_settings, &self.current_mode, ui);
         });
-
-        self.handle_drag_and_drop(ctx);
-
-        // Request the backend to repaint after a few milliseconds, in case some UI
-        // components have been updated, without consuming too much CPU.
-        // Note(ergrelet): this is a workaround for the fact that we can't trigger
-        // a repaint from another thread for wasm32 targets.
-        #[cfg(target_arch = "wasm32")]
-        ctx.request_repaint_after(std::time::Duration::from_secs_f32(0.2));
-    }
-}
-
-// Utility associated functions and methods
-impl ResymApp {
-    pub fn new(cc: &eframe::CreationContext<'_>, logger: &'static MemoryLogger) -> Result<Self> {
-        let (tx_ui, rx_ui) = crossbeam_channel::unbounded::<FrontendCommand>();
-        let frontend_controller = Arc::new(EguiFrontendController::new(
-            tx_ui,
-            rx_ui,
-            cc.egui_ctx.clone(),
-        ));
-        let backend = Backend::new(frontend_controller.clone())?;
-
-        // Load settings on launch
-        let mut settings = ResymAppSettings::default();
-        if let Some(storage) = cc.storage {
-            settings = eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default()
-        }
-
-        log::info!("{} {}", PKG_NAME, PKG_VERSION);
-        Ok(Self {
-            logger,
-            current_mode: ResymAppMode::Idle,
-            filtered_type_list: vec![],
-            selected_row: usize::MAX,
-            search_filter: String::default(),
-            console_content: vec![],
-            settings_wnd_open: false,
-            settings,
-            frontend_controller,
-            backend,
-            #[cfg(target_arch = "wasm32")]
-            open_pdb_data: Rc::new(RefCell::new(None)),
-        })
     }
 
     fn consume_keyboard_shortcuts(&mut self, ui: &mut egui::Ui) {
@@ -222,7 +230,7 @@ impl ResymApp {
         };
         ui.input_mut(|input_state| {
             if input_state.consume_shortcut(&CTRL_O_SHORTCUT) {
-                self.start_open_pdb_file(PDB_MAIN_SLOT);
+                self.start_open_pdb_file(ResymPDBSlots::Main as usize);
             }
         });
 
@@ -250,13 +258,12 @@ impl ResymApp {
                         log::error!("Failed to load PDB file: {}", err);
                     }
                     Ok(pdb_slot) => {
-                        if pdb_slot == PDB_MAIN_SLOT {
+                        if pdb_slot == ResymPDBSlots::Main as usize {
                             // Unload the PDB used for diffing if one is loaded
                             if let ResymAppMode::Comparing(..) = self.current_mode {
-                                if let Err(err) = self
-                                    .backend
-                                    .send_command(BackendCommand::UnloadPDB(PDB_DIFF_SLOT))
-                                {
+                                if let Err(err) = self.backend.send_command(
+                                    BackendCommand::UnloadPDB(ResymPDBSlots::Diff as usize),
+                                ) {
                                     log::error!(
                                         "Failed to unload the PDB used for comparison: {}",
                                         err
@@ -269,7 +276,7 @@ impl ResymApp {
                             // Request a type list update
                             if let Err(err) =
                                 self.backend.send_command(BackendCommand::UpdateTypeFilter(
-                                    PDB_MAIN_SLOT,
+                                    ResymPDBSlots::Main as usize,
                                     String::default(),
                                     false,
                                     false,
@@ -277,7 +284,7 @@ impl ResymApp {
                             {
                                 log::error!("Failed to update type filter value: {}", err);
                             }
-                        } else if pdb_slot == PDB_DIFF_SLOT {
+                        } else if pdb_slot == ResymPDBSlots::Diff as usize {
                             self.current_mode = ResymAppMode::Comparing(
                                 String::default(),
                                 String::default(),
@@ -289,7 +296,10 @@ impl ResymApp {
                             if let Err(err) =
                                 self.backend
                                     .send_command(BackendCommand::UpdateTypeFilterMerged(
-                                        vec![PDB_MAIN_SLOT, PDB_DIFF_SLOT],
+                                        vec![
+                                            ResymPDBSlots::Main as usize,
+                                            ResymPDBSlots::Diff as usize,
+                                        ],
                                         String::default(),
                                         false,
                                         false,
@@ -367,8 +377,7 @@ impl ResymApp {
                 },
 
                 FrontendCommand::UpdateFilteredTypes(filtered_types) => {
-                    self.filtered_type_list = filtered_types;
-                    self.selected_row = usize::MAX;
+                    self.type_list.update_type_list(filtered_types);
                 }
             }
         }
@@ -380,7 +389,7 @@ impl ResymApp {
             ui.menu_button("File", |ui| {
                 if ui.button("Open PDB file (Ctrl+O)").clicked() {
                     ui.close_menu();
-                    self.start_open_pdb_file(PDB_MAIN_SLOT);
+                    self.start_open_pdb_file(ResymPDBSlots::Main as usize);
                 }
                 if ui
                     .add_enabled(
@@ -390,11 +399,11 @@ impl ResymApp {
                     .clicked()
                 {
                     ui.close_menu();
-                    self.start_open_pdb_file(PDB_DIFF_SLOT);
+                    self.start_open_pdb_file(ResymPDBSlots::Diff as usize);
                 }
                 if ui.button("Settings").clicked() {
                     ui.close_menu();
-                    self.settings_wnd_open = true;
+                    self.settings.open();
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 if ui.button("Exit").clicked() {
@@ -403,299 +412,6 @@ impl ResymApp {
                 }
             });
         });
-    }
-
-    fn update_type_list(&mut self, ui: &mut egui::Ui) {
-        let num_rows = self.filtered_type_list.len();
-        const TEXT_STYLE: TextStyle = TextStyle::Body;
-        let row_height = ui.text_style_height(&TEXT_STYLE);
-        ui.with_layout(
-            egui::Layout::top_down(egui::Align::Min).with_cross_justify(true),
-            |ui| {
-                ScrollArea::vertical()
-                    .auto_shrink([false, false])
-                    .show_rows(ui, row_height, num_rows, |ui, row_range| {
-                        for row_index in row_range {
-                            let (type_name, type_index) = &self.filtered_type_list[row_index];
-
-                            if ui
-                                .selectable_label(self.selected_row == row_index, type_name)
-                                .clicked()
-                            {
-                                self.selected_row = row_index;
-                                match self.current_mode {
-                                    ResymAppMode::Browsing(..) => {
-                                        if let Err(err) = self.backend.send_command(
-                                            BackendCommand::ReconstructTypeByIndex(
-                                                PDB_MAIN_SLOT,
-                                                *type_index,
-                                                self.settings.primitive_types_flavor,
-                                                self.settings.print_header,
-                                                self.settings.reconstruct_dependencies,
-                                                self.settings.print_access_specifiers,
-                                            ),
-                                        ) {
-                                            log::error!("Failed to reconstruct type: {}", err);
-                                        }
-                                    }
-                                    ResymAppMode::Comparing(..) => {
-                                        if let Err(err) = self.backend.send_command(
-                                            BackendCommand::DiffTypeByName(
-                                                PDB_MAIN_SLOT,
-                                                PDB_DIFF_SLOT,
-                                                type_name.clone(),
-                                                self.settings.primitive_types_flavor,
-                                                self.settings.print_header,
-                                                self.settings.reconstruct_dependencies,
-                                                self.settings.print_access_specifiers,
-                                            ),
-                                        ) {
-                                            log::error!("Failed to reconstruct type diff: {}", err);
-                                        }
-                                    }
-                                    _ => log::error!("Invalid application state"),
-                                }
-                            }
-                        }
-                    });
-            },
-        );
-    }
-
-    fn update_console(&mut self, ui: &mut egui::Ui) {
-        // Update console
-        self.console_content
-            .extend(self.logger.read().lines().map(|s| s.to_string()));
-        self.logger.clear();
-
-        const TEXT_STYLE: TextStyle = TextStyle::Monospace;
-        let row_height = ui.text_style_height(&TEXT_STYLE);
-        let num_rows = self.console_content.len();
-        ScrollArea::vertical()
-            .auto_shrink([false, false])
-            .stick_to_bottom(true)
-            .show_rows(ui, row_height, num_rows, |ui, row_range| {
-                for row_index in row_range {
-                    ui.add(
-                        egui::TextEdit::singleline(&mut self.console_content[row_index].as_str())
-                            .font(egui::TextStyle::Monospace)
-                            .desired_width(f32::INFINITY),
-                    );
-                }
-            });
-    }
-
-    fn update_code_view(&mut self, ui: &mut egui::Ui) {
-        const LANGUAGE_SYNTAX: &str = "cpp";
-        let theme = if self.settings.use_light_theme {
-            CodeTheme::light(self.settings.font_size, LANGUAGE_SYNTAX.to_string())
-        } else {
-            CodeTheme::dark(self.settings.font_size, LANGUAGE_SYNTAX.to_string())
-        };
-
-        let line_desc =
-            if let ResymAppMode::Comparing(_, _, _, line_changes, _) = &self.current_mode {
-                Some(line_changes)
-            } else {
-                None
-            };
-
-        // Layouter that'll disable wrapping and apply syntax highlighting if needed
-        let mut layouter = |ui: &egui::Ui, string: &str, _wrap_width: f32| {
-            let layout_job = highlight_code(
-                ui.ctx(),
-                &theme,
-                string,
-                self.settings.enable_syntax_hightlighting,
-                line_desc,
-            );
-            ui.fonts(|fonts| fonts.layout_job(layout_job))
-        };
-
-        // Type dump area
-        egui::ScrollArea::both()
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                // TODO(ergrelet): see if there's a better way to compute this width.
-                let line_number_digit_width = 2 + self.settings.font_size as u32;
-                let (num_colums, min_column_width) = if self.settings.print_line_numbers {
-                    match self.current_mode {
-                        ResymAppMode::Comparing(_, _, last_line_number, ..) => {
-                            // Compute the columns' sizes from the number of digits
-                            let char_count = last_line_number.checked_ilog10().unwrap_or(1) + 1;
-                            let line_number_width = (char_count * line_number_digit_width) as f32;
-
-                            // Old index + new index + code editor
-                            (3, line_number_width)
-                        }
-                        ResymAppMode::Browsing(_, last_line_number, _) => {
-                            // Compute the columns' sizes from the number of digits
-                            let char_count = last_line_number.checked_ilog10().unwrap_or(1) + 1;
-                            let line_number_width = (char_count * line_number_digit_width) as f32;
-
-                            // Line numbers + code editor
-                            (2, line_number_width)
-                        }
-                        _ => {
-                            // Code editor only
-                            (1, 0.0)
-                        }
-                    }
-                } else {
-                    // Code editor only
-                    (1, 0.0)
-                };
-
-                egui::Grid::new("code_editor_grid")
-                    .num_columns(num_colums)
-                    .min_col_width(min_column_width)
-                    .show(ui, |ui| {
-                        match &self.current_mode {
-                            ResymAppMode::Comparing(
-                                line_numbers_old,
-                                line_numbers_new,
-                                _,
-                                _,
-                                reconstructed_type_diff,
-                            ) => {
-                                // Line numbers
-                                if self.settings.print_line_numbers {
-                                    ui.add(
-                                        egui::TextEdit::multiline(&mut line_numbers_old.as_str())
-                                            .font(egui::FontId::monospace(
-                                                self.settings.font_size as f32,
-                                            ))
-                                            .interactive(false)
-                                            .desired_width(min_column_width),
-                                    );
-                                    ui.add(
-                                        egui::TextEdit::multiline(&mut line_numbers_new.as_str())
-                                            .font(egui::FontId::monospace(
-                                                self.settings.font_size as f32,
-                                            ))
-                                            .interactive(false)
-                                            .desired_width(min_column_width),
-                                    );
-                                }
-                                // Text content
-                                ui.add(
-                                    egui::TextEdit::multiline(
-                                        &mut reconstructed_type_diff.as_str(),
-                                    )
-                                    .code_editor()
-                                    .layouter(&mut layouter),
-                                );
-                            }
-                            ResymAppMode::Browsing(line_numbers, _, reconstructed_type_content) => {
-                                // Line numbers
-                                if self.settings.print_line_numbers {
-                                    ui.add(
-                                        egui::TextEdit::multiline(&mut line_numbers.as_str())
-                                            .font(egui::FontId::monospace(
-                                                self.settings.font_size as f32,
-                                            ))
-                                            .interactive(false)
-                                            .desired_width(min_column_width),
-                                    );
-                                }
-                                // Text content
-                                ui.add(
-                                    egui::TextEdit::multiline(
-                                        &mut reconstructed_type_content.as_str(),
-                                    )
-                                    .code_editor()
-                                    .layouter(&mut layouter),
-                                );
-                            }
-                            ResymAppMode::Idle => {}
-                        }
-                    });
-            });
-    }
-
-    fn update_settings_window(&mut self, ctx: &egui::Context) {
-        egui::Window::new("Settings")
-            .anchor(egui::Align2::CENTER_CENTER, [0.0; 2])
-            .open(&mut self.settings_wnd_open)
-            .auto_sized()
-            .collapsible(false)
-            .show(ctx, |ui| {
-                const INTER_SECTION_SPACING: f32 = 10.0;
-                ui.label("Theme");
-                // Show radio-buttons to switch between light and dark mode.
-                ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.settings.use_light_theme, true, "☀ Light");
-                    ui.selectable_value(&mut self.settings.use_light_theme, false, "🌙 Dark");
-                });
-                ui.label(
-                    egui::RichText::new("Font size")
-                        .color(ui.style().visuals.widgets.inactive.text_color()),
-                );
-                egui::ComboBox::from_id_source("font_size")
-                    .selected_text(format!("{}", self.settings.font_size))
-                    .show_ui(ui, |ui| {
-                        for font_size in 8..=20 {
-                            ui.selectable_value(
-                                &mut self.settings.font_size,
-                                font_size,
-                                font_size.to_string(),
-                            );
-                        }
-                    });
-                ui.add_space(INTER_SECTION_SPACING);
-
-                ui.label("Search");
-                ui.checkbox(
-                    &mut self.settings.search_case_insensitive,
-                    "Case insensitive",
-                );
-                ui.checkbox(
-                    &mut self.settings.search_use_regex,
-                    "Enable regular expressions",
-                );
-                ui.add_space(INTER_SECTION_SPACING);
-
-                ui.label("Type reconstruction");
-                ui.checkbox(
-                    &mut self.settings.enable_syntax_hightlighting,
-                    "Enable C++ syntax highlighting",
-                );
-
-                ui.label(
-                    egui::RichText::new("Primitive types style")
-                        .color(ui.style().visuals.widgets.inactive.text_color()),
-                );
-                egui::ComboBox::from_id_source("primitive_types_flavor")
-                    .selected_text(format!("{:?}", self.settings.primitive_types_flavor))
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(
-                            &mut self.settings.primitive_types_flavor,
-                            PrimitiveReconstructionFlavor::Portable,
-                            "Portable",
-                        );
-                        ui.selectable_value(
-                            &mut self.settings.primitive_types_flavor,
-                            PrimitiveReconstructionFlavor::Microsoft,
-                            "Microsoft",
-                        );
-                        ui.selectable_value(
-                            &mut self.settings.primitive_types_flavor,
-                            PrimitiveReconstructionFlavor::Raw,
-                            "Raw",
-                        );
-                    });
-
-                ui.checkbox(&mut self.settings.print_header, "Print header");
-                ui.checkbox(
-                    &mut self.settings.reconstruct_dependencies,
-                    "Print definitions of referenced types",
-                );
-                ui.checkbox(
-                    &mut self.settings.print_access_specifiers,
-                    "Print access specifiers",
-                );
-                ui.checkbox(&mut self.settings.print_line_numbers, "Print line numbers");
-            });
     }
 
     /// Function invoked on `Open PDB File` or when the Ctrl+O shortcut is used
@@ -770,7 +486,7 @@ impl ResymApp {
             // Handle dropped files
             if !i.raw.dropped_files.is_empty() {
                 // Allow dropping 1 file (to just view it), or 2 files to diff them
-                let slots = [PDB_MAIN_SLOT, PDB_DIFF_SLOT];
+                let slots = [ResymPDBSlots::Main as usize, ResymPDBSlots::Diff as usize];
                 for (slot, file) in slots.iter().zip(i.raw.dropped_files.iter()) {
                     if let Some(file_path) = &file.path {
                         if let Err(err) = self
@@ -791,7 +507,7 @@ impl ResymApp {
             // Handle dropped files
             if !i.raw.dropped_files.is_empty() {
                 // Allow dropping 1 file (to just view it), or 2 files to diff them
-                let slots = [PDB_MAIN_SLOT, PDB_DIFF_SLOT];
+                let slots = [ResymPDBSlots::Main as usize, ResymPDBSlots::Diff as usize];
                 for (slot, file) in slots.iter().zip(i.raw.dropped_files.iter()) {
                     if let Some(file_bytes) = file.bytes.clone() {
                         if let Err(err) = self.backend.send_command(

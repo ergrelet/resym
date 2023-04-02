@@ -1,11 +1,15 @@
 #[cfg(target_arch = "wasm32")]
 mod frontend;
 #[cfg(target_arch = "wasm32")]
+mod mode;
+#[cfg(target_arch = "wasm32")]
 mod resym_app;
 #[cfg(target_arch = "wasm32")]
 mod settings;
 #[cfg(target_arch = "wasm32")]
 mod syntax_highlighting;
+#[cfg(target_arch = "wasm32")]
+mod ui_components;
 
 #[cfg(target_arch = "wasm32")]
 use eframe::web::AppRunnerRef;
