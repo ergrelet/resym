@@ -26,7 +26,7 @@ use crate::{
     diffing::diff_type_by_name,
     error::{Result, ResymCoreError},
     frontend::FrontendCommand,
-    frontend::FrontendController,
+    frontend::{FrontendController, ModuleList},
     pdb_file::PdbFile,
     pdb_types::{include_headers_for_flavor, PrimitiveReconstructionFlavor},
     PKG_VERSION,
@@ -72,6 +72,10 @@ pub enum BackendCommand {
     /// Retrieve a list of types that match the given filter for multiple PDBs
     /// and merge the result.
     UpdateTypeFilterMerged(Vec<PDBSlot>, String, bool, bool),
+    /// Retrieve the list of all modules in a given PDB.
+    ListModules(PDBSlot),
+    /// Reconstruct a module given its index for a given PDB.
+    ReconstructModuleByIndex(PDBSlot, usize, PrimitiveReconstructionFlavor, bool),
     /// Reconstruct a diff of a type given its name.
     DiffTypeByName(
         PDBSlot,
@@ -372,6 +376,33 @@ fn worker_thread_routine(
                 ))?;
             }
 
+            BackendCommand::ReconstructModuleByIndex(
+                pdb_slot,
+                module_index,
+                primitives_flavor,
+                print_header,
+            ) => {
+                if let Some(pdb_file) = pdb_files.get_mut(&pdb_slot) {
+                    let reconstructed_module_result = reconstruct_module_by_index_command(
+                        pdb_file,
+                        module_index,
+                        primitives_flavor,
+                        print_header,
+                    );
+                    frontend_controller.send_command(FrontendCommand::ReconstructModuleResult(
+                        reconstructed_module_result,
+                    ))?;
+                }
+            }
+
+            BackendCommand::ListModules(pdb_slot) => {
+                if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
+                    let module_list = list_modules_command(pdb_file);
+                    frontend_controller
+                        .send_command(FrontendCommand::UpdateModuleList(module_list))?;
+                }
+            }
+
             BackendCommand::DiffTypeByName(
                 pdb_from_slot,
                 pdb_to_slot,
@@ -412,7 +443,7 @@ fn reconstruct_type_by_index_command<'p, T>(
     print_access_specifiers: bool,
 ) -> Result<String>
 where
-    T: io::Seek + io::Read + 'p,
+    T: io::Seek + io::Read + std::fmt::Debug + 'p,
 {
     let data = pdb_file.reconstruct_type_by_type_index(
         type_index,
@@ -437,7 +468,7 @@ fn reconstruct_type_by_name_command<'p, T>(
     print_access_specifiers: bool,
 ) -> Result<String>
 where
-    T: io::Seek + io::Read + 'p,
+    T: io::Seek + io::Read + std::fmt::Debug + 'p,
 {
     let data = pdb_file.reconstruct_type_by_name(
         type_name,
@@ -460,12 +491,37 @@ fn reconstruct_all_types_command<'p, T>(
     print_access_specifiers: bool,
 ) -> Result<String>
 where
-    T: io::Seek + io::Read + 'p,
+    T: io::Seek + io::Read + std::fmt::Debug + 'p,
 {
     let data = pdb_file.reconstruct_all_types(primitives_flavor, print_access_specifiers)?;
     if print_header {
         let file_header = generate_file_header(pdb_file, primitives_flavor, true);
         Ok(format!("{file_header}{data}"))
+    } else {
+        Ok(data)
+    }
+}
+
+fn list_modules_command<'p, T>(pdb_file: &PdbFile<'p, T>) -> Result<ModuleList>
+where
+    T: io::Seek + io::Read + std::fmt::Debug + 'p,
+{
+    pdb_file.module_list()
+}
+
+fn reconstruct_module_by_index_command<'p, T>(
+    pdb_file: &mut PdbFile<'p, T>,
+    module_index: usize,
+    primitives_flavor: PrimitiveReconstructionFlavor,
+    print_header: bool,
+) -> Result<String>
+where
+    T: io::Seek + io::Read + std::fmt::Debug + 'p,
+{
+    let data = pdb_file.reconstruct_module_by_index(module_index, &primitives_flavor)?;
+    if print_header {
+        let file_header = generate_file_header(pdb_file, primitives_flavor, true);
+        Ok(format!("{file_header}\n{data}"))
     } else {
         Ok(data)
     }

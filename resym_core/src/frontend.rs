@@ -1,6 +1,7 @@
 use crate::{backend::PDBSlot, diffing::DiffedType, error::Result};
 
 pub type TypeList = Vec<(String, pdb::TypeIndex)>;
+pub type ModuleList = Vec<(String, usize)>;
 
 pub enum FrontendCommand {
     LoadPDBResult(Result<PDBSlot>),
@@ -9,6 +10,8 @@ pub enum FrontendCommand {
     LoadURLResult(Result<(PDBSlot, String, Vec<u8>)>),
     UpdateFilteredTypes(TypeList),
     ReconstructTypeResult(Result<String>),
+    ReconstructModuleResult(Result<String>),
+    UpdateModuleList(Result<ModuleList>),
     DiffTypeResult(Result<DiffedType>),
 }
 

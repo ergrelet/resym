@@ -37,7 +37,7 @@ pub fn diff_type_by_name<'p, T>(
     print_access_specifiers: bool,
 ) -> Result<DiffedType>
 where
-    T: io::Seek + io::Read + 'p,
+    T: io::Seek + io::Read + std::fmt::Debug + 'p,
 {
     let diff_start = Instant::now();
     // Prepend header if needed

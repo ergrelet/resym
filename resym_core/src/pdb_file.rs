@@ -17,7 +17,10 @@ use std::{fs::File, path::Path, time::Instant};
 use crate::{
     cond_par_iter,
     error::{Result, ResymCoreError},
-    pdb_types::{self, is_unnamed_type, DataFormatConfiguration, PrimitiveReconstructionFlavor},
+    frontend::ModuleList,
+    pdb_types::{
+        self, is_unnamed_type, type_name, DataFormatConfiguration, PrimitiveReconstructionFlavor,
+    },
 };
 
 /// Wrapper for different buffer types processed by `resym`
@@ -56,6 +59,7 @@ where
     pub forwarder_to_complete_type: Arc<DashMap<pdb::TypeIndex, pdb::TypeIndex>>,
     pub machine_type: pdb::MachineType,
     pub type_information: pdb::TypeInformation<'p>,
+    pub debug_information: pdb::DebugInformation<'p>,
     pub file_path: PathBuf,
     _pdb: pdb::PDB<'p, T>,
 }
@@ -67,6 +71,7 @@ impl<'p> PdbFile<'p, File> {
         let file = PDBDataSource::File(File::open(pdb_file_path)?);
         let mut pdb = pdb::PDB::open(file)?;
         let type_information = pdb.type_information()?;
+        let debug_information = pdb.debug_information()?;
         let machine_type = pdb.debug_information()?.machine_type()?;
 
         let mut pdb_file = PdbFile {
@@ -74,6 +79,7 @@ impl<'p> PdbFile<'p, File> {
             forwarder_to_complete_type: Arc::new(DashMap::default()),
             machine_type,
             type_information,
+            debug_information,
             file_path: pdb_file_path.to_owned(),
             _pdb: pdb,
         };
@@ -92,6 +98,7 @@ impl<'p> PdbFile<'p, PDBDataSource> {
         let reader = PDBDataSource::Vec(io::Cursor::new(pdb_file_data));
         let mut pdb = pdb::PDB::open(reader)?;
         let type_information = pdb.type_information()?;
+        let debug_information = pdb.debug_information()?;
         let machine_type = pdb.debug_information()?.machine_type()?;
 
         let mut pdb_file = PdbFile {
@@ -99,6 +106,7 @@ impl<'p> PdbFile<'p, PDBDataSource> {
             forwarder_to_complete_type: Arc::new(DashMap::default()),
             machine_type,
             type_information,
+            debug_information,
             file_path: pdb_file_name.into(),
             _pdb: pdb,
         };
@@ -115,6 +123,7 @@ impl<'p> PdbFile<'p, PDBDataSource> {
         let reader = PDBDataSource::SharedArray(io::Cursor::new(pdb_file_data));
         let mut pdb = pdb::PDB::open(reader)?;
         let type_information = pdb.type_information()?;
+        let debug_information = pdb.debug_information()?;
         let machine_type = pdb.debug_information()?.machine_type()?;
 
         let mut pdb_file = PdbFile {
@@ -122,6 +131,7 @@ impl<'p> PdbFile<'p, PDBDataSource> {
             forwarder_to_complete_type: Arc::new(DashMap::default()),
             machine_type,
             type_information,
+            debug_information,
             file_path: pdb_file_name.into(),
             _pdb: pdb,
         };
@@ -133,7 +143,7 @@ impl<'p> PdbFile<'p, PDBDataSource> {
 
 impl<'p, T> PdbFile<'p, T>
 where
-    T: io::Seek + io::Read + 'p,
+    T: io::Seek + io::Read + std::fmt::Debug + 'p,
 {
     fn load_symbols(&mut self) -> Result<()> {
         // Build the list of complete types
@@ -343,6 +353,126 @@ where
             reconstruct_dependencies,
             print_access_specifiers,
         )
+    }
+
+    pub fn module_list(&self) -> Result<ModuleList> {
+        let module_list = self
+            .debug_information
+            .modules()?
+            .enumerate()
+            .map(|(index, module)| Ok((module.module_name().into_owned(), index)));
+
+        Ok(module_list.collect()?)
+    }
+
+    pub fn reconstruct_module_by_index(
+        &mut self,
+        module_index: usize,
+        primitives_flavor: &PrimitiveReconstructionFlavor,
+    ) -> Result<String> {
+        let mut modules = self.debug_information.modules()?;
+        let module = modules.nth(module_index)?.ok_or_else(|| {
+            ResymCoreError::ModuleInfoNotFoundError(format!("Module #{} not found", module_index))
+        })?;
+
+        let module_info = self._pdb.module_info(&module)?.ok_or_else(|| {
+            ResymCoreError::ModuleInfoNotFoundError(format!(
+                "No module information present for '{}'",
+                module.object_file_name()
+            ))
+        })?;
+
+        // Populate our `TypeFinder`
+        let mut type_finder = self.type_information.finder();
+        {
+            let mut type_iter = self.type_information.iter();
+            while (type_iter.next()?).is_some() {
+                type_finder.update(&type_iter);
+            }
+        }
+
+        let mut result = String::default();
+        module_info.symbols()?.for_each(|symbol| {
+            let mut needed_types = pdb_types::TypeSet::new();
+
+            match symbol.parse()? {
+                pdb::SymbolData::UserDefinedType(udt) => {
+                    if let Ok(type_name) = type_name(
+                        &type_finder,
+                        &self.forwarder_to_complete_type,
+                        udt.type_index,
+                        primitives_flavor,
+                        &mut needed_types,
+                    ) {
+                        if type_name.0 == "..." {
+                            // No type
+                            result +=
+                                format!("{}; // Missing type information\n", udt.name).as_str();
+                        } else {
+                            result +=
+                                format!("using {} = {}{};\n", udt.name, type_name.0, type_name.1)
+                                    .as_str();
+                        }
+                    }
+                }
+                pdb::SymbolData::Procedure(procedure) => {
+                    if let Ok(type_name) = type_name(
+                        &type_finder,
+                        &self.forwarder_to_complete_type,
+                        procedure.type_index,
+                        primitives_flavor,
+                        &mut needed_types,
+                    ) {
+                        if type_name.0 == "..." {
+                            // No type
+                            result += format!(
+                                "void {}(); // CodeSize={} (missing type information)\n",
+                                procedure.name, procedure.len
+                            )
+                            .as_str();
+                        } else {
+                            result += format!(
+                                "{}{}{}; // CodeSize={}\n",
+                                type_name.0, procedure.name, type_name.1, procedure.len
+                            )
+                            .as_str();
+                        }
+                    }
+                }
+                pdb::SymbolData::Data(data) => {
+                    if let Ok(type_name) = type_name(
+                        &type_finder,
+                        &self.forwarder_to_complete_type,
+                        data.type_index,
+                        primitives_flavor,
+                        &mut needed_types,
+                    ) {
+                        if type_name.0 == "..." {
+                            // No type
+                            result +=
+                                format!("{}; // Missing type information\n", data.name).as_str();
+                        } else {
+                            result +=
+                                format!("{} {}{};\n", type_name.0, data.name, type_name.1).as_str();
+                        }
+                    }
+                }
+                pdb::SymbolData::UsingNamespace(namespace) => {
+                    result += format!("using namespace {};\n", namespace.name).as_str();
+                }
+                pdb::SymbolData::AnnotationReference(annotation) => {
+                    // TODO(ergrelet): update when support for annotations
+                    // (symbol kind 0x1019) has been implemented in `pdb`
+                    result += format!("__annotation(); // {}\n", annotation.name).as_str();
+                }
+                // Ignore
+                _ => {}
+            }
+
+            Ok(())
+        })?;
+
+        Ok(result)
     }
 
     fn reconstruct_type_by_type_index_internal(
