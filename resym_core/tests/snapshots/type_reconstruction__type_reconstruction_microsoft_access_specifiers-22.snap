@@ -1,0 +1,47 @@
+---
+source: resym_core/tests/type_reconstruction.rs
+expression: reconstructed_type
+---
+
+struct resym_test::NestedStructUnionRegression1 { /* Size=0x78 */
+  /* 0x0000 */ public: _LIST_ENTRY TransactionListEntry;
+  /* 0x0010 */ public: resym_test::_CM_INTENT_LOCK* KCBLock;
+  /* 0x0018 */ public: resym_test::_CM_INTENT_LOCK* KeyLock;
+  /* 0x0020 */ public: _LIST_ENTRY KCBListEntry;
+  /* 0x0030 */ public: resym_test::_CM_KEY_CONTROL_BLOCK* KeyControlBlock;
+  /* 0x0038 */ public: resym_test::_CM_TRANS* Transaction;
+  /* 0x0040 */ public: ULONG UoWState;
+  /* 0x0044 */ public: resym_test::UoWActionType ActionType;
+  /* 0x0048 */ public: resym_test::HSTORAGE_TYPE StorageType;
+  /* 0x0050 */ public: resym_test::_CM_KCB_UOW* ParentUoW;
+  union {
+    /* 0x0058 */ public: resym_test::_CM_KEY_CONTROL_BLOCK* ChildKCB;
+    /* 0x0058 */ public: ULONG VolatileKeyCell;
+    struct {
+      /* 0x0058 */ public: ULONG OldValueCell;
+      /* 0x005c */ public: ULONG NewValueCell;
+    };
+    /* 0x0058 */ public: ULONG UserFlags;
+    /* 0x0058 */ public: _LARGE_INTEGER LastWriteTime;
+    /* 0x0058 */ public: ULONG TxSecurityCell;
+    struct {
+      /* 0x0058 */ public: resym_test::_CM_KEY_CONTROL_BLOCK* OldChildKCB;
+      /* 0x0060 */ public: resym_test::_CM_KEY_CONTROL_BLOCK* NewChildKCB;
+    };
+    struct {
+      /* 0x0058 */ public: resym_test::_CM_KEY_CONTROL_BLOCK* OtherChildKCB;
+      /* 0x0060 */ public: ULONG ThisVolatileKeyCell;
+    };
+  };
+  union {
+    /* 0x0068 */ public: PVOID PrepareDataPointer;
+    /* 0x0068 */ public: resym_test::_CM_UOW_SET_SD_DATA* SecurityData;
+    /* 0x0068 */ public: resym_test::_CM_UOW_KEY_STATE_MODIFICATION* ModifyKeysData;
+    /* 0x0068 */ public: resym_test::_CM_UOW_SET_VALUE_LIST_DATA* SetValueData;
+  };
+  union {
+    /* 0x0070 */ public: resym_test::_CM_UOW_SET_VALUE_KEY_DATA* ValueData;
+    /* 0x0070 */ public: resym_test::_CMP_DISCARD_AND_REPLACE_KCB_CONTEXT* DiscardReplaceContext;
+  };
+};
+

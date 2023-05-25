@@ -754,28 +754,59 @@ fn find_unnamed_unions_in_struct(fields: &[Field]) -> Vec<Range<usize>> {
     for (i, field) in fields.iter().enumerate() {
         // Check if the field is located inside of the union we're processing
         if curr_union_offset_range.contains(&field.offset) {
+            // Third step of the "state machine", add new fields to the union.
             let union_info = unions_found_temp
                 .get_mut(&(curr_union_offset_range.start, 0))
                 .unwrap();
             union_info.0.end = i + 1;
             // Update the union's size
-            union_info.1 = std::cmp::max(union_info.1, field.size as u64);
+            union_info.1 = std::cmp::max(
+                union_info.1,
+                field.offset - curr_union_offset_range.start + field.size as u64,
+            );
             curr_union_offset_range.end = std::cmp::max(
                 curr_union_offset_range.end,
                 field.offset + field.size as u64,
             );
+            // (Re)visit previous fields to compute the union's size
+            // as well as the current union's end
+            for previous_field in &fields[union_info.0.clone()] {
+                // Update the union's size
+                if previous_field.offset > field.offset {
+                    union_info.1 = std::cmp::max(
+                        union_info.1,
+                        previous_field.offset - field.offset + previous_field.size as u64,
+                    );
+                } else {
+                    union_info.1 = std::cmp::max(union_info.1, previous_field.size as u64);
+                }
+                curr_union_offset_range.end = std::cmp::max(
+                    curr_union_offset_range.end,
+                    previous_field.offset + previous_field.size as u64,
+                );
+            }
         } else {
             match unions_found_temp
                 .get_mut(&(field.offset, field.bitfield_info.unwrap_or_default().0))
             {
                 Some(union_info) => {
+                    // Second step of the "state machine", two fields share the
+                    // same offset (taking bitfields into account). This becomes
+                    // a union (the current one).
                     union_info.0.end = i + 1;
                     curr_union_offset_range.start = field.offset;
                     // (Re)visit previous fields to compute the union's size
                     // as well as the current union's end
                     for previous_field in &fields[union_info.0.clone()] {
                         // Update the union's size
-                        union_info.1 = std::cmp::max(union_info.1, previous_field.size as u64);
+                        if previous_field.offset > field.offset {
+                            union_info.1 = std::cmp::max(
+                                union_info.1,
+                                previous_field.offset - field.offset + previous_field.size as u64,
+                            );
+                        } else {
+                            union_info.1 = std::cmp::max(union_info.1, previous_field.size as u64);
+                        }
                         curr_union_offset_range.end = std::cmp::max(
                             curr_union_offset_range.end,
                             previous_field.offset + previous_field.size as u64,
@@ -783,6 +814,8 @@ fn find_unnamed_unions_in_struct(fields: &[Field]) -> Vec<Range<usize>> {
                     }
                 }
                 None => {
+                    // First step of the "state machine".
+                    // Each field is a potential new union
                     unions_found_temp.insert(
                         (field.offset, field.bitfield_info.unwrap_or_default().0),
                         (Range { start: i, end: i }, field.size as u64),

@@ -380,6 +380,49 @@ struct BigOffsetsStruct {
   char b[65536];
 };
 
+struct NestedStructUnionRegression1 {
+  /* 0x0000 */ struct _LIST_ENTRY TransactionListEntry;
+  /* 0x0010 */ struct _CM_INTENT_LOCK* KCBLock;
+  /* 0x0018 */ struct _CM_INTENT_LOCK* KeyLock;
+  /* 0x0020 */ struct _LIST_ENTRY KCBListEntry;
+  /* 0x0030 */ struct _CM_KEY_CONTROL_BLOCK* KeyControlBlock;
+  /* 0x0038 */ struct _CM_TRANS* Transaction;
+  /* 0x0040 */ unsigned long UoWState;
+  /* 0x0044 */ enum UoWActionType ActionType;
+  /* 0x0048 */ enum HSTORAGE_TYPE StorageType;
+  /* 0x0050 */ struct _CM_KCB_UOW* ParentUoW;
+  union {
+    /* 0x0058 */ struct _CM_KEY_CONTROL_BLOCK* ChildKCB;
+    /* 0x0058 */ unsigned long VolatileKeyCell;
+    struct {
+      /* 0x0058 */ unsigned long OldValueCell;
+      /* 0x005c */ unsigned long NewValueCell;
+    }; /* size: 0x0008 */
+    /* 0x0058 */ unsigned long UserFlags;
+    /* 0x0058 */ union _LARGE_INTEGER LastWriteTime;
+    /* 0x0058 */ unsigned long TxSecurityCell;
+    struct {
+      /* 0x0058 */ struct _CM_KEY_CONTROL_BLOCK* OldChildKCB;
+      /* 0x0060 */ struct _CM_KEY_CONTROL_BLOCK* NewChildKCB;
+    }; /* size: 0x0010 */
+    struct {
+      /* 0x0058 */ struct _CM_KEY_CONTROL_BLOCK* OtherChildKCB;
+      /* 0x0060 */ unsigned long ThisVolatileKeyCell;
+    }; /* size: 0x000c */
+  };   /* size: 0x0010 */
+  union {
+    /* 0x0068 */ void* PrepareDataPointer;
+    /* 0x0068 */ struct _CM_UOW_SET_SD_DATA* SecurityData;
+    /* 0x0068 */ struct _CM_UOW_KEY_STATE_MODIFICATION* ModifyKeysData;
+    /* 0x0068 */ struct _CM_UOW_SET_VALUE_LIST_DATA* SetValueData;
+  }; /* size: 0x0008 */
+  union {
+    /* 0x0070 */ struct _CM_UOW_SET_VALUE_KEY_DATA* ValueData;
+    /* 0x0070 */ struct _CMP_DISCARD_AND_REPLACE_KCB_CONTEXT*
+        DiscardReplaceContext;
+  }; /* size: 0x0008 */
+};
+
 }  // namespace resym_test
 
 int main() {
@@ -412,5 +455,8 @@ int main() {
   StructAccessTest access_test1{};
   ClassAccessTest access_test2{};
   UnionAccessTest access_test3{};
-  auto big_offsets = std::make_unique<BigOffsetsStruct>();
+  BigOffsetsStruct big_offsets{};
+  NestedStructUnionRegression1 nested_regression1{};
+
+  return 0;
 }

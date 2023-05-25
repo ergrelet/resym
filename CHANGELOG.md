@@ -12,6 +12,10 @@
 
 - `resym` and `resymc` can be built without `rayon` (but are still built with it by default)
 
+### Fixed
+
+- Fix wrong size detection for unnamed unions in structs, leading to infinite loops in certain cases
+
 ## [0.3.0] - 2023-02-19
 
 ### Added
