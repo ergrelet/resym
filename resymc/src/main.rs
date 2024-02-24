@@ -223,7 +223,7 @@ impl ResymcApp {
     ) -> Result<()> {
         // Request the backend to load the PDB
         self.backend
-            .send_command(BackendCommand::LoadPDB(PDB_MAIN_SLOT, pdb_path))?;
+            .send_command(BackendCommand::LoadPDBFromPath(PDB_MAIN_SLOT, pdb_path))?;
         // Wait for the backend to finish loading the PDB
         if let FrontendCommand::LoadPDBResult(result) = self.frontend_controller.rx_ui.recv()? {
             if let Err(err) = result {
@@ -276,7 +276,7 @@ impl ResymcApp {
     ) -> Result<()> {
         // Request the backend to load the PDB
         self.backend
-            .send_command(BackendCommand::LoadPDB(PDB_MAIN_SLOT, pdb_path))?;
+            .send_command(BackendCommand::LoadPDBFromPath(PDB_MAIN_SLOT, pdb_path))?;
         // Wait for the backend to finish loading the PDB
         if let FrontendCommand::LoadPDBResult(result) = self.frontend_controller.rx_ui.recv()? {
             if let Err(err) = result {
@@ -349,7 +349,7 @@ impl ResymcApp {
         output_file_path: Option<PathBuf>,
     ) -> Result<()> {
         // Request the backend to load the first PDB
-        self.backend.send_command(BackendCommand::LoadPDB(
+        self.backend.send_command(BackendCommand::LoadPDBFromPath(
             PDB_MAIN_SLOT,
             from_pdb_path.clone(),
         ))?;
@@ -367,7 +367,7 @@ impl ResymcApp {
         }
 
         // Request the backend to load the second PDB
-        self.backend.send_command(BackendCommand::LoadPDB(
+        self.backend.send_command(BackendCommand::LoadPDBFromPath(
             PDB_DIFF_TO_SLOT,
             to_pdb_path.clone(),
         ))?;

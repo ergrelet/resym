@@ -16,12 +16,11 @@ use std::{
     sync::Arc,
 };
 #[cfg(not(target_arch = "wasm32"))]
-use std::{fs, path::PathBuf, time::Instant};
+use std::{path::PathBuf, time::Instant};
 #[cfg(all(not(feature = "rayon"), target_arch = "wasm32"))]
 use wasm_thread::{self as thread, JoinHandle};
 
-#[cfg(target_arch = "wasm32")]
-use crate::pdb_file::PDBData;
+use crate::pdb_file::PDBDataSource;
 use crate::{
     cond_par_iter, cond_sort_by,
     diffing::diff_type_by_name,
@@ -38,13 +37,14 @@ pub type PDBSlot = usize;
 pub enum BackendCommand {
     /// Load a PDB file given its path as a `PathBuf`.
     #[cfg(not(target_arch = "wasm32"))]
-    LoadPDB(PDBSlot, PathBuf),
+    LoadPDBFromPath(PDBSlot, PathBuf),
     /// Load a PDB file given its name and content as a `Vec<u8>`.
-    #[cfg(target_arch = "wasm32")]
     LoadPDBFromVec(PDBSlot, String, Vec<u8>),
     /// Load a PDB file given its name and content as an `Arc<[u8]>`.
-    #[cfg(target_arch = "wasm32")]
     LoadPDBFromArray(PDBSlot, String, Arc<[u8]>),
+    /// Fetch data via HTTP given its URL as a `String`.
+    #[cfg(feature = "http")]
+    LoadPDBFromURL(PDBSlot, String),
     /// Unload a PDB file given its slot.
     UnloadPDB(PDBSlot),
     /// Reconstruct a type given its type index for a given PDB.
@@ -110,7 +110,7 @@ impl Backend {
             .num_threads(cpu_count - 1)
             .build()?;
         thread_pool.spawn(move || {
-            let exit_result = worker_thread_routine(rx_worker, frontend_controller.as_ref());
+            let exit_result = worker_thread_routine(rx_worker, frontend_controller.clone());
             if let Err(err) = exit_result {
                 log::error!("Background thread aborted: {}", err);
             }
@@ -132,7 +132,7 @@ impl Backend {
 
         // Start a new thread
         let worker_thread = thread::spawn(move || {
-            let exit_result = worker_thread_routine(rx_worker, frontend_controller.as_ref());
+            let exit_result = worker_thread_routine(rx_worker, frontend_controller.clone());
             if let Err(err) = exit_result {
                 log::error!("Background thread aborted: {}", err);
             }
@@ -156,16 +156,13 @@ impl Backend {
 /// the result back.
 fn worker_thread_routine(
     rx_worker: Receiver<BackendCommand>,
-    frontend_controller: &impl FrontendController,
+    frontend_controller: Arc<impl FrontendController + Send + Sync + 'static>,
 ) -> Result<()> {
-    #[cfg(target_arch = "wasm32")]
-    let mut pdb_files: BTreeMap<PDBSlot, PdbFile<io::Cursor<PDBData>>> = BTreeMap::new();
-    #[cfg(not(target_arch = "wasm32"))]
-    let mut pdb_files: BTreeMap<PDBSlot, PdbFile<fs::File>> = BTreeMap::new();
+    let mut pdb_files: BTreeMap<PDBSlot, PdbFile<PDBDataSource>> = BTreeMap::new();
     while let Ok(command) = rx_worker.recv() {
         match command {
             #[cfg(not(target_arch = "wasm32"))]
-            BackendCommand::LoadPDB(pdb_slot, pdb_file_path) => {
+            BackendCommand::LoadPDBFromPath(pdb_slot, pdb_file_path) => {
                 log::info!("Loading a new PDB file ...");
                 match PdbFile::load_from_file(&pdb_file_path) {
                     Err(err) => frontend_controller
@@ -184,7 +181,6 @@ fn worker_thread_routine(
                 }
             }
 
-            #[cfg(target_arch = "wasm32")]
             BackendCommand::LoadPDBFromVec(pdb_slot, pdb_name, pdb_data) => {
                 log::info!("Loading a new PDB file ...");
                 match PdbFile::load_from_bytes_as_vec(pdb_name.clone(), pdb_data) {
@@ -201,7 +197,6 @@ fn worker_thread_routine(
                 }
             }
 
-            #[cfg(target_arch = "wasm32")]
             BackendCommand::LoadPDBFromArray(pdb_slot, pdb_name, pdb_data) => {
                 log::info!("Loading a new PDB file ...");
                 match PdbFile::load_from_bytes_as_array(pdb_name.clone(), pdb_data) {
@@ -214,6 +209,43 @@ fn worker_thread_routine(
                             log::info!("'{}' has been unloaded.", pdb_file.file_path.display());
                         }
                         log::info!("'{}' has been loaded successfully!", pdb_name);
+                    }
+                }
+            }
+
+            #[cfg(feature = "http")]
+            BackendCommand::LoadPDBFromURL(pdb_slot, url) => {
+                log::info!("Fetching data from URL ...");
+                // Parse URL and extract file name, if any
+                match url::Url::parse(&url) {
+                    Err(err) => log::error!("Failed to parse URL: {err}"),
+                    Ok(url) => {
+                        let url_path = url.path();
+                        if let Some(pdb_name) = url_path.split('/').last() {
+                            let frontend_controller = frontend_controller.clone();
+                            let pdb_name = pdb_name.to_string();
+                            let request = ehttp::Request::get(url);
+                            ehttp::fetch(request, move |result: ehttp::Result<ehttp::Response>| {
+                                match result {
+                                    Err(err) => frontend_controller
+                                        .send_command(FrontendCommand::LoadPDBResult(Err(
+                                            ResymCoreError::EHttpError(err),
+                                        )))
+                                        .expect("frontend unavailable"),
+                                    Ok(response) => {
+                                        frontend_controller
+                                            .send_command(FrontendCommand::LoadURLResult(Ok((
+                                                pdb_slot,
+                                                pdb_name,
+                                                response.bytes,
+                                            ))))
+                                            .expect("frontend unavailable");
+                                    }
+                                }
+                            });
+                        } else {
+                            log::error!("URL doesn't point to a file");
+                        }
                     }
                 }
             }

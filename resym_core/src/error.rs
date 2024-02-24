@@ -30,6 +30,11 @@ pub enum ResymCoreError {
     #[error("int conversion error: {0}")]
     TryFromIntError(#[from] std::num::TryFromIntError),
 
+    /// Error reported from `ehttp`.
+    #[cfg(feature = "http")]
+    #[error("http error: {0}")]
+    EHttpError(String),
+
     /// Error returned when `resym_core` cannot process the request because of
     /// of an invalid parameter.
     #[error("invalid parameter: {0}")]
