@@ -19,14 +19,14 @@
 
       body {
         /* Light mode background color for what is not covered by the egui canvas,
-            or where the egui canvas is translucent. */
+          or where the egui canvas is translucent. */
         background: #909090;
       }
 
       @media (prefers-color-scheme: dark) {
         body {
           /* Dark mode background color for what is not covered by the egui canvas,
-                or where the egui canvas is translucent. */
+              or where the egui canvas is translucent. */
           background: #404040;
         }
       }
@@ -108,6 +108,10 @@
 
     <!-- The WASM code will resize the canvas dynamically -->
     <canvas id="resym_canvas_id"></canvas>
+    <div class="centered" id="center_text">
+      <p style="font-size: 16px">Loading…</p>
+      <div class="lds-dual-ring"></div>
+    </div>
 
     <!-- Note the usage of `type=module` here as this is an ES6 module -->
     <script type="module">
@@ -118,7 +122,7 @@
       // will "boot" the module and make it ready to use. Currently browsers
       // don't support natively imported WebAssembly as an ES module, but
       // eventually the manual initialization won't be required!
-      import init, { start } from "./resym_web.js";
+      import init, { WebHandle } from "./resym_web.js";
 
       async function run() {
         // First up we need to actually load the wasm file, so we use the
@@ -149,7 +153,61 @@
         // modes
         await init();
 
-        await start("resym_canvas_id");
+        let handle = new WebHandle();
+
+        // Define this function after defining `handle`, to be able to capture it
+        function check_for_panic() {
+          if (handle.has_panicked()) {
+            console.error("Resym has crashed");
+
+            // The demo app already logs the panic message and callstack, but you
+            // can access them like this if you want to show them in the html:
+            // console.error(`${handle.panic_message()}`);
+            // console.error(`${handle.panic_callstack()}`);
+
+            document.getElementById("resym_canvas_id").remove();
+            document.getElementById("center_text").innerHTML = `
+                        <p>
+                            Resym has crashed.
+                        </p>
+                        <p style="font-size:10px" align="left">
+                            ${handle.panic_message()}
+                        </p>
+                        <p style="font-size:14px">
+                            See the console for details.
+                        </p>
+                        <p style="font-size:14px">
+                            Reload the page to try again.
+                        </p>`;
+          } else {
+            let delay_ms = 1000;
+            setTimeout(check_for_panic, delay_ms);
+          }
+        }
+
+        check_for_panic();
+
+        handle.start("resym_canvas_id").then(on_app_started).catch(on_error);
+      }
+
+      function on_app_started(handle) {
+        console.debug("App started.");
+        document.getElementById("center_text").innerHTML = "";
+      }
+
+      function on_error(error) {
+        console.error("Failed to start: " + error);
+        document.getElementById("resym_canvas_id").remove();
+        document.getElementById("center_text").innerHTML = `
+                <p>
+                    An error occurred during loading:
+                </p>
+                <p style="font-family:Courier New">
+                    ${error}
+                </p>
+                <p style="font-size:14px">
+                    Make sure you use a modern browser with WebGL and WASM enabled.
+                </p>`;
       }
 
       run();

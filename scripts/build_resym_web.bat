@@ -6,7 +6,7 @@ set LIB_NAME=resym_web
 
 REM Build resym-web
 set RUSTFLAGS=--cfg=web_sys_unstable_apis -C target-feature=+atomics,+bulk-memory,+mutable-globals
-rustup run nightly-2022-12-12 wasm-pack build --target web %CRATE_NAME% -- --no-default-features -Z build-std=panic_abort,std
+rustup run nightly-2024-02-24 wasm-pack build --target web %CRATE_NAME% -- --no-default-features -Z build-std=panic_abort,std
 
 REM Copy web resources next to the output
 copy %CRATE_NAME%\resources\web\* %CRATE_NAME%\pkg\

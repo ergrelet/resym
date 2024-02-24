@@ -2,7 +2,7 @@
 name = "resym_core"
 version.workspace = true
 edition = "2021"
-rust-version = "1.67"
+rust-version = "1.75"
 exclude = [
     "tests/data/*",
     "tests/snapshots/*",
@@ -30,7 +30,7 @@ url = { version = "2.3", optional = true }
 # Web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm_thread = { version = "0.2", features = ["es_modules"] }
-instant = "0.1"
+instant = { version = "0.1", features = ["wasm-bindgen"] }
 
 [dev-dependencies]
 insta = "1.14"
