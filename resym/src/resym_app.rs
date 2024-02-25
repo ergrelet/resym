@@ -67,7 +67,7 @@ impl eframe::App for ResymApp {
 
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // For wasm32 targets, we cannot block in the UI thread so we have to
         // check for PDB file opening results manually in an non-blocking way.
         #[cfg(target_arch = "wasm32")]
@@ -87,7 +87,7 @@ impl eframe::App for ResymApp {
         self.open_url.update(ctx, &self.backend);
 
         // Update the top panel (i.e, menu bar)
-        self.update_top_panel(ctx, frame);
+        self.update_top_panel(ctx);
 
         // Update the left side panel (i.e., the type search bar and the type list)
         self.update_left_side_panel(ctx);
@@ -154,13 +154,13 @@ impl ResymApp {
         ctx.set_visuals(theme);
     }
 
-    fn update_top_panel(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn update_top_panel(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             // Process keyboard shortcuts, if any
             self.consume_keyboard_shortcuts(ui);
 
             // The top panel is often a good place for a menu bar
-            self.update_menu_bar(ui, frame);
+            self.update_menu_bar(ui);
         });
     }
 
@@ -242,7 +242,7 @@ impl ResymApp {
         /// Keyboard shortcut for opening files
         const CTRL_O_SHORTCUT: egui::KeyboardShortcut = egui::KeyboardShortcut {
             modifiers: egui::Modifiers::CTRL,
-            key: egui::Key::O,
+            logical_key: egui::Key::O,
         };
         ui.input_mut(|input_state| {
             if input_state.consume_shortcut(&CTRL_O_SHORTCUT) {
@@ -254,7 +254,7 @@ impl ResymApp {
         #[cfg(feature = "http")]
         const CTRL_L_SHORTCUT: egui::KeyboardShortcut = egui::KeyboardShortcut {
             modifiers: egui::Modifiers::CTRL,
-            key: egui::Key::L,
+            logical_key: egui::Key::L,
         };
         #[cfg(feature = "http")]
         ui.input_mut(|input_state| {
@@ -267,7 +267,7 @@ impl ResymApp {
         #[cfg(not(target_arch = "wasm32"))]
         const CTRL_S_SHORTCUT: egui::KeyboardShortcut = egui::KeyboardShortcut {
             modifiers: egui::Modifiers::CTRL,
-            key: egui::Key::S,
+            logical_key: egui::Key::S,
         };
         // Ctrl+S shortcut handling
         // Note: not available on wasm32
@@ -427,7 +427,7 @@ impl ResymApp {
     }
 
     #[cfg_attr(target_arch = "wasm32", allow(unused_variables))]
-    fn update_menu_bar(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+    fn update_menu_bar(&mut self, ui: &mut egui::Ui) {
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| {
                 if ui.button("Open PDB file (Ctrl+O)").clicked() {
@@ -477,7 +477,7 @@ impl ResymApp {
                 #[cfg(not(target_arch = "wasm32"))]
                 if ui.button("Exit").clicked() {
                     ui.close_menu();
-                    frame.close();
+                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                 }
             });
         });

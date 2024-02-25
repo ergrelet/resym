@@ -2,7 +2,7 @@
 name = "resymc"
 version.workspace = true
 edition = "2021"
-rust-version = "1.67"
+rust-version = "1.75"
 
 [features]
 default = ["rayon"]

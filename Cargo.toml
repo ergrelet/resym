@@ -5,4 +5,5 @@ lto = true
 version = "0.3.0"
 
 [workspace]
+resolver = "2"
 members = ["resym_core", "resym", "resymc"]

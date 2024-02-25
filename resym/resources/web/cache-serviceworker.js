@@ -1,5 +1,10 @@
 var cacheName = "resym";
-var filesToCache = ["./", "./index.html", "./resym.js", "./resym_bg.wasm"];
+var filesToCache = [
+  "./",
+  "./index.html",
+  "./resym_web.js",
+  "./resym_web_bg.wasm",
+];
 
 /* Start the service worker and cache all of the app's content */
 self.addEventListener("install", function (e) {
