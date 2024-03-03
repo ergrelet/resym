@@ -395,7 +395,7 @@ impl ResymcApp {
             print_access_specifiers,
         ))?;
         // Wait for the backend to finish
-        if let FrontendCommand::DiffTypeResult(reconstructed_type_diff_result) =
+        if let FrontendCommand::DiffResult(reconstructed_type_diff_result) =
             self.frontend_controller.rx_ui.recv()?
         {
             match reconstructed_type_diff_result {

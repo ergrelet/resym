@@ -365,10 +365,28 @@ where
         Ok(module_list.collect()?)
     }
 
+    pub fn reconstruct_module_by_path(
+        &mut self,
+        module_path: &str,
+        primitives_flavor: PrimitiveReconstructionFlavor,
+    ) -> Result<String> {
+        // Find index for module
+        let mut modules = self.debug_information.modules()?;
+        let module_index = modules.position(|module| Ok(module.module_name() == module_path))?;
+
+        match module_index {
+            None => Err(ResymCoreError::ModuleNotFoundError(format!(
+                "Module '{}' not found",
+                module_path
+            ))),
+            Some(module_index) => self.reconstruct_module_by_index(module_index, primitives_flavor),
+        }
+    }
+
     pub fn reconstruct_module_by_index(
         &mut self,
         module_index: usize,
-        primitives_flavor: &PrimitiveReconstructionFlavor,
+        primitives_flavor: PrimitiveReconstructionFlavor,
     ) -> Result<String> {
         let mut modules = self.debug_information.modules()?;
         let module = modules.nth(module_index)?.ok_or_else(|| {
@@ -401,7 +419,7 @@ where
                         &type_finder,
                         &self.forwarder_to_complete_type,
                         udt.type_index,
-                        primitives_flavor,
+                        &primitives_flavor,
                         &mut needed_types,
                     ) {
                         if type_name.0 == "..." {
@@ -420,7 +438,7 @@ where
                         &type_finder,
                         &self.forwarder_to_complete_type,
                         procedure.type_index,
-                        primitives_flavor,
+                        &primitives_flavor,
                         &mut needed_types,
                     ) {
                         if type_name.0 == "..." {
@@ -444,7 +462,7 @@ where
                         &type_finder,
                         &self.forwarder_to_complete_type,
                         data.type_index,
-                        primitives_flavor,
+                        &primitives_flavor,
                         &mut needed_types,
                     ) {
                         if type_name.0 == "..." {

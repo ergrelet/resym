@@ -15,7 +15,7 @@ use crate::ui_components::OpenURLComponent;
 use crate::{
     frontend::EguiFrontendController,
     mode::ResymAppMode,
-    module_tree::ModuleInfo,
+    module_tree::{ModuleInfo, ModulePath},
     settings::ResymAppSettings,
     ui_components::{
         CodeViewComponent, ConsoleComponent, ModuleTreeComponent, SettingsComponent,
@@ -215,19 +215,39 @@ impl ResymApp {
                     }
                     ExplorerTab::ModuleBrowsing => {
                         // Callback run when a module is selected in the tree
-                        let on_module_selected = |module_info: &ModuleInfo| {
-                            if let Err(err) =
-                                self.backend
-                                    .send_command(BackendCommand::ReconstructModuleByIndex(
-                                        ResymPDBSlots::Main as usize,
-                                        module_info.pdb_index,
-                                        self.settings.app_settings.primitive_types_flavor,
-                                        self.settings.app_settings.print_header,
-                                    ))
+                        let on_module_selected =
+                            |module_path: &ModulePath, module_info: &ModuleInfo| match self
+                                .current_mode
                             {
-                                log::error!("Failed to reconstruct module: {}", err);
-                            }
-                        };
+                                ResymAppMode::Browsing(..) => {
+                                    if let Err(err) = self.backend.send_command(
+                                        BackendCommand::ReconstructModuleByIndex(
+                                            ResymPDBSlots::Main as usize,
+                                            module_info.pdb_index,
+                                            self.settings.app_settings.primitive_types_flavor,
+                                            self.settings.app_settings.print_header,
+                                        ),
+                                    ) {
+                                        log::error!("Failed to reconstruct module: {}", err);
+                                    }
+                                }
+
+                                ResymAppMode::Comparing(..) => {
+                                    if let Err(err) =
+                                        self.backend.send_command(BackendCommand::DiffModuleByPath(
+                                            ResymPDBSlots::Main as usize,
+                                            ResymPDBSlots::Diff as usize,
+                                            module_path.to_string(),
+                                            self.settings.app_settings.primitive_types_flavor,
+                                            self.settings.app_settings.print_header,
+                                        ))
+                                    {
+                                        log::error!("Failed to reconstruct type diff: {}", err);
+                                    }
+                                }
+
+                                _ => log::error!("Invalid application state"),
+                            };
 
                         // Update the module list
                         self.module_tree.update(ctx, ui, &on_module_selected);
@@ -466,9 +486,19 @@ impl ResymApp {
                     }
                 }
 
-                FrontendCommand::DiffTypeResult(type_diff_result) => match type_diff_result {
+                FrontendCommand::DiffResult(type_diff_result) => match type_diff_result {
                     Err(err) => {
-                        log::error!("Failed to diff type: {}", err);
+                        let error_msg = format!("Failed to generate diff: {}", err);
+                        log::error!("{}", &error_msg);
+
+                        // Show an empty "reconstruted" view
+                        self.current_mode = ResymAppMode::Comparing(
+                            Default::default(),
+                            Default::default(),
+                            0,
+                            vec![],
+                            error_msg,
+                        );
                     }
                     Ok(type_diff) => {
                         let mut last_line_number = 1;

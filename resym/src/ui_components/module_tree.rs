@@ -47,7 +47,7 @@ impl ModuleTreeComponent {
     }
 
     /// Update/render the UI component
-    pub fn update<CB: Fn(&ModuleInfo)>(
+    pub fn update<CB: Fn(&ModulePath, &ModuleInfo)>(
         &self,
         ctx: &egui::Context,
         ui: &mut egui::Ui,
@@ -62,7 +62,7 @@ impl ModuleTreeComponent {
             });
     }
 
-    fn update_module_tree<CB: Fn(&ModuleInfo)>(
+    fn update_module_tree<CB: Fn(&ModulePath, &ModuleInfo)>(
         &self,
         ctx: &egui::Context,
         ui: &mut egui::Ui,
@@ -88,7 +88,7 @@ impl ModuleTreeComponent {
         }
     }
 
-    fn update_module_leaf<CB: Fn(&ModuleInfo)>(
+    fn update_module_leaf<CB: Fn(&ModulePath, &ModuleInfo)>(
         &self,
         ui: &mut egui::Ui,
         view_node: &ModuleTreeViewNode,
@@ -104,7 +104,7 @@ impl ModuleTreeComponent {
             {
                 *self.selected_module.borrow_mut() = module_info.pdb_index;
                 // Invoke event callback
-                on_module_selected(module_info);
+                on_module_selected(view_node.path(), module_info);
             }
         }
     }
