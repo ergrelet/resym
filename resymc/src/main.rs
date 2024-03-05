@@ -111,6 +111,21 @@ fn main() -> Result<()> {
             use_regex,
             output_file_path,
         ),
+        ResymOptions::DumpModule {
+            pdb_path,
+            module_id,
+            output_file_path,
+            primitive_types_flavor,
+            print_header,
+            highlight_syntax,
+        } => app.dump_module_command(
+            pdb_path,
+            module_id,
+            primitive_types_flavor.unwrap_or(PrimitiveReconstructionFlavor::Portable),
+            print_header,
+            highlight_syntax,
+            output_file_path,
+        ),
     }
 }
 
@@ -218,6 +233,24 @@ enum ResymOptions {
         /// Use regular expressions
         #[structopt(short = "r", long)]
         use_regex: bool,
+    },
+    /// Dump module from a given PDB file
+    DumpModule {
+        /// Path to the PDB file
+        pdb_path: PathBuf,
+        /// ID of the module to dump
+        module_id: usize,
+        /// Path of the output file
+        output_file_path: Option<PathBuf>,
+        /// Representation of primitive types
+        #[structopt(short = "f", long)]
+        primitive_types_flavor: Option<PrimitiveReconstructionFlavor>,
+        /// Print header
+        #[structopt(short = "h", long)]
+        print_header: bool,
+        /// Highlight C++ output
+        #[structopt(short = "H", long)]
+        highlight_syntax: bool,
     },
 }
 
@@ -338,26 +371,23 @@ impl ResymcApp {
         if let FrontendCommand::ReconstructTypeResult(reconstructed_type_result) =
             self.frontend_controller.rx_ui.recv()?
         {
-            match reconstructed_type_result {
-                Err(err) => Err(err.into()),
-                Ok(reconstructed_type) => {
-                    // Dump output
-                    if let Some(output_file_path) = output_file_path {
-                        let mut output_file = File::create(output_file_path)?;
-                        output_file.write_all(reconstructed_type.as_bytes())?;
-                    } else if highlight_syntax {
-                        let theme = CodeTheme::default();
-                        if let Some(colorized_reconstructed_type) =
-                            highlight_code(&theme, &reconstructed_type, None)
-                        {
-                            println!("{colorized_reconstructed_type}");
-                        }
-                    } else {
-                        println!("{reconstructed_type}");
-                    }
-                    Ok(())
+            let reconstructed_type = reconstructed_type_result?;
+            // Dump output
+            if let Some(output_file_path) = output_file_path {
+                let mut output_file = File::create(output_file_path)?;
+                output_file.write_all(reconstructed_type.as_bytes())?;
+            } else if highlight_syntax {
+                let theme = CodeTheme::default();
+                if let Some(colorized_reconstructed_type) =
+                    highlight_code(&theme, &reconstructed_type, None)
+                {
+                    println!("{colorized_reconstructed_type}");
                 }
+            } else {
+                println!("{reconstructed_type}");
             }
+
+            Ok(())
         } else {
             Err(anyhow!("Invalid response received from the backend?"))
         }
@@ -426,36 +456,33 @@ impl ResymcApp {
         if let FrontendCommand::DiffResult(reconstructed_type_diff_result) =
             self.frontend_controller.rx_ui.recv()?
         {
-            match reconstructed_type_diff_result {
-                Err(err) => Err(err.into()),
-                Ok(reconstructed_type_diff) => {
-                    // Dump output
-                    if let Some(output_file_path) = output_file_path {
-                        let mut output_file = File::create(output_file_path)?;
-                        output_file.write_all(reconstructed_type_diff.data.as_bytes())?;
-                    } else if highlight_syntax {
-                        let theme = CodeTheme::default();
-                        let line_descriptions =
-                            reconstructed_type_diff
-                                .metadata
-                                .iter()
-                                .fold(vec![], |mut acc, e| {
-                                    acc.push(e.1);
-                                    acc
-                                });
-                        if let Some(colorized_reconstructed_type) = highlight_code(
-                            &theme,
-                            &reconstructed_type_diff.data,
-                            Some(line_descriptions),
-                        ) {
-                            println!("{colorized_reconstructed_type}");
-                        }
-                    } else {
-                        println!("{}", reconstructed_type_diff.data);
-                    }
-                    Ok(())
+            let reconstructed_type_diff = reconstructed_type_diff_result?;
+            // Dump output
+            if let Some(output_file_path) = output_file_path {
+                let mut output_file = File::create(output_file_path)?;
+                output_file.write_all(reconstructed_type_diff.data.as_bytes())?;
+            } else if highlight_syntax {
+                let theme = CodeTheme::default();
+                let line_descriptions =
+                    reconstructed_type_diff
+                        .metadata
+                        .iter()
+                        .fold(vec![], |mut acc, e| {
+                            acc.push(e.1);
+                            acc
+                        });
+                if let Some(colorized_reconstructed_type) = highlight_code(
+                    &theme,
+                    &reconstructed_type_diff.data,
+                    Some(line_descriptions),
+                ) {
+                    println!("{colorized_reconstructed_type}");
                 }
+            } else {
+                println!("{}", reconstructed_type_diff.data);
             }
+
+            Ok(())
         } else {
             Err(anyhow!("Invalid response received from the backend?"))
         }
@@ -489,11 +516,11 @@ impl ResymcApp {
             use_regex,
         ))?;
         // Wait for the backend to finish listing modules
-        if let FrontendCommand::UpdateModuleList(module_list) =
+        if let FrontendCommand::UpdateModuleList(module_list_result) =
             self.frontend_controller.rx_ui.recv()?
         {
             // Dump output
-            let module_list = module_list?;
+            let module_list = module_list_result?;
             if let Some(output_file_path) = output_file_path {
                 let mut output_file = File::create(output_file_path)?;
                 for (module_path, module_id) in module_list {
@@ -503,6 +530,61 @@ impl ResymcApp {
                 for (module_path, module_id) in module_list {
                     println!("Mod {module_id:04} | '{module_path}'");
                 }
+            }
+
+            Ok(())
+        } else {
+            Err(anyhow!("Invalid response received from the backend?"))
+        }
+    }
+
+    fn dump_module_command(
+        &self,
+        pdb_path: PathBuf,
+        module_id: usize,
+        primitive_types_flavor: PrimitiveReconstructionFlavor,
+        print_header: bool,
+        highlight_syntax: bool,
+        output_file_path: Option<PathBuf>,
+    ) -> Result<()> {
+        // Request the backend to load the PDB
+        self.backend
+            .send_command(BackendCommand::LoadPDBFromPath(PDB_MAIN_SLOT, pdb_path))?;
+        // Wait for the backend to finish loading the PDB
+        if let FrontendCommand::LoadPDBResult(result) = self.frontend_controller.rx_ui.recv()? {
+            if let Err(err) = result {
+                return Err(anyhow!("Failed to load PDB: {}", err));
+            }
+        } else {
+            return Err(anyhow!("Invalid response received from the backend?"));
+        }
+
+        // Queue a request for the backend to reconstruct the given module
+        self.backend
+            .send_command(BackendCommand::ReconstructModuleByIndex(
+                PDB_MAIN_SLOT,
+                module_id,
+                primitive_types_flavor,
+                print_header,
+            ))?;
+        // Wait for the backend to finish filtering types
+        if let FrontendCommand::ReconstructModuleResult(reconstructed_module) =
+            self.frontend_controller.rx_ui.recv()?
+        {
+            let reconstructed_module = reconstructed_module?;
+            // Dump output
+            if let Some(output_file_path) = output_file_path {
+                let mut output_file = File::create(output_file_path)?;
+                output_file.write_all(reconstructed_module.as_bytes())?;
+            } else if highlight_syntax {
+                let theme = CodeTheme::default();
+                if let Some(colorized_reconstructed_type) =
+                    highlight_code(&theme, &reconstructed_module, None)
+                {
+                    println!("{colorized_reconstructed_type}");
+                }
+            } else {
+                println!("{reconstructed_module}");
             }
             Ok(())
         } else {
@@ -610,7 +692,7 @@ mod tests {
         let app = ResymcApp::new().expect("ResymcApp creation failed");
         let pdb_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FILE_PATH);
         let tmp_dir =
-            TempDir::new("list_types_command_file_successful").expect("TempDir creation failed");
+            TempDir::new("list_modules_command_file_successful").expect("TempDir creation failed");
         let output_path = tmp_dir.path().join("output.txt");
         // The command should succeed
         assert!(app
@@ -630,6 +712,74 @@ mod tests {
             concat!(
                 "Mod 0048 | '* Linker Generated Manifest RES *'\n",
                 "Mod 0053 | '* Linker *'\n"
+            )
+        );
+    }
+
+    #[test]
+    fn dump_module_command_invalid_pdb_path() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::new();
+        // The command should fail
+        assert!(app
+            .dump_module_command(
+                pdb_path,
+                9, // exe_main.obj
+                PrimitiveReconstructionFlavor::Microsoft,
+                false,
+                false,
+                None
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn dump_module_command_stdio_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FILE_PATH);
+        // The command should succeed
+        assert!(app
+            .dump_module_command(
+                pdb_path,
+                9, // exe_main.obj
+                PrimitiveReconstructionFlavor::Microsoft,
+                false,
+                false,
+                None
+            )
+            .is_ok());
+    }
+
+    #[test]
+    fn dump_module_command_file_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FILE_PATH);
+        let tmp_dir =
+            TempDir::new("dump_module_command_file_successful").expect("TempDir creation failed");
+        let output_path = tmp_dir.path().join("output.txt");
+        // The command should succeed
+        assert!(app
+            .dump_module_command(
+                pdb_path,
+                27, // default_local_stdio_options.obj
+                PrimitiveReconstructionFlavor::Portable,
+                false,
+                false,
+                Some(output_path.clone()),
+            )
+            .is_ok());
+
+        // Check output file's content
+        let output = fs::read_to_string(output_path).expect("Failed to read output file");
+        assert_eq!(
+            output,
+            concat!(
+                "using namespace std;\n",
+                "using PUWSTR_C = const wchar_t*;\n",
+                "using TP_CALLBACK_ENVIRON_V3 = _TP_CALLBACK_ENVIRON_V3;\n",
+                "uint64_t* (__local_stdio_scanf_options)(); // CodeSize=8\n",
+                "uint64_t _OptionsStorage;\n",
+                "void (__scrt_initialize_default_local_stdio_options)(); // CodeSize=69\n",
             )
         );
     }

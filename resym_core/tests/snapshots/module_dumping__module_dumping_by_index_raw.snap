@@ -1,0 +1,10 @@
+---
+source: resym_core/tests/module_dumping.rs
+expression: module_dump
+---
+using namespace std;
+using PUWSTR_C = const wchar_t*;
+using TP_CALLBACK_ENVIRON_V3 = _TP_CALLBACK_ENVIRON_V3;
+unsigned __int64* (__local_stdio_scanf_options)(); // CodeSize=8
+unsigned __int64 _OptionsStorage;
+void (__scrt_initialize_default_local_stdio_options)(); // CodeSize=69
