@@ -21,17 +21,17 @@ use std::{path::PathBuf, time::Instant};
 #[cfg(all(not(feature = "rayon"), target_arch = "wasm32"))]
 use wasm_thread::{self as thread, JoinHandle};
 
+use crate::{diffing::diff_module_by_path, pdb_file::PDBDataSource};
 use crate::{
-    cond_par_iter, cond_sort_by,
     diffing::diff_type_by_name,
     error::{Result, ResymCoreError},
     frontend::FrontendCommand,
     frontend::{FrontendController, ModuleList},
+    par_iter_if_available, par_sort_by_if_available,
     pdb_file::PdbFile,
     pdb_types::{include_headers_for_flavor, PrimitiveReconstructionFlavor},
     PKG_VERSION,
 };
-use crate::{diffing::diff_module_by_path, pdb_file::PDBDataSource};
 
 pub type PDBSlot = usize;
 
@@ -74,7 +74,7 @@ pub enum BackendCommand {
     /// and merge the result.
     UpdateTypeFilterMerged(Vec<PDBSlot>, String, bool, bool),
     /// Retrieve the list of all modules in a given PDB.
-    ListModules(PDBSlot),
+    ListModules(PDBSlot, String, bool, bool),
     /// Reconstruct a module given its index for a given PDB.
     ReconstructModuleByIndex(PDBSlot, usize, PrimitiveReconstructionFlavor, bool),
     /// Reconstruct the diff of a type given its name.
@@ -416,9 +416,19 @@ fn worker_thread_routine(
                 }
             }
 
-            BackendCommand::ListModules(pdb_slot) => {
+            BackendCommand::ListModules(
+                pdb_slot,
+                search_filter,
+                case_insensitive_search,
+                use_regex,
+            ) => {
                 if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
-                    let module_list = list_modules_command(&pdb_file.borrow());
+                    let module_list = list_modules_command(
+                        &pdb_file.borrow(),
+                        &search_filter,
+                        case_insensitive_search,
+                        use_regex,
+                    );
                     frontend_controller
                         .send_command(FrontendCommand::UpdateModuleList(module_list))?;
                 }
@@ -545,13 +555,6 @@ where
     }
 }
 
-fn list_modules_command<'p, T>(pdb_file: &PdbFile<'p, T>) -> Result<ModuleList>
-where
-    T: io::Seek + io::Read + std::fmt::Debug + 'p,
-{
-    pdb_file.module_list()
-}
-
 fn reconstruct_module_by_index_command<'p, T>(
     pdb_file: &mut PdbFile<'p, T>,
     module_index: usize,
@@ -630,7 +633,7 @@ where
     if sort_by_index {
         // Order types by type index, so the order is deterministic
         // (i.e., independent from DashMap's hash function)
-        cond_sort_by!(filtered_type_list, |lhs, rhs| lhs.1.cmp(&rhs.1));
+        par_sort_by_if_available!(filtered_type_list, |lhs, rhs| lhs.1.cmp(&rhs.1));
     }
 
     log::debug!(
@@ -653,7 +656,7 @@ fn filter_types_regex(
     {
         // In case of error, return an empty result
         Err(_) => vec![],
-        Ok(regex) => cond_par_iter!(type_list)
+        Ok(regex) => par_iter_if_available!(type_list)
             .filter(|r| regex.find(&r.0).is_some())
             .cloned()
             .collect(),
@@ -668,12 +671,87 @@ fn filter_types_regular(
 ) -> Vec<(String, pdb::TypeIndex)> {
     if case_insensitive_search {
         let search_filter = search_filter.to_lowercase();
-        cond_par_iter!(type_list)
+        par_iter_if_available!(type_list)
             .filter(|r| r.0.to_lowercase().contains(&search_filter))
             .cloned()
             .collect()
     } else {
-        cond_par_iter!(type_list)
+        par_iter_if_available!(type_list)
+            .filter(|r| r.0.contains(search_filter))
+            .cloned()
+            .collect()
+    }
+}
+
+fn list_modules_command<'p, T>(
+    pdb_file: &PdbFile<'p, T>,
+    search_filter: &str,
+    case_insensitive_search: bool,
+    use_regex: bool,
+) -> Result<ModuleList>
+where
+    T: io::Seek + io::Read + std::fmt::Debug + 'p,
+{
+    let filter_start = Instant::now();
+
+    let filtered_module_list = if search_filter.is_empty() {
+        // No need to filter
+        pdb_file.module_list()?
+    } else if use_regex {
+        filter_modules_regex(
+            &pdb_file.module_list()?,
+            search_filter,
+            case_insensitive_search,
+        )
+    } else {
+        filter_modules_regular(
+            &pdb_file.module_list()?,
+            search_filter,
+            case_insensitive_search,
+        )
+    };
+
+    log::debug!(
+        "Module filtering took {} ms",
+        filter_start.elapsed().as_millis()
+    );
+
+    Ok(filtered_module_list)
+}
+
+/// Filter module list with a regular expression
+fn filter_modules_regex(
+    module_list: &[(String, usize)],
+    search_filter: &str,
+    case_insensitive_search: bool,
+) -> Vec<(String, usize)> {
+    match regex::RegexBuilder::new(search_filter)
+        .case_insensitive(case_insensitive_search)
+        .build()
+    {
+        // In case of error, return an empty result
+        Err(_) => vec![],
+        Ok(regex) => par_iter_if_available!(module_list)
+            .filter(|r| regex.find(&r.0).is_some())
+            .cloned()
+            .collect(),
+    }
+}
+
+/// Filter module list with a plain (sub-)string
+fn filter_modules_regular(
+    module_list: &[(String, usize)],
+    search_filter: &str,
+    case_insensitive_search: bool,
+) -> Vec<(String, usize)> {
+    if case_insensitive_search {
+        let search_filter = search_filter.to_lowercase();
+        par_iter_if_available!(module_list)
+            .filter(|r| r.0.to_lowercase().contains(&search_filter))
+            .cloned()
+            .collect()
+    } else {
+        par_iter_if_available!(module_list)
             .filter(|r| r.0.contains(search_filter))
             .cloned()
             .collect()

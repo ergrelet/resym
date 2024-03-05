@@ -15,9 +15,9 @@ use std::{
 use std::{fs::File, path::Path, time::Instant};
 
 use crate::{
-    cond_par_iter,
     error::{Result, ResymCoreError},
     frontend::ModuleList,
+    par_iter_if_available,
     pdb_types::{
         self, is_unnamed_type, type_name, DataFormatConfiguration, PrimitiveReconstructionFlavor,
     },
@@ -216,7 +216,7 @@ where
 
         // Resolve forwarder references to their corresponding complete type, in parallel
         let fwd_start = Instant::now();
-        cond_par_iter!(forwarders).for_each(|(fwd_name, fwd_type_id)| {
+        par_iter_if_available!(forwarders).for_each(|(fwd_name, fwd_type_id)| {
             if let Some(complete_type_index) = complete_symbol_map.get(fwd_name) {
                 self.forwarder_to_complete_type
                     .insert(*fwd_type_id, *complete_type_index);

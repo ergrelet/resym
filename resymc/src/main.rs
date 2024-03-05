@@ -98,6 +98,19 @@ fn main() -> Result<()> {
             highlight_syntax,
             output_file_path,
         ),
+        ResymOptions::ListModules {
+            pdb_path,
+            module_path_filter,
+            output_file_path,
+            case_insensitive,
+            use_regex,
+        } => app.list_modules_command(
+            pdb_path,
+            module_path_filter,
+            case_insensitive,
+            use_regex,
+            output_file_path,
+        ),
     }
 }
 
@@ -190,6 +203,21 @@ enum ResymOptions {
         /// Highlight C++ output and add/deleted lines
         #[structopt(short = "H", long)]
         highlight_syntax: bool,
+    },
+    /// List modules from a given PDB file
+    ListModules {
+        /// Path to the PDB file
+        pdb_path: PathBuf,
+        /// Search filter
+        module_path_filter: String,
+        /// Path of the output file
+        output_file_path: Option<PathBuf>,
+        /// Do not match case
+        #[structopt(short = "i", long)]
+        case_insensitive: bool,
+        /// Use regular expressions
+        #[structopt(short = "r", long)]
+        use_regex: bool,
     },
 }
 
@@ -432,6 +460,55 @@ impl ResymcApp {
             Err(anyhow!("Invalid response received from the backend?"))
         }
     }
+
+    fn list_modules_command(
+        &self,
+        pdb_path: PathBuf,
+        module_path_filter: String,
+        case_insensitive: bool,
+        use_regex: bool,
+        output_file_path: Option<PathBuf>,
+    ) -> Result<()> {
+        // Request the backend to load the PDB
+        self.backend
+            .send_command(BackendCommand::LoadPDBFromPath(PDB_MAIN_SLOT, pdb_path))?;
+        // Wait for the backend to finish loading the PDB
+        if let FrontendCommand::LoadPDBResult(result) = self.frontend_controller.rx_ui.recv()? {
+            if let Err(err) = result {
+                return Err(anyhow!("Failed to load PDB: {}", err));
+            }
+        } else {
+            return Err(anyhow!("Invalid response received from the backend?"));
+        }
+
+        // Queue a request for the backend to return the list of all modules
+        self.backend.send_command(BackendCommand::ListModules(
+            PDB_MAIN_SLOT,
+            module_path_filter,
+            case_insensitive,
+            use_regex,
+        ))?;
+        // Wait for the backend to finish listing modules
+        if let FrontendCommand::UpdateModuleList(module_list) =
+            self.frontend_controller.rx_ui.recv()?
+        {
+            // Dump output
+            let module_list = module_list?;
+            if let Some(output_file_path) = output_file_path {
+                let mut output_file = File::create(output_file_path)?;
+                for (module_path, module_id) in module_list {
+                    writeln!(output_file, "Mod {module_id:04} | '{module_path}'")?;
+                }
+            } else {
+                for (module_path, module_id) in module_list {
+                    println!("Mod {module_id:04} | '{module_path}'");
+                }
+            }
+            Ok(())
+        } else {
+            Err(anyhow!("Invalid response received from the backend?"))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -504,6 +581,55 @@ mod tests {
                 "resym_test::ClassWithNestedDeclarationsTest::NestedUnion\n",
                 "resym_test::ClassWithNestedDeclarationsTest::NestedClass\n",
                 "resym_test::ClassWithNestedDeclarationsTest::NestedStruct\n"
+            )
+        );
+    }
+
+    #[test]
+    fn list_modules_command_invalid_pdb_path() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::new();
+        // The command should fail
+        assert!(app
+            .list_modules_command(pdb_path, "*".to_string(), false, false, None)
+            .is_err());
+    }
+
+    #[test]
+    fn list_modules_command_stdio_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FILE_PATH);
+        // The command should succeed
+        assert!(app
+            .list_modules_command(pdb_path, "*".to_string(), false, false, None)
+            .is_ok());
+    }
+
+    #[test]
+    fn list_modules_command_file_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FILE_PATH);
+        let tmp_dir =
+            TempDir::new("list_types_command_file_successful").expect("TempDir creation failed");
+        let output_path = tmp_dir.path().join("output.txt");
+        // The command should succeed
+        assert!(app
+            .list_modules_command(
+                pdb_path,
+                "*".to_string(),
+                false,
+                false,
+                Some(output_path.clone()),
+            )
+            .is_ok());
+
+        // Check output file's content
+        let output = fs::read_to_string(output_path).expect("Failed to read output file");
+        assert_eq!(
+            output,
+            concat!(
+                "Mod 0048 | '* Linker Generated Manifest RES *'\n",
+                "Mod 0053 | '* Linker *'\n"
             )
         );
     }

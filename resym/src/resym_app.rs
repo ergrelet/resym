@@ -379,9 +379,14 @@ impl ResymApp {
                                 log::error!("Failed to update type filter value: {}", err);
                             }
                             // Request a module list update
-                            if let Err(err) = self.backend.send_command(
-                                BackendCommand::ListModules(ResymPDBSlots::Main as usize),
-                            ) {
+                            if let Err(err) =
+                                self.backend.send_command(BackendCommand::ListModules(
+                                    ResymPDBSlots::Main as usize,
+                                    String::default(),
+                                    false,
+                                    false,
+                                ))
+                            {
                                 log::error!("Failed to update module list: {}", err);
                             }
                         } else if pdb_slot == ResymPDBSlots::Diff as usize {
