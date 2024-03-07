@@ -522,7 +522,7 @@ mod tests {
         );
     }
 
-    // Dump type
+    // Dump types
     #[test]
     fn dump_types_command_invalid_pdb_path() {
         let app = ResymcApp::new().expect("ResymcApp creation failed");
@@ -589,6 +589,91 @@ mod tests {
         assert_eq!(
             output,
             concat!("\nclass resym_test::ClassWithNestedDeclarationsTest { /* Size=0x1 */\n};\n")
+        );
+    }
+
+    // Diff type
+    #[test]
+    fn diff_type_command_invalid_pdb_path() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path_from = PathBuf::new();
+        let pdb_path_to = PathBuf::new();
+
+        // The command should fail
+        assert!(app
+            .diff_type_command(
+                pdb_path_from,
+                pdb_path_to,
+                "".to_string(),
+                PrimitiveReconstructionFlavor::Microsoft,
+                false,
+                false,
+                false,
+                false,
+                None
+            )
+            .is_err());
+    }
+    #[test]
+    fn diff_type_command_stdio_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path_from = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FROM_FILE_PATH);
+        let pdb_path_to = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_TO_FILE_PATH);
+
+        // The command should succeed
+        assert!(app
+            .diff_type_command(
+                pdb_path_from,
+                pdb_path_to,
+                "UserStructAddAndReplace".to_string(),
+                PrimitiveReconstructionFlavor::Microsoft,
+                true,
+                true,
+                true,
+                true,
+                None
+            )
+            .is_ok());
+    }
+
+    #[test]
+    fn diff_type_command_file_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path_from = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FROM_FILE_PATH);
+        let pdb_path_to = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_TO_FILE_PATH);
+
+        let tmp_dir =
+            TempDir::new("diff_type_command_file_successful").expect("TempDir creation failed");
+        let output_path = tmp_dir.path().join("output.txt");
+
+        // The command should succeed
+        assert!(app
+            .diff_type_command(
+                pdb_path_from,
+                pdb_path_to,
+                "UserStructAddAndReplace".to_string(),
+                PrimitiveReconstructionFlavor::Portable,
+                false,
+                false,
+                false,
+                false,
+                Some(output_path.clone()),
+            )
+            .is_ok());
+
+        // Check output file's content
+        let output = fs::read_to_string(output_path).expect("Failed to read output file");
+        assert_eq!(
+            output,
+            concat!(
+                " \n-struct UserStructAddAndReplace { /* Size=0x10 */\n",
+                "-  /* 0x0000 */ int32_t field1;\n-  /* 0x0004 */ char field2;\n",
+                "-  /* 0x0008 */ void* field3;\n+struct UserStructAddAndReplace { /* Size=0x28 */\n",
+                "+  /* 0x0000 */ int32_t before1;\n+  /* 0x0004 */ int32_t field1;\n",
+                "+  /* 0x0008 */ int32_t between12;\n+  /* 0x000c */ char field2;\n",
+                "+  /* 0x0010 */ int32_t between23;\n+  /* 0x0018 */ void* field3;\n",
+                "+  /* 0x0020 */ int32_t after3;\n };\n",
+            )
         );
     }
 
