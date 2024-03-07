@@ -19,7 +19,7 @@ use crate::{
     settings::ResymAppSettings,
     ui_components::{
         CodeViewComponent, ConsoleComponent, ModuleTreeComponent, SettingsComponent,
-        TypeListComponent, TypeSearchComponent,
+        TextSearchComponent, TypeListComponent,
     },
 };
 
@@ -51,7 +51,7 @@ enum ExplorerTab {
 pub struct ResymApp {
     current_mode: ResymAppMode,
     explorer_selected_tab: ExplorerTab,
-    type_search: TypeSearchComponent,
+    type_search: TextSearchComponent,
     type_list: TypeListComponent,
     module_tree: ModuleTreeComponent,
     code_view: CodeViewComponent,
@@ -141,7 +141,7 @@ impl ResymApp {
         Ok(Self {
             current_mode: ResymAppMode::Idle,
             explorer_selected_tab: ExplorerTab::TypeSearch,
-            type_search: TypeSearchComponent::new(),
+            type_search: TextSearchComponent::new(),
             type_list: TypeListComponent::new(),
             module_tree: ModuleTreeComponent::new(),
             code_view: CodeViewComponent::new(),
@@ -196,13 +196,34 @@ impl ResymApp {
 
                 match self.explorer_selected_tab {
                     ExplorerTab::TypeSearch => {
+                        let on_query_update = |search_query: &str| {
+                            // Update filtered list if filter has changed
+                            let result = if let ResymAppMode::Comparing(..) = self.current_mode {
+                                self.backend
+                                    .send_command(BackendCommand::UpdateTypeFilterMerged(
+                                        vec![
+                                            ResymPDBSlots::Main as usize,
+                                            ResymPDBSlots::Diff as usize,
+                                        ],
+                                        search_query.to_string(),
+                                        self.settings.app_settings.search_case_insensitive,
+                                        self.settings.app_settings.search_use_regex,
+                                    ))
+                            } else {
+                                self.backend.send_command(BackendCommand::UpdateTypeFilter(
+                                    ResymPDBSlots::Main as usize,
+                                    search_query.to_string(),
+                                    self.settings.app_settings.search_case_insensitive,
+                                    self.settings.app_settings.search_use_regex,
+                                ))
+                            };
+                            if let Err(err) = result {
+                                log::error!("Failed to update type filter value: {}", err);
+                            }
+                        };
+
                         // Update the type search bar
-                        self.type_search.update(
-                            &self.settings.app_settings,
-                            &self.current_mode,
-                            &self.backend,
-                            ui,
-                        );
+                        self.type_search.update(ui, &on_query_update);
                         ui.add_space(4.0);
 
                         // Update the type list
