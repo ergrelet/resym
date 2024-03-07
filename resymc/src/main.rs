@@ -126,6 +126,23 @@ fn main() -> Result<()> {
             highlight_syntax,
             output_file_path,
         ),
+        ResymOptions::DiffModule {
+            from_pdb_path,
+            to_pdb_path,
+            module_path,
+            output_file_path,
+            primitive_types_flavor,
+            print_header,
+            highlight_syntax,
+        } => app.diff_module_command(
+            from_pdb_path,
+            to_pdb_path,
+            module_path,
+            primitive_types_flavor.unwrap_or(PrimitiveReconstructionFlavor::Portable),
+            print_header,
+            highlight_syntax,
+            output_file_path,
+        ),
     }
 }
 
@@ -249,6 +266,26 @@ enum ResymOptions {
         #[structopt(short = "h", long)]
         print_header: bool,
         /// Highlight C++ output
+        #[structopt(short = "H", long)]
+        highlight_syntax: bool,
+    },
+    /// Compute diff for a module between two given PDB files
+    DiffModule {
+        /// Path of the PDB file to compute the diff from
+        from_pdb_path: PathBuf,
+        /// Path of the PDB file to compute the diff to
+        to_pdb_path: PathBuf,
+        /// Path of the module to diff
+        module_path: String,
+        /// Path of the output file
+        output_file_path: Option<PathBuf>,
+        /// Representation of primitive types
+        #[structopt(short = "f", long)]
+        primitive_types_flavor: Option<PrimitiveReconstructionFlavor>,
+        /// Print header
+        #[structopt(short = "h", long)]
+        print_header: bool,
+        /// Highlight C++ output and add/deleted lines
         #[structopt(short = "H", long)]
         highlight_syntax: bool,
     },
@@ -591,6 +628,97 @@ impl ResymcApp {
             Err(anyhow!("Invalid response received from the backend?"))
         }
     }
+
+    #[allow(clippy::too_many_arguments)]
+    fn diff_module_command(
+        &self,
+        from_pdb_path: PathBuf,
+        to_pdb_path: PathBuf,
+        module_path: String,
+        primitive_types_flavor: PrimitiveReconstructionFlavor,
+        print_header: bool,
+        highlight_syntax: bool,
+        output_file_path: Option<PathBuf>,
+    ) -> Result<()> {
+        // Request the backend to load the first PDB
+        self.backend.send_command(BackendCommand::LoadPDBFromPath(
+            PDB_MAIN_SLOT,
+            from_pdb_path.clone(),
+        ))?;
+        // Wait for the backend to finish loading the PDB
+        if let FrontendCommand::LoadPDBResult(result) = self.frontend_controller.rx_ui.recv()? {
+            if let Err(err) = result {
+                return Err(anyhow!(
+                    "Failed to load PDB '{}': {}",
+                    from_pdb_path.display(),
+                    err
+                ));
+            }
+        } else {
+            return Err(anyhow!("Invalid response received from the backend?"));
+        }
+
+        // Request the backend to load the second PDB
+        self.backend.send_command(BackendCommand::LoadPDBFromPath(
+            PDB_DIFF_TO_SLOT,
+            to_pdb_path.clone(),
+        ))?;
+        // Wait for the backend to finish loading the PDB
+        if let FrontendCommand::LoadPDBResult(result) = self.frontend_controller.rx_ui.recv()? {
+            if let Err(err) = result {
+                return Err(anyhow!(
+                    "Failed to load PDB '{}': {}",
+                    to_pdb_path.display(),
+                    err
+                ));
+            }
+        } else {
+            return Err(anyhow!("Invalid response received from the backend?"));
+        }
+
+        // Queue a request for the backend to diff the given module
+        self.backend.send_command(BackendCommand::DiffModuleByPath(
+            PDB_MAIN_SLOT,
+            PDB_DIFF_TO_SLOT,
+            module_path,
+            primitive_types_flavor,
+            print_header,
+        ))?;
+        // Wait for the backend to finish
+        if let FrontendCommand::DiffResult(reconstructed_module_diff_result) =
+            self.frontend_controller.rx_ui.recv()?
+        {
+            let reconstructed_module_diff = reconstructed_module_diff_result?;
+            // Dump output
+            if let Some(output_file_path) = output_file_path {
+                let mut output_file = File::create(output_file_path)?;
+                output_file.write_all(reconstructed_module_diff.data.as_bytes())?;
+            } else if highlight_syntax {
+                let theme = CodeTheme::default();
+                let line_descriptions =
+                    reconstructed_module_diff
+                        .metadata
+                        .iter()
+                        .fold(vec![], |mut acc, e| {
+                            acc.push(e.1);
+                            acc
+                        });
+                if let Some(colorized_reconstructed_module) = highlight_code(
+                    &theme,
+                    &reconstructed_module_diff.data,
+                    Some(line_descriptions),
+                ) {
+                    println!("{colorized_reconstructed_module}");
+                }
+            } else {
+                println!("{}", reconstructed_module_diff.data);
+            }
+
+            Ok(())
+        } else {
+            Err(anyhow!("Invalid response received from the backend?"))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -602,6 +730,8 @@ mod tests {
     use tempdir::TempDir;
 
     const TEST_PDB_FILE_PATH: &str = "../resym_core/tests/data/test.pdb";
+    const TEST_PDB_FROM_FILE_PATH: &str = "../resym_core/tests/data/test_diff_from.pdb";
+    const TEST_PDB_TO_FILE_PATH: &str = "../resym_core/tests/data/test_diff_to.pdb";
 
     #[test]
     fn list_types_command_invalid_pdb_path() {
@@ -780,6 +910,84 @@ mod tests {
                 "uint64_t* (__local_stdio_scanf_options)(); // CodeSize=8\n",
                 "uint64_t _OptionsStorage;\n",
                 "void (__scrt_initialize_default_local_stdio_options)(); // CodeSize=69\n",
+            )
+        );
+    }
+
+    #[test]
+    fn diff_module_command_invalid_pdb_path() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path_from = PathBuf::new();
+        let pdb_path_to = PathBuf::new();
+
+        // The command should fail
+        assert!(app
+            .diff_module_command(
+                pdb_path_from,
+                pdb_path_to,
+                "d:\\a01\\_work\\43\\s\\Intermediate\\vctools\\msvcrt.nativeproj_607447030\\objd\\amd64\\exe_main.obj".to_string(),
+                PrimitiveReconstructionFlavor::Microsoft,
+                false,
+                false,
+                None
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn diff_module_command_stdio_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path_from = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FROM_FILE_PATH);
+        let pdb_path_to = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_TO_FILE_PATH);
+
+        // The command should succeed
+        assert!(app
+            .diff_module_command(
+                pdb_path_from,
+                pdb_path_to,
+                "d:\\a01\\_work\\43\\s\\Intermediate\\vctools\\msvcrt.nativeproj_607447030\\objd\\amd64\\exe_main.obj".to_string(),
+                PrimitiveReconstructionFlavor::Microsoft,
+                true,
+                true,
+                None
+            )
+            .is_ok());
+    }
+
+    #[test]
+    fn diff_module_command_file_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path_from = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FROM_FILE_PATH);
+        let pdb_path_to = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_TO_FILE_PATH);
+
+        let tmp_dir =
+            TempDir::new("diff_module_command_file_successful").expect("TempDir creation failed");
+        let output_path = tmp_dir.path().join("output.txt");
+
+        // The command should succeed
+        assert!(app
+            .diff_module_command(
+                pdb_path_from,
+                pdb_path_to,
+                "d:\\a01\\_work\\43\\s\\Intermediate\\vctools\\msvcrt.nativeproj_607447030\\objd\\amd64\\default_local_stdio_options.obj".to_string(),
+                PrimitiveReconstructionFlavor::Portable,
+                false,
+                false,
+                Some(output_path.clone()),
+            )
+            .is_ok());
+
+        // Check output file's content
+        let output = fs::read_to_string(output_path).expect("Failed to read output file");
+        assert_eq!(
+            output,
+            concat!(
+                " using namespace std;\n",
+                " using PUWSTR_C = const wchar_t*;\n",
+                " using TP_CALLBACK_ENVIRON_V3 = _TP_CALLBACK_ENVIRON_V3;\n",
+                " uint64_t* (__local_stdio_scanf_options)(); // CodeSize=8\n",
+                " uint64_t _OptionsStorage;\n",
+                " void (__scrt_initialize_default_local_stdio_options)(); // CodeSize=69\n",
             )
         );
     }
