@@ -53,6 +53,7 @@ pub struct ResymApp {
     explorer_selected_tab: ExplorerTab,
     type_search: TextSearchComponent,
     type_list: TypeListComponent,
+    module_search: TextSearchComponent,
     module_tree: ModuleTreeComponent,
     code_view: CodeViewComponent,
     console: ConsoleComponent,
@@ -143,6 +144,7 @@ impl ResymApp {
             explorer_selected_tab: ExplorerTab::TypeSearch,
             type_search: TextSearchComponent::new(),
             type_list: TypeListComponent::new(),
+            module_search: TextSearchComponent::new(),
             module_tree: ModuleTreeComponent::new(),
             code_view: CodeViewComponent::new(),
             console: ConsoleComponent::new(logger),
@@ -196,6 +198,7 @@ impl ResymApp {
 
                 match self.explorer_selected_tab {
                     ExplorerTab::TypeSearch => {
+                        // Callback run when the search query changes
                         let on_query_update = |search_query: &str| {
                             // Update filtered list if filter has changed
                             let result = if let ResymAppMode::Comparing(..) = self.current_mode {
@@ -223,7 +226,9 @@ impl ResymApp {
                         };
 
                         // Update the type search bar
+                        ui.label("Search");
                         self.type_search.update(ui, &on_query_update);
+                        ui.separator();
                         ui.add_space(4.0);
 
                         // Update the type list
@@ -235,6 +240,29 @@ impl ResymApp {
                         );
                     }
                     ExplorerTab::ModuleBrowsing => {
+                        // Callback run when the search query changes
+                        let on_query_update = |search_query: &str| match self.current_mode {
+                            ResymAppMode::Browsing(..) | ResymAppMode::Comparing(..) => {
+                                // Request a module list update
+                                if let Err(err) =
+                                    self.backend.send_command(BackendCommand::ListModules(
+                                        ResymPDBSlots::Main as usize,
+                                        search_query.to_string(),
+                                        self.settings.app_settings.search_case_insensitive,
+                                        self.settings.app_settings.search_use_regex,
+                                    ))
+                                {
+                                    log::error!("Failed to update module list: {}", err);
+                                }
+                            }
+                            _ => {}
+                        };
+                        // Update the type search bar
+                        ui.label("Search");
+                        self.module_search.update(ui, &on_query_update);
+                        ui.separator();
+                        ui.add_space(4.0);
+
                         // Callback run when a module is selected in the tree
                         let on_module_selected =
                             |module_path: &ModulePath, module_info: &ModuleInfo| match self
