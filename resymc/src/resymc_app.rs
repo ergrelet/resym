@@ -457,6 +457,7 @@ mod tests {
     const TEST_PDB_FROM_FILE_PATH: &str = "../resym_core/tests/data/test_diff_from.pdb";
     const TEST_PDB_TO_FILE_PATH: &str = "../resym_core/tests/data/test_diff_to.pdb";
 
+    // List types
     #[test]
     fn list_types_command_invalid_pdb_path() {
         let app = ResymcApp::new().expect("ResymcApp creation failed");
@@ -521,6 +522,77 @@ mod tests {
         );
     }
 
+    // Dump type
+    #[test]
+    fn dump_types_command_invalid_pdb_path() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::new();
+        // The command should fail
+        assert!(app
+            .dump_types_command(
+                pdb_path,
+                None,
+                PrimitiveReconstructionFlavor::Microsoft,
+                false,
+                false,
+                false,
+                false,
+                None
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn dump_types_command_stdio_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FILE_PATH);
+
+        // The command should succeed
+        assert!(app
+            .dump_types_command(
+                pdb_path,
+                None,
+                PrimitiveReconstructionFlavor::Microsoft,
+                true,
+                true,
+                true,
+                true,
+                None
+            )
+            .is_ok());
+    }
+
+    #[test]
+    fn dump_types_command_file_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FILE_PATH);
+        let tmp_dir =
+            TempDir::new("dump_types_command_file_successful").expect("TempDir creation failed");
+        let output_path = tmp_dir.path().join("output.txt");
+
+        // The command should succeed
+        assert!(app
+            .dump_types_command(
+                pdb_path,
+                Some("resym_test::ClassWithNestedDeclarationsTest".to_string()),
+                PrimitiveReconstructionFlavor::Microsoft,
+                false,
+                false,
+                false,
+                false,
+                Some(output_path.clone()),
+            )
+            .is_ok());
+
+        // Check output file's content
+        let output = fs::read_to_string(output_path).expect("Failed to read output file");
+        assert_eq!(
+            output,
+            concat!("\nclass resym_test::ClassWithNestedDeclarationsTest { /* Size=0x1 */\n};\n")
+        );
+    }
+
+    // List modules
     #[test]
     fn list_modules_command_invalid_pdb_path() {
         let app = ResymcApp::new().expect("ResymcApp creation failed");
@@ -570,6 +642,7 @@ mod tests {
         );
     }
 
+    // Dump module
     #[test]
     fn dump_module_command_invalid_pdb_path() {
         let app = ResymcApp::new().expect("ResymcApp creation failed");
@@ -638,6 +711,7 @@ mod tests {
         );
     }
 
+    // Diff module
     #[test]
     fn diff_module_command_invalid_pdb_path() {
         let app = ResymcApp::new().expect("ResymcApp creation failed");
