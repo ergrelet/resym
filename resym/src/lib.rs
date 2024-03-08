@@ -3,6 +3,10 @@ mod frontend;
 #[cfg(target_arch = "wasm32")]
 mod mode;
 #[cfg(target_arch = "wasm32")]
+mod module_tree;
+#[cfg(target_arch = "wasm32")]
+mod module_tree_view;
+#[cfg(target_arch = "wasm32")]
 mod resym_app;
 #[cfg(target_arch = "wasm32")]
 mod settings;

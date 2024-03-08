@@ -45,6 +45,16 @@ pub enum ResymCoreError {
     #[error("type not found: {0}")]
     TypeNameNotFoundError(String),
 
+    /// Error returned when querying for a module by path, that isn't present in
+    /// the PDB file.
+    #[error("module not found: {0}")]
+    ModuleNotFoundError(String),
+
+    /// Error returned when querying for a module's information, that isn't available in
+    /// the PDB file.
+    #[error("module info not found: {0}")]
+    ModuleInfoNotFoundError(String),
+
     /// Error returned when parsing a `PrimitiveReconstructionFlavor` from a string fails.
     #[error("invalid primitive type flavor: {0}")]
     ParsePrimitiveFlavorError(String),

@@ -2,6 +2,8 @@
 
 mod frontend;
 mod mode;
+mod module_tree;
+mod module_tree_view;
 mod resym_app;
 mod settings;
 mod syntax_highlighting;

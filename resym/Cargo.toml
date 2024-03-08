@@ -36,6 +36,10 @@ rfd = "0.11"
 # Note(ergrelet): `fancy-regex` is less performant than `onig` at the moment
 # but is more portable (i.e., compiles to wasm32)
 syntect = { version = "5.0", default-features = false, features=["default-fancy"] }
+ahash = { version = "0.8", default-features = false, features = [
+    "no-rng", # we don't need DOS-protection, so we let users opt-in to it instead
+    "std",
+] }
 
 # Web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]

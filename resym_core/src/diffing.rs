@@ -17,7 +17,7 @@ pub type DiffChange = ChangeTag;
 pub type DiffIndices = (Option<usize>, Option<usize>);
 
 #[derive(Default)]
-pub struct DiffedType {
+pub struct Diff {
     pub metadata: Vec<(DiffIndices, DiffChange)>,
     pub data: String,
 }
@@ -35,11 +35,12 @@ pub fn diff_type_by_name<'p, T>(
     print_header: bool,
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
-) -> Result<DiffedType>
+) -> Result<Diff>
 where
-    T: io::Seek + io::Read + 'p,
+    T: io::Seek + io::Read + std::fmt::Debug + 'p,
 {
     let diff_start = Instant::now();
+
     // Prepend header if needed
     let (mut reconstructed_type_from, mut reconstructed_type_to) = if print_header {
         let diff_header = generate_diff_header(pdb_file_from, pdb_file_to);
@@ -48,7 +49,7 @@ where
         (String::default(), String::default())
     };
 
-    // Reconstruct type from both PDBs
+    // Reconstruct types from both PDBs
     {
         let reconstructed_type_from_tmp = pdb_file_from
             .reconstruct_type_by_name(
@@ -74,29 +75,59 @@ where
         reconstructed_type_to.push_str(&reconstructed_type_to_tmp);
     }
 
-    // Diff reconstructed reprensentations
-    let mut diff_metadata = vec![];
-    let mut diff_data = String::default();
-    {
-        let reconstructed_type_diff =
-            TextDiff::from_lines(&reconstructed_type_from, &reconstructed_type_to);
-        for change in reconstructed_type_diff.iter_all_changes() {
-            diff_metadata.push(((change.old_index(), change.new_index()), change.tag()));
-            let prefix = match change.tag() {
-                ChangeTag::Insert => "+",
-                ChangeTag::Delete => "-",
-                ChangeTag::Equal => " ",
-            };
-            write!(&mut diff_data, "{prefix}{change}")?;
-        }
-    }
-
+    // Diff reconstructed representations
+    let diff = generate_diff(&reconstructed_type_from, &reconstructed_type_to)?;
     log::debug!("Type diffing took {} ms", diff_start.elapsed().as_millis());
 
-    Ok(DiffedType {
-        metadata: diff_metadata,
-        data: diff_data,
-    })
+    Ok(diff)
+}
+
+pub fn diff_module_by_path<'p, T>(
+    pdb_file_from: &mut PdbFile<'p, T>,
+    pdb_file_to: &mut PdbFile<'p, T>,
+    module_path: &str,
+    primitives_flavor: PrimitiveReconstructionFlavor,
+    print_header: bool,
+) -> Result<Diff>
+where
+    T: io::Seek + io::Read + std::fmt::Debug + 'p,
+{
+    let diff_start = Instant::now();
+
+    // Prepend header if needed
+    let (mut reconstructed_module_from, mut reconstructed_module_to) = if print_header {
+        let mut diff_header = generate_diff_header(pdb_file_from, pdb_file_to);
+        diff_header.push('\n');
+
+        (diff_header.clone(), diff_header)
+    } else {
+        (String::default(), String::default())
+    };
+
+    // Reconstruct modules from both PDBs
+    {
+        let reconstructed_type_from_tmp = pdb_file_from
+            .reconstruct_module_by_path(module_path, primitives_flavor)
+            .unwrap_or_default();
+        let reconstructed_type_to_tmp = pdb_file_to
+            .reconstruct_module_by_path(module_path, primitives_flavor)
+            .unwrap_or_default();
+        if reconstructed_type_from_tmp.is_empty() && reconstructed_type_to_tmp.is_empty() {
+            // Make it obvious an error occured
+            return Err(ResymCoreError::ModuleNotFoundError(module_path.to_owned()));
+        }
+        reconstructed_module_from.push_str(&reconstructed_type_from_tmp);
+        reconstructed_module_to.push_str(&reconstructed_type_to_tmp);
+    }
+
+    // Diff reconstructed representations
+    let diff = generate_diff(&reconstructed_module_from, &reconstructed_module_to)?;
+    log::debug!(
+        "Module diffing took {} ms",
+        diff_start.elapsed().as_millis()
+    );
+
+    Ok(diff)
 }
 
 fn generate_diff_header<'p, T>(
@@ -126,4 +157,26 @@ where
         pdb_file_to.machine_type,
         PKG_VERSION,
     )
+}
+
+fn generate_diff(str_from: &str, str_to: &str) -> Result<Diff> {
+    let mut diff_metadata = vec![];
+    let mut diff_data = String::default();
+    {
+        let reconstructed_type_diff = TextDiff::from_lines(str_from, str_to);
+        for change in reconstructed_type_diff.iter_all_changes() {
+            diff_metadata.push(((change.old_index(), change.new_index()), change.tag()));
+            let prefix = match change.tag() {
+                ChangeTag::Insert => "+",
+                ChangeTag::Delete => "-",
+                ChangeTag::Equal => " ",
+            };
+            write!(&mut diff_data, "{prefix}{change}")?;
+        }
+    }
+
+    Ok(Diff {
+        metadata: diff_metadata,
+        data: diff_data,
+    })
 }

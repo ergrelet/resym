@@ -15,10 +15,11 @@ use crate::ui_components::OpenURLComponent;
 use crate::{
     frontend::EguiFrontendController,
     mode::ResymAppMode,
+    module_tree::{ModuleInfo, ModulePath},
     settings::ResymAppSettings,
     ui_components::{
-        CodeViewComponent, ConsoleComponent, SettingsComponent, TypeListComponent,
-        TypeSearchComponent,
+        CodeViewComponent, ConsoleComponent, ModuleTreeComponent, SettingsComponent,
+        TextSearchComponent, TypeListComponent,
     },
 };
 
@@ -33,18 +34,27 @@ pub enum ResymPDBSlots {
     Diff = 1,
 }
 
-impl Into<PDBSlot> for ResymPDBSlots {
-    fn into(self) -> PDBSlot {
-        self as PDBSlot
+impl From<ResymPDBSlots> for PDBSlot {
+    fn from(val: ResymPDBSlots) -> Self {
+        val as PDBSlot
     }
+}
+
+#[derive(PartialEq)]
+enum ExplorerTab {
+    TypeSearch,
+    ModuleBrowsing,
 }
 
 /// Struct that represents our GUI application.
 /// It contains the whole application's context at all time.
 pub struct ResymApp {
     current_mode: ResymAppMode,
-    type_search: TypeSearchComponent,
+    explorer_selected_tab: ExplorerTab,
+    type_search: TextSearchComponent,
     type_list: TypeListComponent,
+    module_search: TextSearchComponent,
+    module_tree: ModuleTreeComponent,
     code_view: CodeViewComponent,
     console: ConsoleComponent,
     settings: SettingsComponent,
@@ -131,8 +141,11 @@ impl ResymApp {
         log::info!("{} {}", PKG_NAME, PKG_VERSION);
         Ok(Self {
             current_mode: ResymAppMode::Idle,
-            type_search: TypeSearchComponent::new(),
+            explorer_selected_tab: ExplorerTab::TypeSearch,
+            type_search: TextSearchComponent::new(),
             type_list: TypeListComponent::new(),
+            module_search: TextSearchComponent::new(),
+            module_tree: ModuleTreeComponent::new(),
             code_view: CodeViewComponent::new(),
             console: ConsoleComponent::new(logger),
             settings: SettingsComponent::new(app_settings),
@@ -169,25 +182,126 @@ impl ResymApp {
             .default_width(250.0)
             .width_range(100.0..=f32::INFINITY)
             .show(ctx, |ui| {
-                ui.label("Search");
-                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    ui.selectable_value(
+                        &mut self.explorer_selected_tab,
+                        ExplorerTab::TypeSearch,
+                        "Search types",
+                    );
+                    ui.selectable_value(
+                        &mut self.explorer_selected_tab,
+                        ExplorerTab::ModuleBrowsing,
+                        "Browse modules",
+                    );
+                });
+                ui.separator();
 
-                // Update the type search bar
-                self.type_search.update(
-                    &self.settings.app_settings,
-                    &self.current_mode,
-                    &self.backend,
-                    ui,
-                );
-                ui.add_space(4.0);
+                match self.explorer_selected_tab {
+                    ExplorerTab::TypeSearch => {
+                        // Callback run when the search query changes
+                        let on_query_update = |search_query: &str| {
+                            // Update filtered list if filter has changed
+                            let result = if let ResymAppMode::Comparing(..) = self.current_mode {
+                                self.backend
+                                    .send_command(BackendCommand::UpdateTypeFilterMerged(
+                                        vec![
+                                            ResymPDBSlots::Main as usize,
+                                            ResymPDBSlots::Diff as usize,
+                                        ],
+                                        search_query.to_string(),
+                                        self.settings.app_settings.search_case_insensitive,
+                                        self.settings.app_settings.search_use_regex,
+                                    ))
+                            } else {
+                                self.backend.send_command(BackendCommand::UpdateTypeFilter(
+                                    ResymPDBSlots::Main as usize,
+                                    search_query.to_string(),
+                                    self.settings.app_settings.search_case_insensitive,
+                                    self.settings.app_settings.search_use_regex,
+                                ))
+                            };
+                            if let Err(err) = result {
+                                log::error!("Failed to update type filter value: {}", err);
+                            }
+                        };
 
-                // Update the type list
-                self.type_list.update(
-                    &self.settings.app_settings,
-                    &self.current_mode,
-                    &self.backend,
-                    ui,
-                );
+                        // Update the type search bar
+                        ui.label("Search");
+                        self.type_search.update(ui, &on_query_update);
+                        ui.separator();
+                        ui.add_space(4.0);
+
+                        // Update the type list
+                        self.type_list.update(
+                            &self.settings.app_settings,
+                            &self.current_mode,
+                            &self.backend,
+                            ui,
+                        );
+                    }
+                    ExplorerTab::ModuleBrowsing => {
+                        // Callback run when the search query changes
+                        let on_query_update = |search_query: &str| match self.current_mode {
+                            ResymAppMode::Browsing(..) | ResymAppMode::Comparing(..) => {
+                                // Request a module list update
+                                if let Err(err) =
+                                    self.backend.send_command(BackendCommand::ListModules(
+                                        ResymPDBSlots::Main as usize,
+                                        search_query.to_string(),
+                                        self.settings.app_settings.search_case_insensitive,
+                                        self.settings.app_settings.search_use_regex,
+                                    ))
+                                {
+                                    log::error!("Failed to update module list: {}", err);
+                                }
+                            }
+                            _ => {}
+                        };
+                        // Update the type search bar
+                        ui.label("Search");
+                        self.module_search.update(ui, &on_query_update);
+                        ui.separator();
+                        ui.add_space(4.0);
+
+                        // Callback run when a module is selected in the tree
+                        let on_module_selected =
+                            |module_path: &ModulePath, module_info: &ModuleInfo| match self
+                                .current_mode
+                            {
+                                ResymAppMode::Browsing(..) => {
+                                    if let Err(err) = self.backend.send_command(
+                                        BackendCommand::ReconstructModuleByIndex(
+                                            ResymPDBSlots::Main as usize,
+                                            module_info.pdb_index,
+                                            self.settings.app_settings.primitive_types_flavor,
+                                            self.settings.app_settings.print_header,
+                                        ),
+                                    ) {
+                                        log::error!("Failed to reconstruct module: {}", err);
+                                    }
+                                }
+
+                                ResymAppMode::Comparing(..) => {
+                                    if let Err(err) =
+                                        self.backend.send_command(BackendCommand::DiffModuleByPath(
+                                            ResymPDBSlots::Main as usize,
+                                            ResymPDBSlots::Diff as usize,
+                                            module_path.to_string(),
+                                            self.settings.app_settings.primitive_types_flavor,
+                                            self.settings.app_settings.print_header,
+                                        ))
+                                    {
+                                        log::error!("Failed to reconstruct type diff: {}", err);
+                                    }
+                                }
+
+                                _ => log::error!("Invalid application state"),
+                            };
+
+                        // Update the module list
+                        self.module_tree.update(ctx, ui, &on_module_selected);
+                    }
+                }
             });
     }
 
@@ -230,7 +344,7 @@ impl ResymApp {
                     }
                 });
             });
-            ui.add_space(4.0);
+            ui.separator();
 
             // Update the code view component
             self.code_view
@@ -313,6 +427,17 @@ impl ResymApp {
                             {
                                 log::error!("Failed to update type filter value: {}", err);
                             }
+                            // Request a module list update
+                            if let Err(err) =
+                                self.backend.send_command(BackendCommand::ListModules(
+                                    ResymPDBSlots::Main as usize,
+                                    String::default(),
+                                    false,
+                                    false,
+                                ))
+                            {
+                                log::error!("Failed to update module list: {}", err);
+                            }
                         } else if pdb_slot == ResymPDBSlots::Diff as usize {
                             self.current_mode = ResymAppMode::Comparing(
                                 String::default(),
@@ -357,7 +482,12 @@ impl ResymApp {
                 FrontendCommand::ReconstructTypeResult(type_reconstruction_result) => {
                     match type_reconstruction_result {
                         Err(err) => {
-                            log::error!("Failed to reconstruct type: {}", err);
+                            let error_msg = format!("Failed to reconstruct type: {}", err);
+                            log::error!("{}", &error_msg);
+
+                            // Show an empty "reconstruted" view
+                            self.current_mode =
+                                ResymAppMode::Browsing(Default::default(), 0, error_msg);
                         }
                         Ok(reconstructed_type) => {
                             let last_line_number = 1 + reconstructed_type.lines().count();
@@ -375,9 +505,54 @@ impl ResymApp {
                     }
                 }
 
-                FrontendCommand::DiffTypeResult(type_diff_result) => match type_diff_result {
+                FrontendCommand::UpdateModuleList(module_list_result) => match module_list_result {
                     Err(err) => {
-                        log::error!("Failed to diff type: {}", err);
+                        log::error!("Failed to retrieve module list: {}", err);
+                    }
+                    Ok(module_list) => {
+                        self.module_tree.set_module_list(module_list);
+                    }
+                },
+
+                FrontendCommand::ReconstructModuleResult(module_reconstruction_result) => {
+                    match module_reconstruction_result {
+                        Err(err) => {
+                            let error_msg = format!("Failed to reconstruct module: {}", err);
+                            log::error!("{}", &error_msg);
+
+                            // Show an empty "reconstruted" view
+                            self.current_mode =
+                                ResymAppMode::Browsing(Default::default(), 0, error_msg);
+                        }
+                        Ok(reconstructed_module) => {
+                            let last_line_number = 1 + reconstructed_module.lines().count();
+                            let line_numbers =
+                                (1..last_line_number).fold(String::default(), |mut acc, e| {
+                                    let _r = writeln!(&mut acc, "{e}");
+                                    acc
+                                });
+                            self.current_mode = ResymAppMode::Browsing(
+                                line_numbers,
+                                last_line_number,
+                                reconstructed_module,
+                            );
+                        }
+                    }
+                }
+
+                FrontendCommand::DiffResult(type_diff_result) => match type_diff_result {
+                    Err(err) => {
+                        let error_msg = format!("Failed to generate diff: {}", err);
+                        log::error!("{}", &error_msg);
+
+                        // Show an empty "reconstruted" view
+                        self.current_mode = ResymAppMode::Comparing(
+                            Default::default(),
+                            Default::default(),
+                            0,
+                            vec![],
+                            error_msg,
+                        );
                     }
                     Ok(type_diff) => {
                         let mut last_line_number = 1;

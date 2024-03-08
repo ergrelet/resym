@@ -11,7 +11,8 @@ use rayon::{
 #[cfg(all(not(feature = "rayon"), not(target_arch = "wasm32")))]
 use std::thread::{self, JoinHandle};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    cell::RefCell,
+    collections::{BTreeSet, HashMap},
     io,
     sync::Arc,
 };
@@ -20,13 +21,13 @@ use std::{path::PathBuf, time::Instant};
 #[cfg(all(not(feature = "rayon"), target_arch = "wasm32"))]
 use wasm_thread::{self as thread, JoinHandle};
 
-use crate::pdb_file::PDBDataSource;
+use crate::{diffing::diff_module_by_path, pdb_file::PDBDataSource};
 use crate::{
-    cond_par_iter, cond_sort_by,
     diffing::diff_type_by_name,
     error::{Result, ResymCoreError},
     frontend::FrontendCommand,
-    frontend::FrontendController,
+    frontend::{FrontendController, ModuleList},
+    par_iter_if_available, par_sort_by_if_available,
     pdb_file::PdbFile,
     pdb_types::{include_headers_for_flavor, PrimitiveReconstructionFlavor},
     PKG_VERSION,
@@ -72,7 +73,11 @@ pub enum BackendCommand {
     /// Retrieve a list of types that match the given filter for multiple PDBs
     /// and merge the result.
     UpdateTypeFilterMerged(Vec<PDBSlot>, String, bool, bool),
-    /// Reconstruct a diff of a type given its name.
+    /// Retrieve the list of all modules in a given PDB.
+    ListModules(PDBSlot, String, bool, bool),
+    /// Reconstruct a module given its index for a given PDB.
+    ReconstructModuleByIndex(PDBSlot, usize, PrimitiveReconstructionFlavor, bool),
+    /// Reconstruct the diff of a type given its name.
     DiffTypeByName(
         PDBSlot,
         PDBSlot,
@@ -80,6 +85,14 @@ pub enum BackendCommand {
         PrimitiveReconstructionFlavor,
         bool,
         bool,
+        bool,
+    ),
+    /// Reconstruct the diff of a module given its path.
+    DiffModuleByPath(
+        PDBSlot,
+        PDBSlot,
+        String,
+        PrimitiveReconstructionFlavor,
         bool,
     ),
 }
@@ -153,12 +166,12 @@ impl Backend {
 }
 
 /// Main backend routine. This processes commands sent by the frontend and sends
-/// the result back.
+/// results back.
 fn worker_thread_routine(
     rx_worker: Receiver<BackendCommand>,
     frontend_controller: Arc<impl FrontendController + Send + Sync + 'static>,
 ) -> Result<()> {
-    let mut pdb_files: BTreeMap<PDBSlot, PdbFile<PDBDataSource>> = BTreeMap::new();
+    let mut pdb_files: HashMap<PDBSlot, RefCell<PdbFile<PDBDataSource>>> = HashMap::new();
     while let Ok(command) = rx_worker.recv() {
         match command {
             #[cfg(not(target_arch = "wasm32"))]
@@ -170,8 +183,11 @@ fn worker_thread_routine(
                     Ok(loaded_pdb_file) => {
                         frontend_controller
                             .send_command(FrontendCommand::LoadPDBResult(Ok(pdb_slot)))?;
-                        if let Some(pdb_file) = pdb_files.insert(pdb_slot, loaded_pdb_file) {
-                            log::info!("'{}' has been unloaded.", pdb_file.file_path.display());
+                        if let Some(pdb_file) = pdb_files.insert(pdb_slot, loaded_pdb_file.into()) {
+                            log::info!(
+                                "'{}' has been unloaded.",
+                                pdb_file.borrow().file_path.display()
+                            );
                         }
                         log::info!(
                             "'{}' has been loaded successfully!",
@@ -189,8 +205,11 @@ fn worker_thread_routine(
                     Ok(loaded_pdb_file) => {
                         frontend_controller
                             .send_command(FrontendCommand::LoadPDBResult(Ok(pdb_slot)))?;
-                        if let Some(pdb_file) = pdb_files.insert(pdb_slot, loaded_pdb_file) {
-                            log::info!("'{}' has been unloaded.", pdb_file.file_path.display());
+                        if let Some(pdb_file) = pdb_files.insert(pdb_slot, loaded_pdb_file.into()) {
+                            log::info!(
+                                "'{}' has been unloaded.",
+                                pdb_file.borrow().file_path.display()
+                            );
                         }
                         log::info!("'{}' has been loaded successfully!", pdb_name);
                     }
@@ -205,8 +224,11 @@ fn worker_thread_routine(
                     Ok(loaded_pdb_file) => {
                         frontend_controller
                             .send_command(FrontendCommand::LoadPDBResult(Ok(pdb_slot)))?;
-                        if let Some(pdb_file) = pdb_files.insert(pdb_slot, loaded_pdb_file) {
-                            log::info!("'{}' has been unloaded.", pdb_file.file_path.display());
+                        if let Some(pdb_file) = pdb_files.insert(pdb_slot, loaded_pdb_file.into()) {
+                            log::info!(
+                                "'{}' has been unloaded.",
+                                pdb_file.borrow().file_path.display()
+                            );
                         }
                         log::info!("'{}' has been loaded successfully!", pdb_name);
                     }
@@ -255,7 +277,10 @@ fn worker_thread_routine(
                     log::error!("Trying to unload an inexistent PDB");
                 }
                 Some(pdb_file) => {
-                    log::info!("'{}' has been unloaded.", pdb_file.file_path.display());
+                    log::info!(
+                        "'{}' has been unloaded.",
+                        pdb_file.borrow().file_path.display()
+                    );
                 }
             },
 
@@ -269,7 +294,7 @@ fn worker_thread_routine(
             ) => {
                 if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
                     let reconstructed_type_result = reconstruct_type_by_index_command(
-                        pdb_file,
+                        &pdb_file.borrow(),
                         type_index,
                         primitives_flavor,
                         print_header,
@@ -292,7 +317,7 @@ fn worker_thread_routine(
             ) => {
                 if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
                     let reconstructed_type_result = reconstruct_type_by_name_command(
-                        pdb_file,
+                        &pdb_file.borrow(),
                         &type_name,
                         primitives_flavor,
                         print_header,
@@ -313,7 +338,7 @@ fn worker_thread_routine(
             ) => {
                 if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
                     let reconstructed_type_result = reconstruct_all_types_command(
-                        pdb_file,
+                        &pdb_file.borrow(),
                         primitives_flavor,
                         print_header,
                         print_access_specifiers,
@@ -332,7 +357,7 @@ fn worker_thread_routine(
             ) => {
                 if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
                     let filtered_type_list = update_type_filter_command(
-                        pdb_file,
+                        &pdb_file.borrow(),
                         &search_filter,
                         case_insensitive_search,
                         use_regex,
@@ -353,7 +378,7 @@ fn worker_thread_routine(
                 for pdb_slot in pdb_slots {
                     if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
                         let filtered_type_list = update_type_filter_command(
-                            pdb_file,
+                            &pdb_file.borrow(),
                             &search_filter,
                             case_insensitive_search,
                             use_regex,
@@ -372,6 +397,43 @@ fn worker_thread_routine(
                 ))?;
             }
 
+            BackendCommand::ReconstructModuleByIndex(
+                pdb_slot,
+                module_index,
+                primitives_flavor,
+                print_header,
+            ) => {
+                if let Some(pdb_file) = pdb_files.get_mut(&pdb_slot) {
+                    let reconstructed_module_result = reconstruct_module_by_index_command(
+                        &mut pdb_file.borrow_mut(),
+                        module_index,
+                        primitives_flavor,
+                        print_header,
+                    );
+                    frontend_controller.send_command(FrontendCommand::ReconstructModuleResult(
+                        reconstructed_module_result,
+                    ))?;
+                }
+            }
+
+            BackendCommand::ListModules(
+                pdb_slot,
+                search_filter,
+                case_insensitive_search,
+                use_regex,
+            ) => {
+                if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
+                    let module_list = list_modules_command(
+                        &pdb_file.borrow(),
+                        &search_filter,
+                        case_insensitive_search,
+                        use_regex,
+                    );
+                    frontend_controller
+                        .send_command(FrontendCommand::UpdateModuleList(module_list))?;
+                }
+            }
+
             BackendCommand::DiffTypeByName(
                 pdb_from_slot,
                 pdb_to_slot,
@@ -384,8 +446,8 @@ fn worker_thread_routine(
                 if let Some(pdb_file_from) = pdb_files.get(&pdb_from_slot) {
                     if let Some(pdb_file_to) = pdb_files.get(&pdb_to_slot) {
                         let type_diff_result = diff_type_by_name(
-                            pdb_file_from,
-                            pdb_file_to,
+                            &pdb_file_from.borrow(),
+                            &pdb_file_to.borrow(),
                             &type_name,
                             primitives_flavor,
                             print_header,
@@ -393,7 +455,29 @@ fn worker_thread_routine(
                             print_access_specifiers,
                         );
                         frontend_controller
-                            .send_command(FrontendCommand::DiffTypeResult(type_diff_result))?;
+                            .send_command(FrontendCommand::DiffResult(type_diff_result))?;
+                    }
+                }
+            }
+
+            BackendCommand::DiffModuleByPath(
+                pdb_from_slot,
+                pdb_to_slot,
+                module_path,
+                primitives_flavor,
+                print_header,
+            ) => {
+                if let Some(pdb_file_from) = pdb_files.get(&pdb_from_slot) {
+                    if let Some(pdb_file_to) = pdb_files.get(&pdb_to_slot) {
+                        let module_diff_result = diff_module_by_path(
+                            &mut pdb_file_from.borrow_mut(),
+                            &mut pdb_file_to.borrow_mut(),
+                            &module_path,
+                            primitives_flavor,
+                            print_header,
+                        );
+                        frontend_controller
+                            .send_command(FrontendCommand::DiffResult(module_diff_result))?;
                     }
                 }
             }
@@ -412,7 +496,7 @@ fn reconstruct_type_by_index_command<'p, T>(
     print_access_specifiers: bool,
 ) -> Result<String>
 where
-    T: io::Seek + io::Read + 'p,
+    T: io::Seek + io::Read + std::fmt::Debug + 'p,
 {
     let data = pdb_file.reconstruct_type_by_type_index(
         type_index,
@@ -437,7 +521,7 @@ fn reconstruct_type_by_name_command<'p, T>(
     print_access_specifiers: bool,
 ) -> Result<String>
 where
-    T: io::Seek + io::Read + 'p,
+    T: io::Seek + io::Read + std::fmt::Debug + 'p,
 {
     let data = pdb_file.reconstruct_type_by_name(
         type_name,
@@ -460,12 +544,30 @@ fn reconstruct_all_types_command<'p, T>(
     print_access_specifiers: bool,
 ) -> Result<String>
 where
-    T: io::Seek + io::Read + 'p,
+    T: io::Seek + io::Read + std::fmt::Debug + 'p,
 {
     let data = pdb_file.reconstruct_all_types(primitives_flavor, print_access_specifiers)?;
     if print_header {
         let file_header = generate_file_header(pdb_file, primitives_flavor, true);
         Ok(format!("{file_header}{data}"))
+    } else {
+        Ok(data)
+    }
+}
+
+fn reconstruct_module_by_index_command<'p, T>(
+    pdb_file: &mut PdbFile<'p, T>,
+    module_index: usize,
+    primitives_flavor: PrimitiveReconstructionFlavor,
+    print_header: bool,
+) -> Result<String>
+where
+    T: io::Seek + io::Read + std::fmt::Debug + 'p,
+{
+    let data = pdb_file.reconstruct_module_by_index(module_index, primitives_flavor)?;
+    if print_header {
+        let file_header = generate_file_header(pdb_file, primitives_flavor, true);
+        Ok(format!("{file_header}\n{data}"))
     } else {
         Ok(data)
     }
@@ -531,7 +633,7 @@ where
     if sort_by_index {
         // Order types by type index, so the order is deterministic
         // (i.e., independent from DashMap's hash function)
-        cond_sort_by!(filtered_type_list, |lhs, rhs| lhs.1.cmp(&rhs.1));
+        par_sort_by_if_available!(filtered_type_list, |lhs, rhs| lhs.1.cmp(&rhs.1));
     }
 
     log::debug!(
@@ -554,7 +656,7 @@ fn filter_types_regex(
     {
         // In case of error, return an empty result
         Err(_) => vec![],
-        Ok(regex) => cond_par_iter!(type_list)
+        Ok(regex) => par_iter_if_available!(type_list)
             .filter(|r| regex.find(&r.0).is_some())
             .cloned()
             .collect(),
@@ -569,12 +671,87 @@ fn filter_types_regular(
 ) -> Vec<(String, pdb::TypeIndex)> {
     if case_insensitive_search {
         let search_filter = search_filter.to_lowercase();
-        cond_par_iter!(type_list)
+        par_iter_if_available!(type_list)
             .filter(|r| r.0.to_lowercase().contains(&search_filter))
             .cloned()
             .collect()
     } else {
-        cond_par_iter!(type_list)
+        par_iter_if_available!(type_list)
+            .filter(|r| r.0.contains(search_filter))
+            .cloned()
+            .collect()
+    }
+}
+
+fn list_modules_command<'p, T>(
+    pdb_file: &PdbFile<'p, T>,
+    search_filter: &str,
+    case_insensitive_search: bool,
+    use_regex: bool,
+) -> Result<ModuleList>
+where
+    T: io::Seek + io::Read + std::fmt::Debug + 'p,
+{
+    let filter_start = Instant::now();
+
+    let filtered_module_list = if search_filter.is_empty() {
+        // No need to filter
+        pdb_file.module_list()?
+    } else if use_regex {
+        filter_modules_regex(
+            &pdb_file.module_list()?,
+            search_filter,
+            case_insensitive_search,
+        )
+    } else {
+        filter_modules_regular(
+            &pdb_file.module_list()?,
+            search_filter,
+            case_insensitive_search,
+        )
+    };
+
+    log::debug!(
+        "Module filtering took {} ms",
+        filter_start.elapsed().as_millis()
+    );
+
+    Ok(filtered_module_list)
+}
+
+/// Filter module list with a regular expression
+fn filter_modules_regex(
+    module_list: &[(String, usize)],
+    search_filter: &str,
+    case_insensitive_search: bool,
+) -> Vec<(String, usize)> {
+    match regex::RegexBuilder::new(search_filter)
+        .case_insensitive(case_insensitive_search)
+        .build()
+    {
+        // In case of error, return an empty result
+        Err(_) => vec![],
+        Ok(regex) => par_iter_if_available!(module_list)
+            .filter(|r| regex.find(&r.0).is_some())
+            .cloned()
+            .collect(),
+    }
+}
+
+/// Filter module list with a plain (sub-)string
+fn filter_modules_regular(
+    module_list: &[(String, usize)],
+    search_filter: &str,
+    case_insensitive_search: bool,
+) -> Vec<(String, usize)> {
+    if case_insensitive_search {
+        let search_filter = search_filter.to_lowercase();
+        par_iter_if_available!(module_list)
+            .filter(|r| r.0.to_lowercase().contains(&search_filter))
+            .cloned()
+            .collect()
+    } else {
+        par_iter_if_available!(module_list)
             .filter(|r| r.0.contains(search_filter))
             .cloned()
             .collect()

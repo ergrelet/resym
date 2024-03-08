@@ -757,7 +757,7 @@ fn find_unnamed_unions_in_struct(fields: &[Field]) -> Vec<Range<usize>> {
             // Third step of the "state machine", add new fields to the union.
             let union_info = unions_found_temp
                 .get_mut(&(curr_union_offset_range.start, 0))
-                .unwrap();
+                .expect("key should exist in map");
             union_info.0.end = i + 1;
             // Update the union's size
             union_info.1 = std::cmp::max(
