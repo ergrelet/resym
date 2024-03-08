@@ -7,7 +7,9 @@
 - Allow opening a PDB file and diffing two PDB files using drag and drop (@learn-more)
 - Add support for the `wasm32-unknown-unknown` target
 - Publish a web version of `resym` from the `main` branch automatically
-- Allowing loading PDBs from URLs
+- Allowing loading PDBs from URLs (but the feature can be disabled at build time)
+- Implement basic module reconstruction and diffing capabilities
+- Add 3 new commands to `resymc`: `list-modules`, `dump-module`, `diff-module`
 
 ### Changed
 
