@@ -10,6 +10,7 @@
 - Allowing loading PDBs from URLs (but the feature can be disabled at build time)
 - Implement basic module reconstruction and diffing capabilities
 - Add 3 new commands to `resymc`: `list-modules`, `dump-module`, `diff-module`
+- Add support for small MSF file format (e.g., VC++ 6 PDBs) in the `pdb` crate fork (@jon-zu)
 
 ### Changed
 

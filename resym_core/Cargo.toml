@@ -15,7 +15,7 @@ rayon = ["dep:rayon", "dep:num_cpus", "dashmap/rayon"]
 http = ["dep:ehttp", "dep:url"]
 
 [dependencies]
-pdb = { git = "https://github.com/ergrelet/pdb", branch = "0.8.0-resym" }
+pdb = { git = "https://github.com/ergrelet/pdb", tag = "0.8.0-resym01" }
 thiserror = "1.0"
 log = "0.4"
 rayon = { version = "1.5", optional = true }
