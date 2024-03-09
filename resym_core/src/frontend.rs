@@ -1,6 +1,7 @@
 use crate::{backend::PDBSlot, diffing::Diff, error::Result};
 
-pub type TypeList = Vec<(String, pdb::TypeIndex)>;
+pub type TypeIndex = pdb::TypeIndex;
+pub type TypeList = Vec<(String, TypeIndex)>;
 pub type ModuleList = Vec<(String, usize)>;
 
 pub enum FrontendCommand {
@@ -13,6 +14,7 @@ pub enum FrontendCommand {
     ReconstructModuleResult(Result<String>),
     UpdateModuleList(Result<ModuleList>),
     DiffResult(Result<Diff>),
+    ListTypeCrossReferencesResult(Result<TypeList>),
 }
 
 pub trait FrontendController {

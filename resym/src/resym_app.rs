@@ -3,7 +3,7 @@ use eframe::egui;
 use memory_logger::blocking::MemoryLogger;
 use resym_core::{
     backend::{Backend, BackendCommand, PDBSlot},
-    frontend::FrontendCommand,
+    frontend::{FrontendCommand, TypeIndex},
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -40,24 +40,38 @@ impl From<ResymPDBSlots> for PDBSlot {
     }
 }
 
+/// Tabs available for the left-side panel
 #[derive(PartialEq)]
-enum ExplorerTab {
+enum LeftPanelTab {
     TypeSearch,
     ModuleBrowsing,
+}
+
+/// Tabs available for the bottom panel
+#[derive(PartialEq)]
+enum BottomPanelTab {
+    Console,
+    XRefs,
 }
 
 /// Struct that represents our GUI application.
 /// It contains the whole application's context at all time.
 pub struct ResymApp {
     current_mode: ResymAppMode,
-    explorer_selected_tab: ExplorerTab,
+    // Components used in the left-side panel
+    left_panel_selected_tab: LeftPanelTab,
     type_search: TextSearchComponent,
     type_list: TypeListComponent,
     module_search: TextSearchComponent,
     module_tree: ModuleTreeComponent,
     code_view: CodeViewComponent,
+    // Components used in the bottom panel
+    bottom_panel_selected_tab: BottomPanelTab,
     console: ConsoleComponent,
+    xref_list: TypeListComponent,
+    // Other components
     settings: SettingsComponent,
+    selected_type_index: Option<TypeIndex>,
     #[cfg(feature = "http")]
     open_url: OpenURLComponent,
     frontend_controller: Arc<EguiFrontendController>,
@@ -141,13 +155,16 @@ impl ResymApp {
         log::info!("{} {}", PKG_NAME, PKG_VERSION);
         Ok(Self {
             current_mode: ResymAppMode::Idle,
-            explorer_selected_tab: ExplorerTab::TypeSearch,
+            left_panel_selected_tab: LeftPanelTab::TypeSearch,
             type_search: TextSearchComponent::new(),
             type_list: TypeListComponent::new(),
             module_search: TextSearchComponent::new(),
             module_tree: ModuleTreeComponent::new(),
             code_view: CodeViewComponent::new(),
+            bottom_panel_selected_tab: BottomPanelTab::Console,
             console: ConsoleComponent::new(logger),
+            xref_list: TypeListComponent::new(),
+            selected_type_index: None,
             settings: SettingsComponent::new(app_settings),
             #[cfg(feature = "http")]
             open_url: OpenURLComponent::new(),
@@ -182,22 +199,23 @@ impl ResymApp {
             .default_width(250.0)
             .width_range(100.0..=f32::INFINITY)
             .show(ctx, |ui| {
+                ui.add_space(2.0);
                 ui.horizontal(|ui| {
                     ui.selectable_value(
-                        &mut self.explorer_selected_tab,
-                        ExplorerTab::TypeSearch,
+                        &mut self.left_panel_selected_tab,
+                        LeftPanelTab::TypeSearch,
                         "Search types",
                     );
                     ui.selectable_value(
-                        &mut self.explorer_selected_tab,
-                        ExplorerTab::ModuleBrowsing,
+                        &mut self.left_panel_selected_tab,
+                        LeftPanelTab::ModuleBrowsing,
                         "Browse modules",
                     );
                 });
                 ui.separator();
 
-                match self.explorer_selected_tab {
-                    ExplorerTab::TypeSearch => {
+                match self.left_panel_selected_tab {
+                    LeftPanelTab::TypeSearch => {
                         // Callback run when the search query changes
                         let on_query_update = |search_query: &str| {
                             // Update filtered list if filter has changed
@@ -231,15 +249,48 @@ impl ResymApp {
                         ui.separator();
                         ui.add_space(4.0);
 
+                        // Callback run when a type is selected in the list
+                        let mut on_type_selected = |type_name: &str, type_index: TypeIndex| {
+                            // Update currently selected type index
+                            self.selected_type_index = Some(type_index);
+
+                            match self.current_mode {
+                                ResymAppMode::Browsing(..) => {
+                                    if let Err(err) = self.backend.send_command(
+                                        BackendCommand::ReconstructTypeByIndex(
+                                            ResymPDBSlots::Main as usize,
+                                            type_index,
+                                            self.settings.app_settings.primitive_types_flavor,
+                                            self.settings.app_settings.print_header,
+                                            self.settings.app_settings.reconstruct_dependencies,
+                                            self.settings.app_settings.print_access_specifiers,
+                                        ),
+                                    ) {
+                                        log::error!("Failed to reconstruct type: {}", err);
+                                    }
+                                }
+                                ResymAppMode::Comparing(..) => {
+                                    if let Err(err) =
+                                        self.backend.send_command(BackendCommand::DiffTypeByName(
+                                            ResymPDBSlots::Main as usize,
+                                            ResymPDBSlots::Diff as usize,
+                                            type_name.to_string(),
+                                            self.settings.app_settings.primitive_types_flavor,
+                                            self.settings.app_settings.print_header,
+                                            self.settings.app_settings.reconstruct_dependencies,
+                                            self.settings.app_settings.print_access_specifiers,
+                                        ))
+                                    {
+                                        log::error!("Failed to reconstruct type diff: {}", err);
+                                    }
+                                }
+                                _ => log::error!("Invalid application state"),
+                            }
+                        };
                         // Update the type list
-                        self.type_list.update(
-                            &self.settings.app_settings,
-                            &self.current_mode,
-                            &self.backend,
-                            ui,
-                        );
+                        self.type_list.update(ui, &mut on_type_selected);
                     }
-                    ExplorerTab::ModuleBrowsing => {
+                    LeftPanelTab::ModuleBrowsing => {
                         // Callback run when the search query changes
                         let on_query_update = |search_query: &str| match self.current_mode {
                             ResymAppMode::Browsing(..) | ResymAppMode::Comparing(..) => {
@@ -305,18 +356,60 @@ impl ResymApp {
             });
     }
 
+    /// Update/render the bottom panel component and its sub-components
     fn update_bottom_panel(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::bottom("bottom_panel")
             .min_height(100.0)
             .resizable(true)
             .show(ctx, |ui| {
-                // Console panel
+                ui.add_space(4.0);
                 ui.vertical(|ui| {
-                    ui.label("Console");
-                    ui.add_space(4.0);
+                    // Tab headers
+                    ui.horizontal(|ui| {
+                        ui.selectable_value(
+                            &mut self.bottom_panel_selected_tab,
+                            BottomPanelTab::Console,
+                            "Console",
+                        );
+                        ui.selectable_value(
+                            &mut self.bottom_panel_selected_tab,
+                            BottomPanelTab::XRefs,
+                            "XRefs to",
+                        );
+                    });
+                    ui.separator();
 
-                    // Update the console component
-                    self.console.update(ui);
+                    // Tab body
+                    match self.bottom_panel_selected_tab {
+                        BottomPanelTab::Console => {
+                            // Console panel
+                            self.console.update(ui);
+                        }
+                        BottomPanelTab::XRefs => {
+                            let mut on_type_selected = |_: &str, type_index: TypeIndex| {
+                                // Update currently selected type index
+                                self.selected_type_index = Some(type_index);
+
+                                // Note: only support "Browsing" mode
+                                if let ResymAppMode::Browsing(..) = self.current_mode {
+                                    if let Err(err) = self.backend.send_command(
+                                        BackendCommand::ReconstructTypeByIndex(
+                                            ResymPDBSlots::Main as usize,
+                                            type_index,
+                                            self.settings.app_settings.primitive_types_flavor,
+                                            self.settings.app_settings.print_header,
+                                            self.settings.app_settings.reconstruct_dependencies,
+                                            self.settings.app_settings.print_access_specifiers,
+                                        ),
+                                    ) {
+                                        log::error!("Failed to reconstruct type: {}", err);
+                                    }
+                                }
+                            };
+                            // Update xref list
+                            self.xref_list.update(ui, &mut on_type_selected);
+                        }
+                    }
                 });
             });
     }
@@ -335,12 +428,34 @@ impl ResymApp {
                 // Start displaying buttons from the right
                 #[cfg_attr(target_arch = "wasm32", allow(unused_variables))]
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                    // Fetures only available in "Browsing" mode
                     if let ResymAppMode::Browsing(..) = self.current_mode {
-                        // Save button handling
+                        // Save button
                         // Note: not available on wasm32
                         #[cfg(not(target_arch = "wasm32"))]
                         if ui.button("💾  Save (Ctrl+S)").clicked() {
                             self.start_save_reconstruted_content();
+                        }
+
+                        // Cross-references button
+                        if let Some(selected_type_index) = self.selected_type_index {
+                            if ui.button("🔍  Find Xrefs to").clicked() {
+                                log::info!(
+                                    "Looking for cross-references for type #0x{:x}...",
+                                    selected_type_index.0
+                                );
+                                if let Err(err) = self.backend.send_command(
+                                    BackendCommand::ListTypeCrossReferences(
+                                        ResymPDBSlots::Main as usize,
+                                        selected_type_index,
+                                    ),
+                                ) {
+                                    log::error!(
+                                        "Failed to list cross-references to type #0x{:x}: {err}",
+                                        selected_type_index.0
+                                    );
+                                }
+                            }
                         }
                     }
                 });
@@ -597,6 +712,23 @@ impl ResymApp {
 
                 FrontendCommand::UpdateFilteredTypes(filtered_types) => {
                     self.type_list.update_type_list(filtered_types);
+                }
+
+                FrontendCommand::ListTypeCrossReferencesResult(xref_list_result) => {
+                    match xref_list_result {
+                        Err(err) => {
+                            log::error!("Failed to list cross-references: {err}");
+                        }
+                        Ok(xref_list) => {
+                            let xref_count = xref_list.len();
+                            log::info!("{xref_count} cross-references found!");
+
+                            // Update xref list component
+                            self.xref_list.update_type_list(xref_list);
+                            // Switch to xref tab
+                            self.bottom_panel_selected_tab = BottomPanelTab::XRefs;
+                        }
+                    }
                 }
             }
         }

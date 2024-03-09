@@ -1,10 +1,5 @@
 use eframe::egui::{self, ScrollArea, TextStyle};
-use resym_core::{
-    backend::{Backend, BackendCommand},
-    frontend::TypeList,
-};
-
-use crate::{mode::ResymAppMode, resym_app::ResymPDBSlots, settings::ResymAppSettings};
+use resym_core::frontend::{TypeIndex, TypeList};
 
 pub struct TypeListComponent {
     filtered_type_list: TypeList,
@@ -24,12 +19,10 @@ impl TypeListComponent {
         self.selected_row = usize::MAX;
     }
 
-    pub fn update(
+    pub fn update<CB: FnMut(&str, TypeIndex)>(
         &mut self,
-        app_settings: &ResymAppSettings,
-        current_mode: &ResymAppMode,
-        backend: &Backend,
         ui: &mut egui::Ui,
+        on_type_selected: &mut CB,
     ) {
         let num_rows = self.filtered_type_list.len();
         const TEXT_STYLE: TextStyle = TextStyle::Body;
@@ -37,6 +30,12 @@ impl TypeListComponent {
         ui.with_layout(
             egui::Layout::top_down(egui::Align::Min).with_cross_justify(true),
             |ui| {
+                if num_rows == 0 {
+                    // Display a default message to make it obvious the list is empty
+                    ui.label("No results");
+                    return;
+                }
+
                 ScrollArea::vertical()
                     .auto_shrink([false, false])
                     .show_rows(ui, row_height, num_rows, |ui, row_range| {
@@ -48,38 +47,7 @@ impl TypeListComponent {
                                 .clicked()
                             {
                                 self.selected_row = row_index;
-                                match current_mode {
-                                    ResymAppMode::Browsing(..) => {
-                                        if let Err(err) = backend.send_command(
-                                            BackendCommand::ReconstructTypeByIndex(
-                                                ResymPDBSlots::Main as usize,
-                                                *type_index,
-                                                app_settings.primitive_types_flavor,
-                                                app_settings.print_header,
-                                                app_settings.reconstruct_dependencies,
-                                                app_settings.print_access_specifiers,
-                                            ),
-                                        ) {
-                                            log::error!("Failed to reconstruct type: {}", err);
-                                        }
-                                    }
-                                    ResymAppMode::Comparing(..) => {
-                                        if let Err(err) =
-                                            backend.send_command(BackendCommand::DiffTypeByName(
-                                                ResymPDBSlots::Main as usize,
-                                                ResymPDBSlots::Diff as usize,
-                                                type_name.clone(),
-                                                app_settings.primitive_types_flavor,
-                                                app_settings.print_header,
-                                                app_settings.reconstruct_dependencies,
-                                                app_settings.print_access_specifiers,
-                                            ))
-                                        {
-                                            log::error!("Failed to reconstruct type diff: {}", err);
-                                        }
-                                    }
-                                    _ => log::error!("Invalid application state"),
-                                }
+                                on_type_selected(type_name, *type_index);
                             }
                         }
                     });

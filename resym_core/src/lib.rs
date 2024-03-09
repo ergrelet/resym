@@ -41,3 +41,19 @@ macro_rules! par_sort_by_if_available {
         $expression.par_sort_by($($x)*)
     };
 }
+
+/// Macro used to switch between `find_any` and `find` depending on rayon's availability
+#[macro_export]
+#[cfg(not(feature = "rayon"))]
+macro_rules! find_any_if_available {
+    ($expression:expr, $($x:tt)*) => {
+        $expression.iter().find($($x)*)
+    };
+}
+#[macro_export]
+#[cfg(feature = "rayon")]
+macro_rules! find_any_if_available {
+    ($expression:expr, $($x:tt)*) => {
+        $expression.par_iter().find_any($($x)*)
+    };
+}

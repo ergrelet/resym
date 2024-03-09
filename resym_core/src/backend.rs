@@ -95,6 +95,8 @@ pub enum BackendCommand {
         PrimitiveReconstructionFlavor,
         bool,
     ),
+    /// Retrieve a list of all types that reference the given type
+    ListTypeCrossReferences(PDBSlot, pdb::TypeIndex),
 }
 
 /// Struct that represents the backend. The backend is responsible
@@ -481,6 +483,14 @@ fn worker_thread_routine(
                     }
                 }
             }
+
+            BackendCommand::ListTypeCrossReferences(pdb_slot, type_index) => {
+                if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
+                    let xref_list = list_type_xrefs_command(&mut pdb_file.borrow_mut(), type_index);
+                    frontend_controller
+                        .send_command(FrontendCommand::ListTypeCrossReferencesResult(xref_list))?;
+                }
+            }
         }
     }
 
@@ -756,4 +766,21 @@ fn filter_modules_regular(
             .cloned()
             .collect()
     }
+}
+
+fn list_type_xrefs_command<'p, T>(
+    pdb_file: &mut PdbFile<'p, T>,
+    type_index: pdb::TypeIndex,
+) -> Result<Vec<(String, pdb::TypeIndex)>>
+where
+    T: io::Seek + io::Read + std::fmt::Debug + 'p,
+{
+    let xref_start = Instant::now();
+    let xref_list = pdb_file.get_xrefs_for_type(type_index)?;
+    log::debug!(
+        "Xref resolution took {} ms",
+        xref_start.elapsed().as_millis()
+    );
+
+    Ok(xref_list)
 }

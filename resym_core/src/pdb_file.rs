@@ -16,6 +16,7 @@ use std::{fs::File, path::Path, time::Instant};
 
 use crate::{
     error::{Result, ResymCoreError},
+    find_any_if_available,
     frontend::ModuleList,
     par_iter_if_available,
     pdb_types::{
@@ -61,6 +62,7 @@ where
     pub type_information: pdb::TypeInformation<'p>,
     pub debug_information: pdb::DebugInformation<'p>,
     pub file_path: PathBuf,
+    pub xref_map: DashMap<pdb::TypeIndex, Vec<pdb::TypeIndex>>,
     _pdb: pdb::PDB<'p, T>,
 }
 
@@ -81,6 +83,7 @@ impl<'p> PdbFile<'p, File> {
             type_information,
             debug_information,
             file_path: pdb_file_path.to_owned(),
+            xref_map: DashMap::default(),
             _pdb: pdb,
         };
         pdb_file.load_symbols()?;
@@ -108,6 +111,7 @@ impl<'p> PdbFile<'p, PDBDataSource> {
             type_information,
             debug_information,
             file_path: pdb_file_name.into(),
+            xref_map: DashMap::default(),
             _pdb: pdb,
         };
         pdb_file.load_symbols()?;
@@ -133,6 +137,7 @@ impl<'p> PdbFile<'p, PDBDataSource> {
             type_information,
             debug_information,
             file_path: pdb_file_name.into(),
+            xref_map: DashMap::default(),
             _pdb: pdb,
         };
         pdb_file.load_symbols()?;
@@ -603,5 +608,73 @@ where
         let mut reconstruction_output = String::new();
         type_data.reconstruct(&fmt_configuration, &mut reconstruction_output)?;
         Ok(reconstruction_output)
+    }
+
+    pub fn get_xrefs_for_type(
+        &mut self,
+        type_index: pdb::TypeIndex,
+    ) -> Result<Vec<(String, pdb::TypeIndex)>> {
+        // Generate xref cache if empty
+        if self.xref_map.is_empty() {
+            // Populate our `TypeFinder`
+            let mut type_finder = self.type_information.finder();
+            {
+                let mut type_iter = self.type_information.iter();
+                while (type_iter.next()?).is_some() {
+                    type_finder.update(&type_iter);
+                }
+            }
+
+            // Iterate through all types
+            let xref_map: DashMap<pdb::TypeIndex, Vec<pdb::TypeIndex>> = DashMap::default();
+            let mut type_iter = self.type_information.iter();
+            while let Some(type_item) = type_iter.next()? {
+                let current_type_index = type_item.index();
+                // Reconstruct type and retrieve referenced types
+                let mut type_data = pdb_types::Data::new();
+                let mut needed_types = pdb_types::TypeSet::new();
+                type_data.add(
+                    &type_finder,
+                    &self.forwarder_to_complete_type,
+                    current_type_index,
+                    &PrimitiveReconstructionFlavor::Raw,
+                    &mut needed_types,
+                )?;
+
+                par_iter_if_available!(needed_types).for_each(|t| {
+                    if let Some(mut xref_list) = xref_map.get_mut(t) {
+                        xref_list.push(current_type_index);
+                    } else {
+                        xref_map.insert(*t, vec![current_type_index]);
+                    }
+                });
+            }
+
+            // Update cache
+            self.xref_map = xref_map;
+        }
+
+        // Query xref cache
+        if let Some(xref_list) = self.xref_map.get(&type_index) {
+            // Convert the xref list into a proper Name+TypeIndex tuple list
+            let xref_type_list = xref_list
+                .iter()
+                .map(|xref_type_index| {
+                    // Look for the corresponding tuple (in parallel if possible)
+                    let tuple = find_any_if_available!(
+                        self.complete_type_list,
+                        |(_, type_index)| type_index == xref_type_index
+                    )
+                    .expect("`complete_type_list` should contain type index");
+
+                    tuple.clone()
+                })
+                .collect();
+
+            Ok(xref_type_list)
+        } else {
+            // No xrefs found for the given type
+            Ok(vec![])
+        }
     }
 }
