@@ -307,7 +307,8 @@ impl ResymApp {
 
     fn update_bottom_panel(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::bottom("bottom_panel")
-            .default_height(100.0)
+            .min_height(100.0)
+            .resizable(true)
             .show(ctx, |ui| {
                 // Console panel
                 ui.vertical(|ui| {
