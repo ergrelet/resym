@@ -439,22 +439,8 @@ impl ResymApp {
 
                         // Cross-references button
                         if let Some(selected_type_index) = self.selected_type_index {
-                            if ui.button("🔍  Find Xrefs to").clicked() {
-                                log::info!(
-                                    "Looking for cross-references for type #0x{:x}...",
-                                    selected_type_index.0
-                                );
-                                if let Err(err) = self.backend.send_command(
-                                    BackendCommand::ListTypeCrossReferences(
-                                        ResymPDBSlots::Main as usize,
-                                        selected_type_index,
-                                    ),
-                                ) {
-                                    log::error!(
-                                        "Failed to list cross-references to type #0x{:x}: {err}",
-                                        selected_type_index.0
-                                    );
-                                }
+                            if ui.button("🔍  Find XRefs to (Ctrl+R)").clicked() {
+                                self.list_xrefs_for_type(selected_type_index);
                             }
                         }
                     }
@@ -480,7 +466,7 @@ impl ResymApp {
             }
         });
 
-        /// Keyboard shortcut for opening URLs
+        // Keyboard shortcut for opening URLs
         #[cfg(feature = "http")]
         const CTRL_L_SHORTCUT: egui::KeyboardShortcut = egui::KeyboardShortcut {
             modifiers: egui::Modifiers::CTRL,
@@ -493,7 +479,20 @@ impl ResymApp {
             }
         });
 
-        /// Keyboard shortcut for saving reconstructed content
+        // Keyboard shortcut for finding cross-references
+        const CTRL_R_SHORTCUT: egui::KeyboardShortcut = egui::KeyboardShortcut {
+            modifiers: egui::Modifiers::CTRL,
+            logical_key: egui::Key::R,
+        };
+        ui.input_mut(|input_state| {
+            if input_state.consume_shortcut(&CTRL_R_SHORTCUT) {
+                if let Some(selected_type_index) = self.selected_type_index {
+                    self.list_xrefs_for_type(selected_type_index);
+                }
+            }
+        });
+
+        // Keyboard shortcut for saving reconstructed content
         #[cfg(not(target_arch = "wasm32"))]
         const CTRL_S_SHORTCUT: egui::KeyboardShortcut = egui::KeyboardShortcut {
             modifiers: egui::Modifiers::CTRL,
@@ -833,6 +832,26 @@ impl ResymApp {
             )) {
                 log::error!("Failed to load the PDB file: {err}");
             }
+        }
+    }
+
+    /// Function invoked on 'Find XRefs to'
+    fn list_xrefs_for_type(&self, type_index: TypeIndex) {
+        log::info!(
+            "Looking for cross-references for type #0x{:x}...",
+            type_index.0
+        );
+        if let Err(err) = self
+            .backend
+            .send_command(BackendCommand::ListTypeCrossReferences(
+                ResymPDBSlots::Main as usize,
+                type_index,
+            ))
+        {
+            log::error!(
+                "Failed to list cross-references to type #0x{:x}: {err}",
+                type_index.0
+            );
         }
     }
 
