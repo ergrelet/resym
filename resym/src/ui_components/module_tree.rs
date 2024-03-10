@@ -10,6 +10,7 @@ use crate::{
 };
 
 /// UI component in charge of rendering a tree of PDB modules
+/// Warning: not thread-safe, use only in single-threaded contexts
 pub struct ModuleTreeComponent {
     /// Tree data
     module_tree_view: ModuleTreeView,

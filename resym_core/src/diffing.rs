@@ -83,8 +83,8 @@ where
 }
 
 pub fn diff_module_by_path<'p, T>(
-    pdb_file_from: &mut PdbFile<'p, T>,
-    pdb_file_to: &mut PdbFile<'p, T>,
+    pdb_file_from: &PdbFile<'p, T>,
+    pdb_file_to: &PdbFile<'p, T>,
     module_path: &str,
     primitives_flavor: PrimitiveReconstructionFlavor,
     print_header: bool,

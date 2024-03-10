@@ -9,7 +9,7 @@ use std::{
     collections::BTreeSet,
     io::{self, Read, Seek},
     path::PathBuf,
-    sync::Arc,
+    sync::{Arc, RwLock},
 };
 #[cfg(not(target_arch = "wasm32"))]
 use std::{fs::File, path::Path, time::Instant};
@@ -62,8 +62,8 @@ where
     pub type_information: pdb::TypeInformation<'p>,
     pub debug_information: pdb::DebugInformation<'p>,
     pub file_path: PathBuf,
-    pub xref_map: DashMap<pdb::TypeIndex, Vec<pdb::TypeIndex>>,
-    _pdb: pdb::PDB<'p, T>,
+    pub xref_map: RwLock<DashMap<pdb::TypeIndex, Vec<pdb::TypeIndex>>>,
+    pdb: RwLock<pdb::PDB<'p, T>>,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -83,8 +83,8 @@ impl<'p> PdbFile<'p, File> {
             type_information,
             debug_information,
             file_path: pdb_file_path.to_owned(),
-            xref_map: DashMap::default(),
-            _pdb: pdb,
+            xref_map: DashMap::default().into(),
+            pdb: pdb.into(),
         };
         pdb_file.load_symbols()?;
 
@@ -111,8 +111,8 @@ impl<'p> PdbFile<'p, PDBDataSource> {
             type_information,
             debug_information,
             file_path: pdb_file_name.into(),
-            xref_map: DashMap::default(),
-            _pdb: pdb,
+            xref_map: DashMap::default().into(),
+            pdb: pdb.into(),
         };
         pdb_file.load_symbols()?;
 
@@ -137,8 +137,8 @@ impl<'p> PdbFile<'p, PDBDataSource> {
             type_information,
             debug_information,
             file_path: pdb_file_name.into(),
-            xref_map: DashMap::default(),
-            _pdb: pdb,
+            xref_map: DashMap::default().into(),
+            pdb: pdb.into(),
         };
         pdb_file.load_symbols()?;
 
@@ -371,7 +371,7 @@ where
     }
 
     pub fn reconstruct_module_by_path(
-        &mut self,
+        &self,
         module_path: &str,
         primitives_flavor: PrimitiveReconstructionFlavor,
     ) -> Result<String> {
@@ -389,7 +389,7 @@ where
     }
 
     pub fn reconstruct_module_by_index(
-        &mut self,
+        &self,
         module_index: usize,
         primitives_flavor: PrimitiveReconstructionFlavor,
     ) -> Result<String> {
@@ -398,12 +398,17 @@ where
             ResymCoreError::ModuleInfoNotFoundError(format!("Module #{} not found", module_index))
         })?;
 
-        let module_info = self._pdb.module_info(&module)?.ok_or_else(|| {
-            ResymCoreError::ModuleInfoNotFoundError(format!(
-                "No module information present for '{}'",
-                module.object_file_name()
-            ))
-        })?;
+        let module_info = self
+            .pdb
+            .write()
+            .expect("lock shouldn't be poisoned")
+            .module_info(&module)?
+            .ok_or_else(|| {
+                ResymCoreError::ModuleInfoNotFoundError(format!(
+                    "No module information present for '{}'",
+                    module.object_file_name()
+                ))
+            })?;
 
         // Populate our `TypeFinder`
         let mut type_finder = self.type_information.finder();
@@ -611,11 +616,16 @@ where
     }
 
     pub fn get_xrefs_for_type(
-        &mut self,
+        &self,
         type_index: pdb::TypeIndex,
     ) -> Result<Vec<(String, pdb::TypeIndex)>> {
         // Generate xref cache if empty
-        if self.xref_map.is_empty() {
+        if self
+            .xref_map
+            .read()
+            .expect("lock shouldn't be poisoned")
+            .is_empty()
+        {
             // Populate our `TypeFinder`
             let mut type_finder = self.type_information.finder();
             {
@@ -651,11 +661,18 @@ where
             }
 
             // Update cache
-            self.xref_map = xref_map;
+            if let Ok(mut xref_map_ref) = self.xref_map.write() {
+                *xref_map_ref = xref_map;
+            }
         }
 
         // Query xref cache
-        if let Some(xref_list) = self.xref_map.get(&type_index) {
+        if let Some(xref_list) = self
+            .xref_map
+            .read()
+            .expect("lock shouldn't be poisoned")
+            .get(&type_index)
+        {
             // Convert the xref list into a proper Name+TypeIndex tuple list
             let xref_type_list = xref_list
                 .iter()

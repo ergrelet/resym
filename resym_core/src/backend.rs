@@ -11,7 +11,6 @@ use rayon::{
 #[cfg(all(not(feature = "rayon"), not(target_arch = "wasm32")))]
 use std::thread::{self, JoinHandle};
 use std::{
-    cell::RefCell,
     collections::{BTreeSet, HashMap},
     io,
     sync::Arc,
@@ -173,7 +172,7 @@ fn worker_thread_routine(
     rx_worker: Receiver<BackendCommand>,
     frontend_controller: Arc<impl FrontendController + Send + Sync + 'static>,
 ) -> Result<()> {
-    let mut pdb_files: HashMap<PDBSlot, RefCell<PdbFile<PDBDataSource>>> = HashMap::new();
+    let mut pdb_files: HashMap<PDBSlot, PdbFile<PDBDataSource>> = HashMap::new();
     while let Ok(command) = rx_worker.recv() {
         match command {
             #[cfg(not(target_arch = "wasm32"))]
@@ -185,11 +184,8 @@ fn worker_thread_routine(
                     Ok(loaded_pdb_file) => {
                         frontend_controller
                             .send_command(FrontendCommand::LoadPDBResult(Ok(pdb_slot)))?;
-                        if let Some(pdb_file) = pdb_files.insert(pdb_slot, loaded_pdb_file.into()) {
-                            log::info!(
-                                "'{}' has been unloaded.",
-                                pdb_file.borrow().file_path.display()
-                            );
+                        if let Some(pdb_file) = pdb_files.insert(pdb_slot, loaded_pdb_file) {
+                            log::info!("'{}' has been unloaded.", pdb_file.file_path.display());
                         }
                         log::info!(
                             "'{}' has been loaded successfully!",
@@ -207,11 +203,8 @@ fn worker_thread_routine(
                     Ok(loaded_pdb_file) => {
                         frontend_controller
                             .send_command(FrontendCommand::LoadPDBResult(Ok(pdb_slot)))?;
-                        if let Some(pdb_file) = pdb_files.insert(pdb_slot, loaded_pdb_file.into()) {
-                            log::info!(
-                                "'{}' has been unloaded.",
-                                pdb_file.borrow().file_path.display()
-                            );
+                        if let Some(pdb_file) = pdb_files.insert(pdb_slot, loaded_pdb_file) {
+                            log::info!("'{}' has been unloaded.", pdb_file.file_path.display());
                         }
                         log::info!("'{}' has been loaded successfully!", pdb_name);
                     }
@@ -226,11 +219,8 @@ fn worker_thread_routine(
                     Ok(loaded_pdb_file) => {
                         frontend_controller
                             .send_command(FrontendCommand::LoadPDBResult(Ok(pdb_slot)))?;
-                        if let Some(pdb_file) = pdb_files.insert(pdb_slot, loaded_pdb_file.into()) {
-                            log::info!(
-                                "'{}' has been unloaded.",
-                                pdb_file.borrow().file_path.display()
-                            );
+                        if let Some(pdb_file) = pdb_files.insert(pdb_slot, loaded_pdb_file) {
+                            log::info!("'{}' has been unloaded.", pdb_file.file_path.display());
                         }
                         log::info!("'{}' has been loaded successfully!", pdb_name);
                     }
@@ -279,10 +269,7 @@ fn worker_thread_routine(
                     log::error!("Trying to unload an inexistent PDB");
                 }
                 Some(pdb_file) => {
-                    log::info!(
-                        "'{}' has been unloaded.",
-                        pdb_file.borrow().file_path.display()
-                    );
+                    log::info!("'{}' has been unloaded.", pdb_file.file_path.display());
                 }
             },
 
@@ -296,7 +283,7 @@ fn worker_thread_routine(
             ) => {
                 if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
                     let reconstructed_type_result = reconstruct_type_by_index_command(
-                        &pdb_file.borrow(),
+                        pdb_file,
                         type_index,
                         primitives_flavor,
                         print_header,
@@ -319,7 +306,7 @@ fn worker_thread_routine(
             ) => {
                 if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
                     let reconstructed_type_result = reconstruct_type_by_name_command(
-                        &pdb_file.borrow(),
+                        pdb_file,
                         &type_name,
                         primitives_flavor,
                         print_header,
@@ -340,7 +327,7 @@ fn worker_thread_routine(
             ) => {
                 if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
                     let reconstructed_type_result = reconstruct_all_types_command(
-                        &pdb_file.borrow(),
+                        pdb_file,
                         primitives_flavor,
                         print_header,
                         print_access_specifiers,
@@ -359,7 +346,7 @@ fn worker_thread_routine(
             ) => {
                 if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
                     let filtered_type_list = update_type_filter_command(
-                        &pdb_file.borrow(),
+                        pdb_file,
                         &search_filter,
                         case_insensitive_search,
                         use_regex,
@@ -380,7 +367,7 @@ fn worker_thread_routine(
                 for pdb_slot in pdb_slots {
                     if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
                         let filtered_type_list = update_type_filter_command(
-                            &pdb_file.borrow(),
+                            pdb_file,
                             &search_filter,
                             case_insensitive_search,
                             use_regex,
@@ -407,7 +394,7 @@ fn worker_thread_routine(
             ) => {
                 if let Some(pdb_file) = pdb_files.get_mut(&pdb_slot) {
                     let reconstructed_module_result = reconstruct_module_by_index_command(
-                        &mut pdb_file.borrow_mut(),
+                        pdb_file,
                         module_index,
                         primitives_flavor,
                         print_header,
@@ -426,7 +413,7 @@ fn worker_thread_routine(
             ) => {
                 if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
                     let module_list = list_modules_command(
-                        &pdb_file.borrow(),
+                        pdb_file,
                         &search_filter,
                         case_insensitive_search,
                         use_regex,
@@ -448,8 +435,8 @@ fn worker_thread_routine(
                 if let Some(pdb_file_from) = pdb_files.get(&pdb_from_slot) {
                     if let Some(pdb_file_to) = pdb_files.get(&pdb_to_slot) {
                         let type_diff_result = diff_type_by_name(
-                            &pdb_file_from.borrow(),
-                            &pdb_file_to.borrow(),
+                            pdb_file_from,
+                            pdb_file_to,
                             &type_name,
                             primitives_flavor,
                             print_header,
@@ -472,8 +459,8 @@ fn worker_thread_routine(
                 if let Some(pdb_file_from) = pdb_files.get(&pdb_from_slot) {
                     if let Some(pdb_file_to) = pdb_files.get(&pdb_to_slot) {
                         let module_diff_result = diff_module_by_path(
-                            &mut pdb_file_from.borrow_mut(),
-                            &mut pdb_file_to.borrow_mut(),
+                            pdb_file_from,
+                            pdb_file_to,
                             &module_path,
                             primitives_flavor,
                             print_header,
@@ -486,7 +473,7 @@ fn worker_thread_routine(
 
             BackendCommand::ListTypeCrossReferences(pdb_slot, type_index) => {
                 if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
-                    let xref_list = list_type_xrefs_command(&mut pdb_file.borrow_mut(), type_index);
+                    let xref_list = list_type_xrefs_command(pdb_file, type_index);
                     frontend_controller
                         .send_command(FrontendCommand::ListTypeCrossReferencesResult(xref_list))?;
                 }
@@ -769,7 +756,7 @@ fn filter_modules_regular(
 }
 
 fn list_type_xrefs_command<'p, T>(
-    pdb_file: &mut PdbFile<'p, T>,
+    pdb_file: &PdbFile<'p, T>,
     type_index: pdb::TypeIndex,
 ) -> Result<Vec<(String, pdb::TypeIndex)>>
 where
