@@ -32,7 +32,8 @@ impl ConsoleComponent {
                     ui.add(
                         egui::TextEdit::singleline(&mut self.content[row_index].as_str())
                             .font(TEXT_STYLE)
-                            .clip_text(false),
+                            .clip_text(false)
+                            .desired_width(f32::INFINITY),
                     );
                 }
             },
