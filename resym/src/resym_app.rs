@@ -529,8 +529,14 @@ impl ResymApp {
                                 }
                             }
 
+                            // Reset current mode
                             self.current_mode =
                                 ResymAppMode::Browsing(String::default(), 0, String::default());
+                            // Reset selected type
+                            self.selected_type_index = None;
+                            // Reset xref list
+                            self.xref_list.update_type_list(vec![]);
+
                             // Request a type list update
                             if let Err(err) =
                                 self.backend.send_command(BackendCommand::UpdateTypeFilter(
@@ -554,6 +560,7 @@ impl ResymApp {
                                 log::error!("Failed to update module list: {}", err);
                             }
                         } else if pdb_slot == ResymPDBSlots::Diff as usize {
+                            // Reset current mode
                             self.current_mode = ResymAppMode::Comparing(
                                 String::default(),
                                 String::default(),
@@ -561,6 +568,11 @@ impl ResymApp {
                                 vec![],
                                 String::default(),
                             );
+                            // Reset selected type
+                            self.selected_type_index = None;
+                            // Reset xref list
+                            self.xref_list.update_type_list(vec![]);
+
                             // Request a type list update
                             if let Err(err) =
                                 self.backend
