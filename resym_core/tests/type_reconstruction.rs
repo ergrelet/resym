@@ -27,6 +27,7 @@ const TEST_CASES: &[&str] = &[
     "resym_test::BitFieldsTest6",
     "resym_test::BitFieldsTest7",
     "resym_test::NestedStructUnionRegression1",
+    "resym_test::NtdllRegression1",
 ];
 
 #[test]
