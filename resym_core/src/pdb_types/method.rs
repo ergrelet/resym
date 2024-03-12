@@ -8,7 +8,7 @@ use crate::error::{Result, ResymCoreError};
 pub struct Method<'p> {
     pub name: pdb::RawString<'p>,
     pub return_type_name: (String, String),
-    pub arguments: Vec<String>,
+    pub arguments: Vec<(String, String)>,
     pub is_virtual: bool,
     pub is_pure_virtual: bool,
     pub is_ctor: bool,

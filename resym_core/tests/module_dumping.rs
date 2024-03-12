@@ -8,8 +8,7 @@ const TEST_MODULE_PATH: &str = "D:\\a\\_work\\1\\s\\Intermediate\\crt\\vcstartup
 
 #[test]
 fn test_module_dumping_by_path_portable() {
-    let mut pdb_file =
-        PdbFile::load_from_file(Path::new(TEST_PDB_FILE_PATH)).expect("load test.pdb");
+    let pdb_file = PdbFile::load_from_file(Path::new(TEST_PDB_FILE_PATH)).expect("load test.pdb");
 
     let module_dump = pdb_file
         .reconstruct_module_by_path(TEST_MODULE_PATH, PrimitiveReconstructionFlavor::Portable)
@@ -50,8 +49,7 @@ fn test_module_dumping_by_index_internal(
     module_index: usize,
     primitives_flavor: PrimitiveReconstructionFlavor,
 ) {
-    let mut pdb_file =
-        PdbFile::load_from_file(Path::new(TEST_PDB_FILE_PATH)).expect("load test.pdb");
+    let pdb_file = PdbFile::load_from_file(Path::new(TEST_PDB_FILE_PATH)).expect("load test.pdb");
 
     let module_dump = pdb_file
         .reconstruct_module_by_index(module_index, primitives_flavor)
