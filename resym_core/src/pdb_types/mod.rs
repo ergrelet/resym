@@ -113,7 +113,7 @@ pub fn type_name(
             // Resolve the complete type's index, if present in the PDB
             let complete_element_type_index =
                 resolve_complete_type_index(type_forwarder, data.element_type);
-            let (base_name, mut dimensions) = array_base_name(
+            let ((type_left, type_right), mut dimensions) = array_base_name(
                 type_finder,
                 type_forwarder,
                 complete_element_type_index,
@@ -123,8 +123,9 @@ pub fn type_name(
             let type_size = u32::try_from(type_size(type_finder, complete_element_type_index)?)?;
             let mut divider = if type_size == 0 {
                 log::warn!(
-                    "'{}' has invalid size (0), array dimensions might be incorrect",
-                    base_name
+                    "'{}{}' has invalid size (0), array dimensions might be incorrect",
+                    type_left,
+                    type_right,
                 );
                 1
             } else {
@@ -149,7 +150,7 @@ pub fn type_name(
                 dimensions_str = format!("{dimensions_str}[{dim}]");
             }
 
-            (base_name, dimensions_str)
+            (type_left, format!("{}{}", dimensions_str, type_right))
         }
 
         pdb::TypeData::Bitfield(data) => {
@@ -252,13 +253,13 @@ fn array_base_name(
     type_index: pdb::TypeIndex,
     primitive_flavor: &PrimitiveReconstructionFlavor,
     needed_types: &mut TypeSet,
-) -> Result<(String, Vec<usize>)> {
+) -> Result<((String, String), Vec<usize>)> {
     match type_finder.find(type_index)?.parse()? {
         pdb::TypeData::Array(data) => {
             // Resolve the complete type's index, if present in the PDB
             let complete_element_type_index =
                 resolve_complete_type_index(type_forwarder, data.element_type);
-            let (base_name, mut base_dimensions) = array_base_name(
+            let ((type_left, type_right), mut base_dimensions) = array_base_name(
                 type_finder,
                 type_forwarder,
                 complete_element_type_index,
@@ -268,8 +269,9 @@ fn array_base_name(
             let type_size = u32::try_from(type_size(type_finder, complete_element_type_index)?)?;
             let mut divider = if type_size == 0 {
                 log::warn!(
-                    "'{}' has invalid size (0), array dimensions might be incorrect",
-                    base_name
+                    "'{}{}' has invalid size (0), array dimensions might be incorrect",
+                    type_left,
+                    type_right,
                 );
                 1
             } else {
@@ -287,7 +289,7 @@ fn array_base_name(
                 .collect::<Vec<_>>();
             base_dimensions.append(&mut dimensions_elem_count);
 
-            Ok((base_name, base_dimensions))
+            Ok(((type_left, type_right), base_dimensions))
         }
         _ => Ok((
             type_name(
@@ -296,8 +298,7 @@ fn array_base_name(
                 type_index,
                 primitive_flavor,
                 needed_types,
-            )?
-            .0,
+            )?,
             vec![],
         )),
     }

@@ -423,6 +423,13 @@ struct NestedStructUnionRegression1 {
   }; /* size: 0x0008 */
 };
 
+struct NtdllRegression1 {
+  VOID(*KernelRoutine)
+  (struct _KAPC* arg1, VOID (**arg2)(VOID* arg1, VOID* arg2, VOID* arg3),
+   VOID** arg3, VOID** arg4, VOID** arg5);
+  LONG (*MajorFunction[28])(struct _DEVICE_OBJECT* arg1, struct _IRP* arg2);
+};
+
 }  // namespace resym_test
 
 int main() {
