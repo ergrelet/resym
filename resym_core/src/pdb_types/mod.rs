@@ -193,7 +193,14 @@ pub fn type_name(
 
             (
                 format!("{ret_type_left}{ret_type_right} ("),
-                format!(")({})", arg_list.join(", ")),
+                format!(
+                    ")({})",
+                    arg_list
+                        .into_iter()
+                        .map(|(type_left, type_right)| format!("{type_left}{type_right}"))
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                ),
             )
         }
 
@@ -228,7 +235,14 @@ pub fn type_name(
 
             (
                 format!("{ret_type_left}{ret_type_right} ({class_type_left}::"),
-                format!(")({})", arg_list.join(", ")),
+                format!(
+                    ")({})",
+                    arg_list
+                        .into_iter()
+                        .map(|(type_left, type_right)| format!("{type_left}{type_right}"))
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                ),
             )
         }
 
@@ -310,21 +324,18 @@ pub fn argument_list(
     type_index: pdb::TypeIndex,
     primitive_flavor: &PrimitiveReconstructionFlavor,
     needed_types: &mut TypeSet,
-) -> Result<Vec<String>> {
+) -> Result<Vec<(String, String)>> {
     match type_finder.find(type_index)?.parse()? {
         pdb::TypeData::ArgumentList(data) => {
-            let mut args: Vec<String> = Vec::new();
+            let mut args = Vec::new();
             for arg_type in data.arguments {
-                args.push(
-                    type_name(
-                        type_finder,
-                        type_forwarder,
-                        arg_type,
-                        primitive_flavor,
-                        needed_types,
-                    )?
-                    .0,
-                );
+                args.push(type_name(
+                    type_finder,
+                    type_forwarder,
+                    arg_type,
+                    primitive_flavor,
+                    needed_types,
+                )?);
             }
             Ok(args)
         }

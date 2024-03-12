@@ -510,7 +510,12 @@ impl<'p> Class<'p> {
                         ""
                     },
                     &method.name,
-                    method.arguments.join(", "),
+                    method
+                        .arguments
+                        .iter()
+                        .map(|(type_left, type_right)| format!("{type_left}{type_right}"))
+                        .collect::<Vec<String>>()
+                        .join(", "),
                     method.return_type_name.1,
                     if method.is_const { " const" } else { "" },
                     if method.is_volatile { " volatile" } else { "" },
@@ -537,7 +542,12 @@ impl<'p> Class<'p> {
                         ""
                     },
                     &method.name,
-                    method.arguments.join(", "),
+                    method
+                        .arguments
+                        .iter()
+                        .map(|(type_left, type_right)| format!("{type_left}{type_right}"))
+                        .collect::<Vec<String>>()
+                        .join(", "),
                     method.return_type_name.1,
                     if method.is_const { " const" } else { "" },
                     if method.is_volatile { " volatile" } else { "" },
