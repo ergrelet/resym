@@ -1,6 +1,6 @@
 use super::{
     argument_list, field::FieldAccess, primitive_types::PrimitiveReconstructionFlavor, type_name,
-    TypeForwarder, TypeSet,
+    NeededTypeSet, TypeForwarder,
 };
 use crate::error::{Result, ResymCoreError};
 
@@ -26,7 +26,7 @@ impl<'p> Method<'p> {
         type_forwarder: &TypeForwarder,
         type_index: pdb::TypeIndex,
         primitive_flavor: &PrimitiveReconstructionFlavor,
-        needed_types: &mut TypeSet,
+        needed_types: &mut NeededTypeSet,
     ) -> Result<Method<'p>> {
         match type_finder.find(type_index)?.parse()? {
             pdb::TypeData::MemberFunction(data) => Ok(Method {

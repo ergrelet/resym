@@ -7,7 +7,8 @@ use super::{
     primitive_types::PrimitiveReconstructionFlavor,
     resolve_complete_type_index, type_bitfield_info, type_name, type_size,
     union::Union,
-    DataFormatConfiguration, Field, Method, Result, ResymCoreError, TypeForwarder, TypeSet,
+    DataFormatConfiguration, Field, Method, NeededTypeSet, ReconstructibleTypeData, Result,
+    ResymCoreError, TypeForwarder,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,6 +53,7 @@ pub struct BaseClass {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Class<'p> {
+    pub index: pdb::TypeIndex,
     pub kind: pdb::ClassKind,
     pub name: String,
     pub size: u64,
@@ -71,7 +73,7 @@ impl<'p> Class<'p> {
         &mut self,
         _: &pdb::TypeFinder<'p>,
         _: pdb::TypeIndex,
-        _: &mut TypeSet,
+        _: &mut NeededTypeSet,
     ) -> Result<()> {
         // TODO
         Ok(())
@@ -83,7 +85,7 @@ impl<'p> Class<'p> {
         type_forwarder: &TypeForwarder,
         type_index: pdb::TypeIndex,
         primitive_flavor: &PrimitiveReconstructionFlavor,
-        needed_types: &mut TypeSet,
+        needed_types: &mut NeededTypeSet,
     ) -> Result<()> {
         // Resolve the complete type's index, if present in the PDB
         let complete_type_index = resolve_complete_type_index(type_forwarder, type_index);
@@ -122,6 +124,7 @@ impl<'p> Class<'p> {
                 };
 
                 let mut class = Class {
+                    index: type_index,
                     kind: data.kind,
                     name,
                     size: data.size,
@@ -162,6 +165,7 @@ impl<'p> Class<'p> {
                 };
 
                 let mut u = Union {
+                    index: type_index,
                     name,
                     size: data.size,
                     fields: Vec::new(),
@@ -194,6 +198,7 @@ impl<'p> Class<'p> {
                 };
 
                 let mut e = Enum {
+                    index: type_index,
                     name,
                     underlying_type_name: type_name(
                         type_finder,
@@ -237,7 +242,7 @@ impl<'p> Class<'p> {
         type_forwarder: &TypeForwarder,
         field: &pdb::TypeData<'p>,
         primitive_flavor: &PrimitiveReconstructionFlavor,
-        needed_types: &mut TypeSet,
+        needed_types: &mut NeededTypeSet,
     ) -> Result<()> {
         match *field {
             pdb::TypeData::Member(ref data) => {
@@ -410,8 +415,10 @@ impl<'p> Class<'p> {
 
         Ok(())
     }
+}
 
-    pub fn reconstruct(
+impl ReconstructibleTypeData for Class<'_> {
+    fn reconstruct(
         &self,
         fmt_configuration: &DataFormatConfiguration,
         f: &mut impl std::fmt::Write,
@@ -464,7 +471,7 @@ impl<'p> Class<'p> {
         if !self.nested_enums.is_empty() {
             writeln!(f, "  ")?;
             for e in &self.nested_enums {
-                e.reconstruct(f)?;
+                e.reconstruct(fmt_configuration, f)?;
             }
         }
 

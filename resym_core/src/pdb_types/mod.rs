@@ -1,11 +1,13 @@
 mod class;
 mod enumeration;
 mod field;
+mod forward_declaration;
+mod forward_reference;
 mod method;
 mod primitive_types;
 mod union;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 use std::ops::Range;
 
@@ -19,8 +21,14 @@ use union::Union;
 
 pub use primitive_types::{include_headers_for_flavor, PrimitiveReconstructionFlavor};
 
-/// Set of `TypeIndex` objets
-pub type TypeSet = BTreeSet<pdb::TypeIndex>;
+use self::forward_declaration::{ForwardDeclaration, ForwardDeclarationKind};
+use self::forward_reference::ForwardReference;
+
+/// Set of (`TypeIndex`, bool) tuples.
+///
+/// The boolean value indicates whether the type was referenced via a pointer
+/// or a C++ reference.
+pub type NeededTypeSet = HashSet<(pdb::TypeIndex, bool)>;
 
 pub type TypeForwarder = dashmap::DashMap<pdb::TypeIndex, pdb::TypeIndex>;
 
@@ -30,7 +38,7 @@ pub fn type_name(
     type_forwarder: &TypeForwarder,
     type_index: pdb::TypeIndex,
     primitive_flavor: &PrimitiveReconstructionFlavor,
-    needed_types: &mut TypeSet,
+    needed_types: &mut NeededTypeSet,
 ) -> Result<(String, String)> {
     let (type_left, type_right) = match type_finder.find(type_index)?.parse()? {
         pdb::TypeData::Primitive(data) => {
@@ -41,7 +49,7 @@ pub fn type_name(
         }
 
         pdb::TypeData::Class(data) => {
-            needed_types.insert(type_index);
+            needed_types.insert((type_index, false));
             // Rename unnamed anonymous tags to something unique
             let name = data.name.to_string();
             if is_unnamed_type(&name) {
@@ -53,7 +61,7 @@ pub fn type_name(
         }
 
         pdb::TypeData::Union(data) => {
-            needed_types.insert(type_index);
+            needed_types.insert((type_index, false));
             // Rename unnamed anonymous tags to something unique
             let name = data.name.to_string();
             if is_unnamed_type(&name) {
@@ -65,7 +73,7 @@ pub fn type_name(
         }
 
         pdb::TypeData::Enumeration(data) => {
-            needed_types.insert(type_index);
+            needed_types.insert((type_index, false));
             (data.name.to_string().into_owned(), String::default())
         }
 
@@ -73,13 +81,25 @@ pub fn type_name(
             // Resolve the complete type's index, if present in the PDB
             let complete_underlying_type_index =
                 resolve_complete_type_index(type_forwarder, data.underlying_type);
+            let mut temporary_needed_types = HashSet::new();
             let (type_left, type_right) = type_name(
                 type_finder,
                 type_forwarder,
                 complete_underlying_type_index,
                 primitive_flavor,
-                needed_types,
+                &mut temporary_needed_types,
             )?;
+
+            if temporary_needed_types.len() < 2 {
+                // "Simple" type (e.g., class, union, enum) -> add as pointer
+                if let Some(needed_type) = temporary_needed_types.into_iter().next() {
+                    needed_types.insert((needed_type.0, true));
+                }
+            } else {
+                // "Complex" type (e.g., procedure) -> add as is
+                needed_types.extend(temporary_needed_types);
+            }
+
             if data.attributes.is_reference() {
                 (format!("{type_left}&"), type_right)
             } else {
@@ -266,7 +286,7 @@ fn array_base_name(
     type_forwarder: &TypeForwarder,
     type_index: pdb::TypeIndex,
     primitive_flavor: &PrimitiveReconstructionFlavor,
-    needed_types: &mut TypeSet,
+    needed_types: &mut NeededTypeSet,
 ) -> Result<((String, String), Vec<usize>)> {
     match type_finder.find(type_index)?.parse()? {
         pdb::TypeData::Array(data) => {
@@ -323,7 +343,7 @@ pub fn argument_list(
     type_forwarder: &TypeForwarder,
     type_index: pdb::TypeIndex,
     primitive_flavor: &PrimitiveReconstructionFlavor,
-    needed_types: &mut TypeSet,
+    needed_types: &mut NeededTypeSet,
 ) -> Result<Vec<(String, String)>> {
     match type_finder.find(type_index)?.parse()? {
         pdb::TypeData::ArgumentList(data) => {
@@ -449,46 +469,90 @@ pub fn is_unnamed_type(type_name: &str) -> bool {
         || type_name.contains("__unnamed")
 }
 
+/// Trait for type data that can be reconstructed to C++
+pub trait ReconstructibleTypeData {
+    fn reconstruct(
+        &self,
+        fmt_configuration: &DataFormatConfiguration,
+        f: &mut impl std::fmt::Write,
+    ) -> fmt::Result;
+}
+
 /// Struct that represent a set of reconstructed types (forward declarations,
 /// classes/structs, enums and unions)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Data<'p> {
-    forward_references: Vec<ForwardReference>,
-    classes: Vec<Class<'p>>,
-    enums: Vec<Enum<'p>>,
-    unions: Vec<Union<'p>>,
+    /// Forward-declared types which are referenced in this PDB but not defined in it
+    forward_references: BTreeMap<pdb::TypeIndex, ForwardReference>,
+    /// Forward-declared types which are defined in this PDB
+    forward_declarations: BTreeMap<pdb::TypeIndex, ForwardDeclaration>,
+    /// Enum types
+    enums: BTreeMap<pdb::TypeIndex, Enum<'p>>,
+    /// Class/struct types
+    classes: BTreeMap<pdb::TypeIndex, Class<'p>>,
+    /// Union types
+    unions: BTreeMap<pdb::TypeIndex, Union<'p>>,
 }
 
 impl Data<'_> {
     pub fn reconstruct(
         &self,
         fmt_configuration: &DataFormatConfiguration,
+        type_depth_map: &BTreeMap<usize, Vec<pdb::TypeIndex>>,
         f: &mut impl std::fmt::Write,
-    ) -> fmt::Result {
+    ) -> Result<()> {
         // Types without definition
         if !self.forward_references.is_empty() {
             writeln!(f)?;
-            for e in &self.forward_references {
-                e.reconstruct(f)?;
-            }
+        }
+        for e in self.forward_references.values() {
+            e.reconstruct(fmt_configuration, f)?;
+        }
+
+        // Forward declarations
+        if !self.forward_declarations.is_empty() {
+            writeln!(f)?;
+        }
+        for e in self.forward_declarations.values() {
+            e.reconstruct(fmt_configuration, f)?;
         }
 
         // Enum definitions
-        for e in &self.enums {
+        for e in self.enums.values() {
             writeln!(f)?;
-            e.reconstruct(f)?;
+            e.reconstruct(fmt_configuration, f)?;
         }
 
-        // Class/struct definitions
-        for class in &self.classes {
-            writeln!(f)?;
-            class.reconstruct(fmt_configuration, f)?;
-        }
+        if !type_depth_map.is_empty() {
+            // Follow type depth map order
+            for type_indices in type_depth_map.values().rev() {
+                for type_index in type_indices.iter() {
+                    // Class definitions
+                    if let Some(class) = self.classes.get(type_index) {
+                        writeln!(f)?;
+                        class.reconstruct(fmt_configuration, f)?;
+                    }
+                    // Union definitions
+                    else if let Some(union) = self.unions.get(type_index) {
+                        writeln!(f)?;
+                        union.reconstruct(fmt_configuration, f)?;
+                    }
+                }
+            }
+        } else {
+            // Follow type index order
+            //
+            // Class/struct definitions
+            for class in self.classes.values() {
+                writeln!(f)?;
+                class.reconstruct(fmt_configuration, f)?;
+            }
 
-        // Union definitions
-        for u in &self.unions {
-            writeln!(f)?;
-            u.reconstruct(fmt_configuration, f)?;
+            // Union definitions
+            for u in self.unions.values() {
+                writeln!(f)?;
+                u.reconstruct(fmt_configuration, f)?;
+            }
         }
 
         Ok(())
@@ -504,10 +568,11 @@ impl<'p> Default for Data<'p> {
 impl<'p> Data<'p> {
     pub fn new() -> Self {
         Self {
-            forward_references: Vec::new(),
-            classes: Vec::new(),
-            enums: Vec::new(),
-            unions: Vec::new(),
+            forward_references: BTreeMap::new(),
+            forward_declarations: BTreeMap::new(),
+            classes: BTreeMap::new(),
+            enums: BTreeMap::new(),
+            unions: BTreeMap::new(),
         }
     }
 
@@ -517,7 +582,7 @@ impl<'p> Data<'p> {
         type_forwarder: &TypeForwarder,
         type_index: pdb::TypeIndex,
         primitive_flavor: &PrimitiveReconstructionFlavor,
-        needed_types: &mut TypeSet,
+        needed_types: &mut NeededTypeSet,
     ) -> Result<()> {
         match type_finder.find(type_index)?.parse()? {
             pdb::TypeData::Class(data) => {
@@ -530,17 +595,22 @@ impl<'p> Data<'p> {
                 };
 
                 if data.properties.forward_reference() {
-                    self.forward_references.push(ForwardReference {
-                        kind: data.kind,
-                        name,
-                    });
+                    self.forward_references.insert(
+                        type_index,
+                        ForwardReference {
+                            index: type_index,
+                            kind: data.kind,
+                            name,
+                        },
+                    );
 
                     return Ok(());
                 }
 
                 let mut class = Class {
+                    index: type_index,
                     kind: data.kind,
-                    name,
+                    name: name.clone(),
                     size: data.size,
                     fields: Vec::new(),
                     static_fields: Vec::new(),
@@ -576,7 +646,7 @@ impl<'p> Data<'p> {
                     }
                 }
 
-                self.classes.insert(0, class);
+                self.classes.insert(type_index, class);
             }
 
             pdb::TypeData::Union(data) => {
@@ -589,7 +659,8 @@ impl<'p> Data<'p> {
                 };
 
                 let mut u = Union {
-                    name,
+                    index: type_index,
+                    name: name.clone(),
                     size: data.size,
                     fields: Vec::new(),
                     static_fields: Vec::new(),
@@ -614,7 +685,7 @@ impl<'p> Data<'p> {
                     );
                 }
 
-                self.unions.insert(0, u);
+                self.unions.insert(type_index, u);
             }
 
             pdb::TypeData::Enumeration(data) => {
@@ -627,7 +698,8 @@ impl<'p> Data<'p> {
                 };
 
                 let mut e = Enum {
-                    name,
+                    index: type_index,
+                    name: name.clone(),
                     underlying_type_name: type_name(
                         type_finder,
                         type_forwarder,
@@ -647,11 +719,61 @@ impl<'p> Data<'p> {
                     );
                 }
 
-                self.enums.insert(0, e);
+                self.enums.insert(type_index, e);
             }
 
             // ignore
             other => log::debug!("don't know how to add {:?}", other),
+        }
+
+        Ok(())
+    }
+
+    pub fn add_as_forward_declaration(
+        &mut self,
+        type_finder: &pdb::TypeFinder<'p>,
+        type_index: pdb::TypeIndex,
+    ) -> Result<()> {
+        match type_finder.find(type_index)?.parse()? {
+            pdb::TypeData::Class(data) => {
+                let name_str = data.name.to_string();
+                // Rename unnamed anonymous tags to something unique
+                let name = if is_unnamed_type(&name_str) {
+                    format!("_unnamed_{type_index}")
+                } else {
+                    name_str.into_owned()
+                };
+
+                self.forward_declarations.insert(
+                    type_index,
+                    ForwardDeclaration {
+                        index: type_index,
+                        kind: ForwardDeclarationKind::from_class_kind(data.kind),
+                        name,
+                    },
+                );
+            }
+
+            pdb::TypeData::Union(data) => {
+                let name_str = data.name.to_string();
+                // Rename unnamed anonymous tags to something unique
+                let name = if is_unnamed_type(&name_str) {
+                    format!("_unnamed_{type_index}")
+                } else {
+                    name_str.into_owned()
+                };
+
+                self.forward_declarations.insert(
+                    type_index,
+                    ForwardDeclaration {
+                        index: type_index,
+                        kind: ForwardDeclarationKind::Union,
+                        name,
+                    },
+                );
+            }
+
+            _ => {}
         }
 
         Ok(())
@@ -957,27 +1079,6 @@ fn find_unnamed_structs_in_unions(fields: &[Field]) -> Vec<Range<usize>> {
     }
 
     structs_found
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ForwardReference {
-    kind: pdb::ClassKind,
-    name: String,
-}
-
-impl ForwardReference {
-    pub fn reconstruct(&self, f: &mut impl std::fmt::Write) -> fmt::Result {
-        writeln!(
-            f,
-            "{} {};",
-            match self.kind {
-                pdb::ClassKind::Class => "class",
-                pdb::ClassKind::Struct => "struct",
-                pdb::ClassKind::Interface => "interface", // when can this happen?
-            },
-            self.name
-        )
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

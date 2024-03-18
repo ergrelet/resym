@@ -1,10 +1,11 @@
 use std::fmt;
 
-use super::TypeSet;
+use super::{DataFormatConfiguration, NeededTypeSet, ReconstructibleTypeData};
 use crate::error::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Enum<'p> {
+    pub index: pdb::TypeIndex,
     pub name: String,
     pub underlying_type_name: String,
     pub values: Vec<EnumValue<'p>>,
@@ -15,7 +16,7 @@ impl<'p> Enum<'p> {
         &mut self,
         type_finder: &pdb::TypeFinder<'p>,
         type_index: pdb::TypeIndex,
-        needed_types: &mut TypeSet,
+        needed_types: &mut NeededTypeSet,
     ) -> Result<()> {
         match type_finder.find(type_index)?.parse()? {
             pdb::TypeData::FieldList(data) => {
@@ -40,7 +41,12 @@ impl<'p> Enum<'p> {
         Ok(())
     }
 
-    fn add_field(&mut self, _: &pdb::TypeFinder<'p>, field: &pdb::TypeData<'p>, _: &mut TypeSet) {
+    fn add_field(
+        &mut self,
+        _: &pdb::TypeFinder<'p>,
+        field: &pdb::TypeData<'p>,
+        _: &mut NeededTypeSet,
+    ) {
         // ignore everything else even though that's sad
         if let pdb::TypeData::Enumerate(ref data) = field {
             self.values.push(EnumValue {
@@ -49,8 +55,14 @@ impl<'p> Enum<'p> {
             });
         }
     }
+}
 
-    pub fn reconstruct(&self, f: &mut impl std::fmt::Write) -> fmt::Result {
+impl ReconstructibleTypeData for Enum<'_> {
+    fn reconstruct(
+        &self,
+        _fmt_configuration: &DataFormatConfiguration,
+        f: &mut impl std::fmt::Write,
+    ) -> fmt::Result {
         writeln!(f, "enum {} : {} {{", self.name, self.underlying_type_name)?;
 
         for value in &self.values {

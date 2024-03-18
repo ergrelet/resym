@@ -6,7 +6,7 @@ use pdb::FallibleIterator;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     io::{self, Read, Seek},
     path::PathBuf,
     sync::{Arc, RwLock},
@@ -421,7 +421,7 @@ where
 
         let mut result = String::default();
         module_info.symbols()?.for_each(|symbol| {
-            let mut needed_types = pdb_types::TypeSet::new();
+            let mut needed_types = pdb_types::NeededTypeSet::new();
 
             match symbol.parse()? {
                 pdb::SymbolData::UserDefinedType(udt) => {
@@ -515,55 +515,88 @@ where
             print_access_specifiers,
         };
         let mut type_data = pdb_types::Data::new();
-        let mut needed_types = pdb_types::TypeSet::new();
 
-        // Add the requested type first
-        type_data.add(
-            type_finder,
-            &self.forwarder_to_complete_type,
-            type_index,
-            &primitives_flavor,
-            &mut needed_types,
-        )?;
-
-        // If dependencies aren't needed, we're done
+        // If dependencies aren't needed, only process the given type index and return
         if !reconstruct_dependencies {
+            let mut needed_types = pdb_types::NeededTypeSet::new();
+            type_data.add(
+                type_finder,
+                &self.forwarder_to_complete_type,
+                type_index,
+                &primitives_flavor,
+                &mut needed_types,
+            )?;
+
             let mut reconstruction_output = String::new();
-            type_data.reconstruct(&fmt_configuration, &mut reconstruction_output)?;
+            type_data.reconstruct(
+                &fmt_configuration,
+                &Default::default(),
+                &mut reconstruction_output,
+            )?;
             return Ok(reconstruction_output);
         }
 
         // Add all the needed types iteratively until we're done
-        let mut dependencies_data = pdb_types::Data::new();
-        let mut processed_types = BTreeSet::from([type_index]);
-        let dep_start = Instant::now();
-        loop {
-            // Get the first element in needed_types without holding an immutable borrow
-            let first = needed_types.difference(&processed_types).next().copied();
-            match first {
-                None => break,
-                Some(needed_type_index) => {
-                    // Add the type
-                    dependencies_data.add(
-                        type_finder,
-                        &self.forwarder_to_complete_type,
-                        needed_type_index,
-                        &primitives_flavor,
-                        &mut needed_types,
-                    )?;
+        let mut type_dependency_map: HashMap<pdb::TypeIndex, Vec<(pdb::TypeIndex, bool)>> =
+            HashMap::new();
+        {
+            let dep_start = Instant::now();
 
-                    processed_types.insert(needed_type_index);
+            // Add the requested type first
+            let mut types_to_process: VecDeque<pdb::TypeIndex> = VecDeque::from([type_index]);
+            let mut processed_type_set = HashSet::from([]);
+            // Keep processing new types until there's nothing to process
+            while let Some(needed_type_index) = types_to_process.pop_front() {
+                if processed_type_set.contains(&needed_type_index) {
+                    // Already processed, continue
+                    continue;
                 }
+
+                // Add the type
+                let mut needed_types = pdb_types::NeededTypeSet::new();
+                type_data.add(
+                    type_finder,
+                    &self.forwarder_to_complete_type,
+                    needed_type_index,
+                    &primitives_flavor,
+                    &mut needed_types,
+                )?;
+
+                for pair in &needed_types {
+                    // Add forward declaration for types referenced by pointers
+                    if pair.1 {
+                        type_data.add_as_forward_declaration(type_finder, pair.0)?;
+                    }
+
+                    // Update type dependency map
+                    if let Some(type_dependency) = type_dependency_map.get_mut(&needed_type_index) {
+                        type_dependency.push(*pair);
+                    } else {
+                        type_dependency_map.insert(needed_type_index, vec![*pair]);
+                    }
+                }
+                // Update the set of processed types
+                processed_type_set.insert(needed_type_index);
+                // Update the queue of type to process
+                types_to_process.extend(needed_types.into_iter().map(|pair| pair.0));
             }
+
+            log::debug!(
+                "Dependencies reconstruction took {} ms",
+                dep_start.elapsed().as_millis()
+            );
         }
-        log::debug!(
-            "Dependencies reconstruction took {} ms",
-            dep_start.elapsed().as_millis()
-        );
+
+        // Deduce type "depth" from the dependency map
+        let type_depth_map = compute_type_depth_map(&type_dependency_map, &[type_index]);
 
         let mut reconstruction_output = String::new();
-        dependencies_data.reconstruct(&fmt_configuration, &mut reconstruction_output)?;
-        type_data.reconstruct(&fmt_configuration, &mut reconstruction_output)?;
+        type_data.reconstruct(
+            &fmt_configuration,
+            &type_depth_map,
+            &mut reconstruction_output,
+        )?;
+
         Ok(reconstruction_output)
     }
 
@@ -585,7 +618,7 @@ where
             // Add the requested types
             type_iter = self.type_information.iter();
             while let Some(item) = type_iter.next()? {
-                let mut needed_types = pdb_types::TypeSet::new();
+                let mut needed_types = pdb_types::NeededTypeSet::new();
                 let type_index = item.index();
                 let result = type_data.add(
                     &type_finder,
@@ -607,11 +640,15 @@ where
             }
         }
 
-        let fmt_configuration = DataFormatConfiguration {
-            print_access_specifiers,
-        };
         let mut reconstruction_output = String::new();
-        type_data.reconstruct(&fmt_configuration, &mut reconstruction_output)?;
+        type_data.reconstruct(
+            &DataFormatConfiguration {
+                print_access_specifiers,
+            },
+            &Default::default(),
+            &mut reconstruction_output,
+        )?;
+
         Ok(reconstruction_output)
     }
 
@@ -642,7 +679,7 @@ where
                 let current_type_index = type_item.index();
                 // Reconstruct type and retrieve referenced types
                 let mut type_data = pdb_types::Data::new();
-                let mut needed_types = pdb_types::TypeSet::new();
+                let mut needed_types = pdb_types::NeededTypeSet::new();
                 type_data.add(
                     &type_finder,
                     &self.forwarder_to_complete_type,
@@ -651,7 +688,7 @@ where
                     &mut needed_types,
                 )?;
 
-                par_iter_if_available!(needed_types).for_each(|t| {
+                par_iter_if_available!(needed_types).for_each(|(t, _)| {
                     if let Some(mut xref_list) = xref_map.get_mut(t) {
                         xref_list.push(current_type_index);
                     } else {
@@ -694,4 +731,53 @@ where
             Ok(vec![])
         }
     }
+}
+
+fn compute_type_depth_map(
+    type_dependency_map: &HashMap<pdb::TypeIndex, Vec<(pdb::TypeIndex, bool)>>,
+    root_types: &[pdb::TypeIndex],
+) -> BTreeMap<usize, Vec<pdb::TypeIndex>> {
+    let depth_start = Instant::now();
+
+    let mut type_depth_map: HashMap<pdb::TypeIndex, usize> =
+        HashMap::from_iter(root_types.iter().map(|elem| (*elem, 0)));
+    // Perform depth-first search to determine the "depth" of each type
+    let mut types_to_visit: VecDeque<(usize, pdb::TypeIndex)> =
+        VecDeque::from_iter(root_types.iter().map(|elem| (0, *elem)));
+    while let Some((current_type_depth, current_type_index)) = types_to_visit.pop_back() {
+        if let Some(type_dependencies) = type_dependency_map.get(&current_type_index) {
+            for (child_type_index, child_is_pointer) in type_dependencies {
+                // Visit child only if it's directly referenced, to avoid infinite loops
+                if !child_is_pointer {
+                    let current_child_depth = current_type_depth + 1;
+                    if let Some(child_type_depth) = type_depth_map.get_mut(child_type_index) {
+                        *child_type_depth = std::cmp::max(*child_type_depth, current_child_depth);
+                    } else {
+                        type_depth_map.insert(*child_type_index, current_child_depth);
+                    }
+                    types_to_visit.push_back((current_child_depth, *child_type_index));
+                }
+            }
+        }
+    }
+
+    // Invert type depth map
+    let inverted_type_depth_map: BTreeMap<usize, Vec<pdb::TypeIndex>> = type_depth_map
+        .into_iter()
+        .fold(BTreeMap::new(), |mut acc, (type_index, type_depth)| {
+            if let Some(type_indices) = acc.get_mut(&type_depth) {
+                type_indices.push(type_index);
+            } else {
+                acc.insert(type_depth, vec![type_index]);
+            }
+
+            acc
+        });
+
+    log::debug!(
+        "Depth calculation took {} ms",
+        depth_start.elapsed().as_millis()
+    );
+
+    inverted_type_depth_map
 }
