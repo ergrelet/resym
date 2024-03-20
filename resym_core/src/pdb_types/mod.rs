@@ -492,6 +492,8 @@ pub struct Data<'p> {
     classes: BTreeMap<pdb::TypeIndex, Class<'p>>,
     /// Union types
     unions: BTreeMap<pdb::TypeIndex, Union<'p>>,
+    /// Unique type names
+    type_names: HashSet<String>,
 }
 
 impl Data<'_> {
@@ -573,6 +575,7 @@ impl<'p> Data<'p> {
             classes: BTreeMap::new(),
             enums: BTreeMap::new(),
             unions: BTreeMap::new(),
+            type_names: HashSet::new(),
         }
     }
 
@@ -594,7 +597,13 @@ impl<'p> Data<'p> {
                     name_str.into_owned()
                 };
 
+                if self.type_names.contains(&name) {
+                    // Type has already been added, return
+                    return Ok(());
+                }
+
                 if data.properties.forward_reference() {
+                    self.type_names.insert(name.clone());
                     self.forward_references.insert(
                         type_index,
                         ForwardReference {
@@ -646,6 +655,7 @@ impl<'p> Data<'p> {
                     }
                 }
 
+                self.type_names.insert(name);
                 self.classes.insert(type_index, class);
             }
 
@@ -657,6 +667,11 @@ impl<'p> Data<'p> {
                 } else {
                     name_str.into_owned()
                 };
+
+                if self.type_names.contains(&name) {
+                    // Type has already been added, return
+                    return Ok(());
+                }
 
                 let mut u = Union {
                     index: type_index,
@@ -685,6 +700,7 @@ impl<'p> Data<'p> {
                     );
                 }
 
+                self.type_names.insert(name);
                 self.unions.insert(type_index, u);
             }
 
@@ -696,6 +712,11 @@ impl<'p> Data<'p> {
                 } else {
                     name_str.into_owned()
                 };
+
+                if self.type_names.contains(&name) {
+                    // Type has already been added, return
+                    return Ok(());
+                }
 
                 let mut e = Enum {
                     index: type_index,
@@ -719,6 +740,7 @@ impl<'p> Data<'p> {
                     );
                 }
 
+                self.type_names.insert(name.clone());
                 self.enums.insert(type_index, e);
             }
 

@@ -544,7 +544,7 @@ where
 
             // Add the requested type first
             let mut types_to_process: VecDeque<pdb::TypeIndex> = VecDeque::from([type_index]);
-            let mut processed_type_set = HashSet::from([]);
+            let mut processed_type_set = HashSet::new();
             // Keep processing new types until there's nothing to process
             while let Some(needed_type_index) = types_to_process.pop_front() {
                 if processed_type_set.contains(&needed_type_index) {
@@ -606,9 +606,11 @@ where
         print_access_specifiers: bool,
     ) -> Result<String> {
         let mut type_data = pdb_types::Data::new();
-
-        let mut type_finder = self.type_information.finder();
+        let mut processed_types = Vec::new();
+        let mut type_dependency_map: HashMap<pdb::TypeIndex, Vec<(pdb::TypeIndex, bool)>> =
+            HashMap::new();
         {
+            let mut type_finder = self.type_information.finder();
             // Populate our `TypeFinder`
             let mut type_iter = self.type_information.iter();
             while (type_iter.next()?).is_some() {
@@ -616,36 +618,67 @@ where
             }
 
             // Add the requested types
-            type_iter = self.type_information.iter();
+            let mut type_iter = self.type_information.iter();
             while let Some(item) = type_iter.next()? {
                 let mut needed_types = pdb_types::NeededTypeSet::new();
-                let type_index = item.index();
+                // Note(ergelet): try to get the complete type's index here.
+                // This avoids adding empty "forward reference" type index which
+                // usually have lower type indices
+                let complete_type_index = self
+                    .forwarder_to_complete_type
+                    .get(&item.index())
+                    .map(|e| *e)
+                    .unwrap_or_else(|| item.index());
                 let result = type_data.add(
                     &type_finder,
                     &self.forwarder_to_complete_type,
-                    type_index,
+                    complete_type_index,
                     &primitives_flavor,
                     &mut needed_types,
                 );
+
+                // Process result
                 if let Err(err) = result {
+                    // Handle error
                     match err {
                         ResymCoreError::PdbError(err) => {
                             // Ignore this kind of error since some particular PDB features might not be supported.
                             // This allows the recontruction to go through with the correctly reconstructed types.
-                            log::warn!("Failed to reconstruct type with index {type_index}: {err}")
+                            log::warn!("Failed to reconstruct type with index {complete_type_index}: {err}")
                         }
                         _ => return Err(err),
+                    }
+                } else {
+                    // Handle success
+                    processed_types.push(complete_type_index);
+                    for pair in &needed_types {
+                        // Add forward declaration for types referenced by pointers
+                        if pair.1 {
+                            type_data.add_as_forward_declaration(&type_finder, pair.0)?;
+                        }
+
+                        // Update type dependency map
+                        if let Some(type_dependency) =
+                            type_dependency_map.get_mut(&complete_type_index)
+                        {
+                            type_dependency.push(*pair);
+                        } else {
+                            type_dependency_map.insert(complete_type_index, vec![*pair]);
+                        }
                     }
                 }
             }
         }
+
+        // Deduce type "depth" from the dependency map
+        let type_depth_map = compute_type_depth_map(&type_dependency_map, &processed_types);
 
         let mut reconstruction_output = String::new();
         type_data.reconstruct(
             &DataFormatConfiguration {
                 print_access_specifiers,
             },
-            &Default::default(),
+            &type_depth_map,
             &mut reconstruction_output,
         )?;
 
@@ -748,7 +781,7 @@ fn compute_type_depth_map(
         if let Some(type_dependencies) = type_dependency_map.get(&current_type_index) {
             for (child_type_index, child_is_pointer) in type_dependencies {
                 // Visit child only if it's directly referenced, to avoid infinite loops
-                if !child_is_pointer {
+                if !child_is_pointer && *child_type_index != current_type_index {
                     let current_child_depth = current_type_depth + 1;
                     if let Some(child_type_depth) = type_depth_map.get_mut(child_type_index) {
                         *child_type_depth = std::cmp::max(*child_type_depth, current_child_depth);
