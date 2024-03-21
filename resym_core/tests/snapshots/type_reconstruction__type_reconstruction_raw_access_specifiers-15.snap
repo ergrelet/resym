@@ -2,20 +2,18 @@
 source: resym_core/tests/type_reconstruction.rs
 expression: reconstructed_type
 ---
-
 class resym_test::ClassWithRefsAndStaticsTest { /* Size=0x40 */
-  /* 0x0000 */ private: long& iref;
-  /* 0x0008 */ private: const long& ciref;
-  /* 0x0010 */ private: long* iptr;
-  /* 0x0018 */ private: const long* ciptr;
+  /* 0x0000 */ private: int& iref;
+  /* 0x0008 */ private: const int& ciref;
+  /* 0x0010 */ private: int* iptr;
+  /* 0x0018 */ private: const int* ciptr;
   /* 0x0020 */ private: bool& bref;
   /* 0x0028 */ private: const bool& cbref;
   /* 0x0030 */ private: bool* bptr;
   /* 0x0038 */ private: const bool* cbptr;
-  private: static long sint;
+  private: static int sint;
   private: static bool sbool;
   
   public: ClassWithRefsAndStaticsTest();
-  public: void __autoclassinit2(unsigned __int64);
+  public: void __autoclassinit2(unsigned long long int);
 };
-

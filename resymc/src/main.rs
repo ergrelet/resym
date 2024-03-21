@@ -10,6 +10,8 @@ use structopt::StructOpt;
 use crate::resymc_app::ResymcApp;
 use crate::resymc_options::ResymcOptions;
 
+const DEFAULT_PRIMITIVE_FLAVOR: PrimitiveReconstructionFlavor = PrimitiveReconstructionFlavor::Raw;
+
 fn main() -> Result<()> {
     env_logger::init();
     let app = ResymcApp::new()?;
@@ -42,7 +44,7 @@ fn main() -> Result<()> {
         } => app.dump_types_command(
             pdb_path,
             Some(type_name),
-            primitive_types_flavor.unwrap_or(PrimitiveReconstructionFlavor::Portable),
+            primitive_types_flavor.unwrap_or(DEFAULT_PRIMITIVE_FLAVOR),
             print_header,
             print_dependencies,
             print_access_specifiers,
@@ -59,7 +61,7 @@ fn main() -> Result<()> {
         } => app.dump_types_command(
             pdb_path,
             None,
-            primitive_types_flavor.unwrap_or(PrimitiveReconstructionFlavor::Portable),
+            primitive_types_flavor.unwrap_or(DEFAULT_PRIMITIVE_FLAVOR),
             print_header,
             false,
             print_access_specifiers,
@@ -80,7 +82,7 @@ fn main() -> Result<()> {
             from_pdb_path,
             to_pdb_path,
             type_name,
-            primitive_types_flavor.unwrap_or(PrimitiveReconstructionFlavor::Portable),
+            primitive_types_flavor.unwrap_or(DEFAULT_PRIMITIVE_FLAVOR),
             print_header,
             print_dependencies,
             print_access_specifiers,
@@ -110,7 +112,7 @@ fn main() -> Result<()> {
         } => app.dump_module_command(
             pdb_path,
             module_id,
-            primitive_types_flavor.unwrap_or(PrimitiveReconstructionFlavor::Portable),
+            primitive_types_flavor.unwrap_or(DEFAULT_PRIMITIVE_FLAVOR),
             print_header,
             highlight_syntax,
             output_file_path,
@@ -127,7 +129,7 @@ fn main() -> Result<()> {
             from_pdb_path,
             to_pdb_path,
             module_path,
-            primitive_types_flavor.unwrap_or(PrimitiveReconstructionFlavor::Portable),
+            primitive_types_flavor.unwrap_or(DEFAULT_PRIMITIVE_FLAVOR),
             print_header,
             highlight_syntax,
             output_file_path,

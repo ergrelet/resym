@@ -171,10 +171,10 @@ fn primitive_kind_as_str_raw(
 
         pdb::PrimitiveKind::I16 | pdb::PrimitiveKind::Short => Ok("short"),
         pdb::PrimitiveKind::U16 | pdb::PrimitiveKind::UShort => Ok("unsigned short"),
-        pdb::PrimitiveKind::I32 | pdb::PrimitiveKind::Long => Ok("long"),
-        pdb::PrimitiveKind::U32 | pdb::PrimitiveKind::ULong => Ok("unsigned long"),
-        pdb::PrimitiveKind::I64 | pdb::PrimitiveKind::Quad => Ok("__int64"),
-        pdb::PrimitiveKind::U64 | pdb::PrimitiveKind::UQuad => Ok("unsigned __int64"),
+        pdb::PrimitiveKind::I32 | pdb::PrimitiveKind::Long => Ok("int"),
+        pdb::PrimitiveKind::U32 | pdb::PrimitiveKind::ULong => Ok("unsigned int"),
+        pdb::PrimitiveKind::I64 | pdb::PrimitiveKind::Quad => Ok("long long int"),
+        pdb::PrimitiveKind::U64 | pdb::PrimitiveKind::UQuad => Ok("unsigned long long int"),
 
         pdb::PrimitiveKind::F32 => Ok("float"),
         pdb::PrimitiveKind::F64 => Ok("double"),
