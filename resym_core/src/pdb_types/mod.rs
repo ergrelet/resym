@@ -501,59 +501,64 @@ impl Data<'_> {
         &self,
         fmt_configuration: &DataFormatConfiguration,
         type_depth_map: &BTreeMap<usize, Vec<pdb::TypeIndex>>,
-        f: &mut impl std::fmt::Write,
+        output_writer: &mut impl std::fmt::Write,
     ) -> Result<()> {
         // Types without definition
         if !self.forward_references.is_empty() {
-            writeln!(f)?;
+            writeln!(output_writer)?;
         }
         for e in self.forward_references.values() {
-            e.reconstruct(fmt_configuration, f)?;
+            e.reconstruct(fmt_configuration, output_writer)?;
         }
 
         // Forward declarations
         if !self.forward_declarations.is_empty() {
-            writeln!(f)?;
+            writeln!(output_writer)?;
         }
         for e in self.forward_declarations.values() {
-            e.reconstruct(fmt_configuration, f)?;
-        }
-
-        // Enum definitions
-        for e in self.enums.values() {
-            writeln!(f)?;
-            e.reconstruct(fmt_configuration, f)?;
+            e.reconstruct(fmt_configuration, output_writer)?;
         }
 
         if !type_depth_map.is_empty() {
             // Follow type depth map order
             for type_indices in type_depth_map.values().rev() {
                 for type_index in type_indices.iter() {
+                    // Enum definitions
+                    if let Some(e) = self.enums.get(type_index) {
+                        writeln!(output_writer)?;
+                        e.reconstruct(fmt_configuration, output_writer)?;
+                    }
                     // Class definitions
-                    if let Some(class) = self.classes.get(type_index) {
-                        writeln!(f)?;
-                        class.reconstruct(fmt_configuration, f)?;
+                    else if let Some(c) = self.classes.get(type_index) {
+                        writeln!(output_writer)?;
+                        c.reconstruct(fmt_configuration, output_writer)?;
                     }
                     // Union definitions
-                    else if let Some(union) = self.unions.get(type_index) {
-                        writeln!(f)?;
-                        union.reconstruct(fmt_configuration, f)?;
+                    else if let Some(u) = self.unions.get(type_index) {
+                        writeln!(output_writer)?;
+                        u.reconstruct(fmt_configuration, output_writer)?;
                     }
                 }
             }
         } else {
             // Follow type index order
             //
+            // Enum definitions
+            for e in self.enums.values() {
+                writeln!(output_writer)?;
+                e.reconstruct(fmt_configuration, output_writer)?;
+            }
+
             // Class/struct definitions
             for class in self.classes.values() {
-                writeln!(f)?;
-                class.reconstruct(fmt_configuration, f)?;
+                writeln!(output_writer)?;
+                class.reconstruct(fmt_configuration, output_writer)?;
             }
 
             // Union definitions
             for u in self.unions.values() {
-                writeln!(f)?;
-                u.reconstruct(fmt_configuration, f)?;
+                writeln!(output_writer)?;
+                u.reconstruct(fmt_configuration, output_writer)?;
             }
         }
 
