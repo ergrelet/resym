@@ -57,14 +57,14 @@ impl ResymcApp {
 
         // Queue a request for the backend to return the list of types that
         // match the given filter
-        self.backend.send_command(BackendCommand::UpdateTypeFilter(
+        self.backend.send_command(BackendCommand::ListTypes(
             PDB_MAIN_SLOT,
             type_name_filter,
             case_insensitive,
             use_regex,
         ))?;
         // Wait for the backend to finish filtering types
-        if let FrontendCommand::UpdateFilteredTypes(type_list) =
+        if let FrontendCommand::ListTypesResult(type_list) =
             self.frontend_controller.rx_ui.recv()?
         {
             // Dump output

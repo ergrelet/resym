@@ -9,7 +9,7 @@ pub enum FrontendCommand {
     /// Send result from `LoadURL` backend command.
     /// Contains last path segment (i.e., file name) as a `String` and data as `Vec<u8>`.
     LoadURLResult(Result<(PDBSlot, String, Vec<u8>)>),
-    UpdateFilteredTypes(TypeList),
+    ListTypesResult(TypeList),
     ReconstructTypeResult(Result<String>),
     ReconstructModuleResult(Result<String>),
     UpdateModuleList(Result<ModuleList>),

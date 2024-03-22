@@ -68,10 +68,10 @@ pub enum BackendCommand {
     /// Reconstruct all types found in a given PDB.
     ReconstructAllTypes(PDBSlot, PrimitiveReconstructionFlavor, bool, bool),
     /// Retrieve a list of types that match the given filter for a given PDB.
-    UpdateTypeFilter(PDBSlot, String, bool, bool),
+    ListTypes(PDBSlot, String, bool, bool),
     /// Retrieve a list of types that match the given filter for multiple PDBs
     /// and merge the result.
-    UpdateTypeFilterMerged(Vec<PDBSlot>, String, bool, bool),
+    ListTypesMerged(Vec<PDBSlot>, String, bool, bool),
     /// Retrieve the list of all modules in a given PDB.
     ListModules(PDBSlot, String, bool, bool),
     /// Reconstruct a module given its index for a given PDB.
@@ -338,7 +338,7 @@ fn worker_thread_routine(
                 }
             }
 
-            BackendCommand::UpdateTypeFilter(
+            BackendCommand::ListTypes(
                 pdb_slot,
                 search_filter,
                 case_insensitive_search,
@@ -353,11 +353,11 @@ fn worker_thread_routine(
                         true,
                     );
                     frontend_controller
-                        .send_command(FrontendCommand::UpdateFilteredTypes(filtered_type_list))?;
+                        .send_command(FrontendCommand::ListTypesResult(filtered_type_list))?;
                 }
             }
 
-            BackendCommand::UpdateTypeFilterMerged(
+            BackendCommand::ListTypesMerged(
                 pdb_slots,
                 search_filter,
                 case_insensitive_search,
@@ -381,7 +381,7 @@ fn worker_thread_routine(
                         }));
                     }
                 }
-                frontend_controller.send_command(FrontendCommand::UpdateFilteredTypes(
+                frontend_controller.send_command(FrontendCommand::ListTypesResult(
                     filtered_type_set.into_iter().collect(),
                 ))?;
             }

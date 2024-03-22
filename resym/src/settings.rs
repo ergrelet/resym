@@ -14,6 +14,8 @@ pub struct ResymAppSettings {
     pub print_header: bool,
     pub reconstruct_dependencies: bool,
     pub print_access_specifiers: bool,
+    // Ignore types in the `std` namespace (e.g., STL-generated types)
+    pub ignore_std_types: bool,
     pub print_line_numbers: bool,
 }
 
@@ -29,6 +31,7 @@ impl Default for ResymAppSettings {
             print_header: true,
             reconstruct_dependencies: true,
             print_access_specifiers: true,
+            ignore_std_types: true,
             print_line_numbers: false,
         }
     }
