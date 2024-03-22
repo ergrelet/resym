@@ -2,7 +2,6 @@ mod class;
 mod enumeration;
 mod field;
 mod forward_declaration;
-mod forward_reference;
 mod method;
 mod primitive_types;
 mod union;
@@ -22,7 +21,6 @@ use union::Union;
 pub use primitive_types::{include_headers_for_flavor, PrimitiveReconstructionFlavor};
 
 use self::forward_declaration::{ForwardDeclaration, ForwardDeclarationKind};
-use self::forward_reference::ForwardReference;
 
 /// Set of (`TypeIndex`, bool) tuples.
 ///
@@ -484,8 +482,6 @@ pub trait ReconstructibleTypeData {
 pub struct Data<'p> {
     /// Do not reconstruct types in the `std` namespace
     ignore_std_types: bool,
-    /// Forward-declared types which are referenced in this PDB but not defined in it
-    forward_references: BTreeMap<pdb::TypeIndex, ForwardReference>,
     /// Forward-declared types which are defined in this PDB
     forward_declarations: BTreeMap<pdb::TypeIndex, ForwardDeclaration>,
     /// Enum types
@@ -505,18 +501,6 @@ impl Data<'_> {
         type_depth_map: &BTreeMap<usize, Vec<pdb::TypeIndex>>,
         output_writer: &mut impl std::fmt::Write,
     ) -> Result<()> {
-        // Types without definition
-        if !self.forward_references.is_empty() {
-            writeln!(output_writer)?;
-        }
-        for e in self.forward_references.values() {
-            if self.ignore_std_types && e.name.starts_with("std::") {
-                // Type is in the `std` namespace and should be ignored
-                continue;
-            }
-            e.reconstruct(fmt_configuration, output_writer)?;
-        }
-
         // Forward declarations
         if !self.forward_declarations.is_empty() {
             writeln!(output_writer)?;
@@ -604,7 +588,6 @@ impl<'p> Data<'p> {
     pub fn new(ignore_std_types: bool) -> Self {
         Self {
             ignore_std_types,
-            forward_references: BTreeMap::new(),
             forward_declarations: BTreeMap::new(),
             classes: BTreeMap::new(),
             enums: BTreeMap::new(),
@@ -635,18 +618,8 @@ impl<'p> Data<'p> {
                     // Type has already been added, return
                     return Ok(());
                 }
-
                 if data.properties.forward_reference() {
-                    self.type_names.insert(name.clone());
-                    self.forward_references.insert(
-                        type_index,
-                        ForwardReference {
-                            index: type_index,
-                            kind: data.kind,
-                            name,
-                        },
-                    );
-
+                    // Type isn't a complete type, return
                     return Ok(());
                 }
 
