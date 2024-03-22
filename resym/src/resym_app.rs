@@ -443,7 +443,7 @@ impl ResymApp {
 
                         // Cross-references button
                         if let Some(selected_type_index) = self.selected_type_index {
-                            if ui.button("🔍  Find XRefs to (Ctrl+X)").clicked() {
+                            if ui.button("🔍  Find XRefs to (Alt+X)").clicked() {
                                 self.list_xrefs_for_type(selected_type_index);
                             }
                         }
@@ -484,12 +484,12 @@ impl ResymApp {
         });
 
         // Keyboard shortcut for finding cross-references
-        const CTRL_X_SHORTCUT: egui::KeyboardShortcut = egui::KeyboardShortcut {
-            modifiers: egui::Modifiers::CTRL,
+        const ALT_X_SHORTCUT: egui::KeyboardShortcut = egui::KeyboardShortcut {
+            modifiers: egui::Modifiers::ALT,
             logical_key: egui::Key::X,
         };
         ui.input_mut(|input_state| {
-            if input_state.consume_shortcut(&CTRL_X_SHORTCUT) {
+            if input_state.consume_shortcut(&ALT_X_SHORTCUT) {
                 if let Some(selected_type_index) = self.selected_type_index {
                     self.list_xrefs_for_type(selected_type_index);
                 }
