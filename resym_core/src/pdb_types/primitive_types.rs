@@ -34,13 +34,14 @@ pub fn include_headers_for_flavor(
 
     let common_std_headers = if ignore_std_types {
         concat!(
-            "#include <vector>\n",
-            "#include <map>\n",
-            "#include <unordered_map>\n",
-            "#include <list>\n",
             "#include <array>\n",
-            "#include <utility>\n",
+            "#include <list>\n",
+            "#include <map>\n",
             "#include <memory>\n",
+            "#include <string>\n",
+            "#include <unordered_map>\n",
+            "#include <utility>\n",
+            "#include <vector>\n",
         )
     } else {
         ""
