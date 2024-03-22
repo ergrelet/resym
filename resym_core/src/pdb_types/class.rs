@@ -495,8 +495,10 @@ impl ReconstructibleTypeData for Class<'_> {
         }
 
         if !self.instance_methods.is_empty() {
+            let class_name = self.name.as_str().into();
             writeln!(f, "  ")?;
             for method in &self.instance_methods {
+                let method_has_class_name = method.name == class_name;
                 writeln!(
                     f,
                     "  {}{}{}{}{}({}){}{}{}{};",
@@ -506,12 +508,16 @@ impl ReconstructibleTypeData for Class<'_> {
                         &FieldAccess::None
                     },
                     if method.is_virtual { "virtual " } else { "" },
-                    if method.is_ctor || method.is_dtor {
+                    if method.is_ctor || method.is_dtor || method_has_class_name {
                         ""
                     } else {
                         &method.return_type_name.0
                     },
-                    if !method.is_ctor && !method.is_dtor && method.return_type_name.1.is_empty() {
+                    if !method.is_ctor
+                        && !method.is_dtor
+                        && !method_has_class_name
+                        && method.return_type_name.1.is_empty()
+                    {
                         " "
                     } else {
                         ""
