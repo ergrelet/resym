@@ -102,6 +102,10 @@ impl SettingsComponent {
                     "Print access specifiers",
                 );
                 ui.checkbox(
+                    &mut self.app_settings.ignore_std_types,
+                    "Ignore types from the std namespace",
+                );
+                ui.checkbox(
                     &mut self.app_settings.print_line_numbers,
                     "Print line numbers",
                 );
