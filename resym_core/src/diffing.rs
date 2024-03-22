@@ -27,6 +27,7 @@ pub struct DiffLine {
     pub line: String,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn diff_type_by_name<'p, T>(
     pdb_file_from: &PdbFile<'p, T>,
     pdb_file_to: &PdbFile<'p, T>,
@@ -35,6 +36,7 @@ pub fn diff_type_by_name<'p, T>(
     print_header: bool,
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
+    ignore_std_types: bool,
 ) -> Result<Diff>
 where
     T: io::Seek + io::Read + std::fmt::Debug + 'p,
@@ -57,6 +59,7 @@ where
                 primitives_flavor,
                 reconstruct_dependencies,
                 print_access_specifiers,
+                ignore_std_types,
             )
             .unwrap_or_default();
         let reconstructed_type_to_tmp = pdb_file_to
@@ -65,6 +68,7 @@ where
                 primitives_flavor,
                 reconstruct_dependencies,
                 print_access_specifiers,
+                ignore_std_types,
             )
             .unwrap_or_default();
         if reconstructed_type_from_tmp.is_empty() && reconstructed_type_to_tmp.is_empty() {

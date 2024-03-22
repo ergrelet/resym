@@ -55,6 +55,7 @@ pub enum BackendCommand {
         bool,
         bool,
         bool,
+        bool,
     ),
     /// Reconstruct a type given its name for a given PDB.
     ReconstructTypeByName(
@@ -64,14 +65,15 @@ pub enum BackendCommand {
         bool,
         bool,
         bool,
+        bool,
     ),
     /// Reconstruct all types found in a given PDB.
-    ReconstructAllTypes(PDBSlot, PrimitiveReconstructionFlavor, bool, bool),
+    ReconstructAllTypes(PDBSlot, PrimitiveReconstructionFlavor, bool, bool, bool),
     /// Retrieve a list of types that match the given filter for a given PDB.
-    ListTypes(PDBSlot, String, bool, bool),
+    ListTypes(PDBSlot, String, bool, bool, bool),
     /// Retrieve a list of types that match the given filter for multiple PDBs
     /// and merge the result.
-    ListTypesMerged(Vec<PDBSlot>, String, bool, bool),
+    ListTypesMerged(Vec<PDBSlot>, String, bool, bool, bool),
     /// Retrieve the list of all modules in a given PDB.
     ListModules(PDBSlot, String, bool, bool),
     /// Reconstruct a module given its index for a given PDB.
@@ -82,6 +84,7 @@ pub enum BackendCommand {
         PDBSlot,
         String,
         PrimitiveReconstructionFlavor,
+        bool,
         bool,
         bool,
         bool,
@@ -280,6 +283,7 @@ fn worker_thread_routine(
                 print_header,
                 reconstruct_dependencies,
                 print_access_specifiers,
+                ignore_std_types,
             ) => {
                 if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
                     let reconstructed_type_result = reconstruct_type_by_index_command(
@@ -289,6 +293,7 @@ fn worker_thread_routine(
                         print_header,
                         reconstruct_dependencies,
                         print_access_specifiers,
+                        ignore_std_types,
                     );
                     frontend_controller.send_command(FrontendCommand::ReconstructTypeResult(
                         reconstructed_type_result,
@@ -303,6 +308,7 @@ fn worker_thread_routine(
                 print_header,
                 reconstruct_dependencies,
                 print_access_specifiers,
+                ignore_std_types,
             ) => {
                 if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
                     let reconstructed_type_result = reconstruct_type_by_name_command(
@@ -312,6 +318,7 @@ fn worker_thread_routine(
                         print_header,
                         reconstruct_dependencies,
                         print_access_specifiers,
+                        ignore_std_types,
                     );
                     frontend_controller.send_command(FrontendCommand::ReconstructTypeResult(
                         reconstructed_type_result,
@@ -324,6 +331,7 @@ fn worker_thread_routine(
                 primitives_flavor,
                 print_header,
                 print_access_specifiers,
+                ignore_std_types,
             ) => {
                 if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
                     let reconstructed_type_result = reconstruct_all_types_command(
@@ -331,6 +339,7 @@ fn worker_thread_routine(
                         primitives_flavor,
                         print_header,
                         print_access_specifiers,
+                        ignore_std_types,
                     );
                     frontend_controller.send_command(FrontendCommand::ReconstructTypeResult(
                         reconstructed_type_result,
@@ -343,6 +352,7 @@ fn worker_thread_routine(
                 search_filter,
                 case_insensitive_search,
                 use_regex,
+                ignore_std_types,
             ) => {
                 if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
                     let filtered_type_list = update_type_filter_command(
@@ -350,6 +360,7 @@ fn worker_thread_routine(
                         &search_filter,
                         case_insensitive_search,
                         use_regex,
+                        ignore_std_types,
                         true,
                     );
                     frontend_controller
@@ -362,6 +373,7 @@ fn worker_thread_routine(
                 search_filter,
                 case_insensitive_search,
                 use_regex,
+                ignore_std_types,
             ) => {
                 let mut filtered_type_set = BTreeSet::default();
                 for pdb_slot in pdb_slots {
@@ -371,6 +383,7 @@ fn worker_thread_routine(
                             &search_filter,
                             case_insensitive_search,
                             use_regex,
+                            ignore_std_types,
                             false,
                         );
                         filtered_type_set.extend(filtered_type_list.into_iter().map(|(s, _)| {
@@ -397,6 +410,7 @@ fn worker_thread_routine(
                         pdb_file,
                         module_index,
                         primitives_flavor,
+                        false,
                         print_header,
                     );
                     frontend_controller.send_command(FrontendCommand::ReconstructModuleResult(
@@ -431,6 +445,7 @@ fn worker_thread_routine(
                 print_header,
                 reconstruct_dependencies,
                 print_access_specifiers,
+                ignore_std_types,
             ) => {
                 if let Some(pdb_file_from) = pdb_files.get(&pdb_from_slot) {
                     if let Some(pdb_file_to) = pdb_files.get(&pdb_to_slot) {
@@ -442,6 +457,7 @@ fn worker_thread_routine(
                             print_header,
                             reconstruct_dependencies,
                             print_access_specifiers,
+                            ignore_std_types,
                         );
                         frontend_controller
                             .send_command(FrontendCommand::DiffResult(type_diff_result))?;
@@ -491,6 +507,7 @@ fn reconstruct_type_by_index_command<'p, T>(
     print_header: bool,
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
+    ignore_std_types: bool,
 ) -> Result<String>
 where
     T: io::Seek + io::Read + std::fmt::Debug + 'p,
@@ -500,9 +517,10 @@ where
         primitives_flavor,
         reconstruct_dependencies,
         print_access_specifiers,
+        ignore_std_types,
     )?;
     if print_header {
-        let file_header = generate_file_header(pdb_file, primitives_flavor, true);
+        let file_header = generate_file_header(pdb_file, primitives_flavor, true, ignore_std_types);
         Ok(format!("{file_header}{data}"))
     } else {
         Ok(data)
@@ -516,6 +534,7 @@ fn reconstruct_type_by_name_command<'p, T>(
     print_header: bool,
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
+    ignore_std_types: bool,
 ) -> Result<String>
 where
     T: io::Seek + io::Read + std::fmt::Debug + 'p,
@@ -525,9 +544,10 @@ where
         primitives_flavor,
         reconstruct_dependencies,
         print_access_specifiers,
+        ignore_std_types,
     )?;
     if print_header {
-        let file_header = generate_file_header(pdb_file, primitives_flavor, true);
+        let file_header = generate_file_header(pdb_file, primitives_flavor, true, ignore_std_types);
         Ok(format!("{file_header}{data}"))
     } else {
         Ok(data)
@@ -539,13 +559,18 @@ fn reconstruct_all_types_command<'p, T>(
     primitives_flavor: PrimitiveReconstructionFlavor,
     print_header: bool,
     print_access_specifiers: bool,
+    ignore_std_types: bool,
 ) -> Result<String>
 where
     T: io::Seek + io::Read + std::fmt::Debug + 'p,
 {
-    let data = pdb_file.reconstruct_all_types(primitives_flavor, print_access_specifiers)?;
+    let data = pdb_file.reconstruct_all_types(
+        primitives_flavor,
+        print_access_specifiers,
+        ignore_std_types,
+    )?;
     if print_header {
-        let file_header = generate_file_header(pdb_file, primitives_flavor, true);
+        let file_header = generate_file_header(pdb_file, primitives_flavor, true, ignore_std_types);
         Ok(format!("{file_header}{data}"))
     } else {
         Ok(data)
@@ -556,6 +581,7 @@ fn reconstruct_module_by_index_command<'p, T>(
     pdb_file: &mut PdbFile<'p, T>,
     module_index: usize,
     primitives_flavor: PrimitiveReconstructionFlavor,
+    ignore_std_types: bool,
     print_header: bool,
 ) -> Result<String>
 where
@@ -563,7 +589,7 @@ where
 {
     let data = pdb_file.reconstruct_module_by_index(module_index, primitives_flavor)?;
     if print_header {
-        let file_header = generate_file_header(pdb_file, primitives_flavor, true);
+        let file_header = generate_file_header(pdb_file, primitives_flavor, true, ignore_std_types);
         Ok(format!("{file_header}\n{data}"))
     } else {
         Ok(data)
@@ -574,6 +600,7 @@ fn generate_file_header<T>(
     pdb_file: &PdbFile<T>,
     primitives_flavor: PrimitiveReconstructionFlavor,
     include_header_files: bool,
+    ignore_std_types: bool,
 ) -> String
 where
     T: io::Seek + io::Read,
@@ -581,18 +608,21 @@ where
     format!(
         concat!(
             "//\n",
+            "// Information extracted with resym v{}\n",
+            "//\n",
             "// PDB file: {}\n",
             "// Image architecture: {}\n",
             "//\n",
-            "// Information extracted with resym v{}\n",
-            "//\n",
             "{}"
         ),
+        PKG_VERSION,
         pdb_file.file_path.display(),
         pdb_file.machine_type,
-        PKG_VERSION,
         if include_header_files {
-            format!("\n{}", include_headers_for_flavor(primitives_flavor))
+            format!(
+                "\n{}",
+                include_headers_for_flavor(primitives_flavor, ignore_std_types)
+            )
         } else {
             "".to_string()
         }
@@ -604,6 +634,7 @@ fn update_type_filter_command<T>(
     search_filter: &str,
     case_insensitive_search: bool,
     use_regex: bool,
+    ignore_std_types: bool,
     sort_by_index: bool,
 ) -> Vec<(String, pdb::TypeIndex)>
 where
@@ -611,21 +642,21 @@ where
 {
     let filter_start = Instant::now();
 
+    // Fitler out std types if needed
+    let filtered_type_list = if ignore_std_types {
+        filter_std_types(&pdb_file.complete_type_list)
+    } else {
+        pdb_file.complete_type_list.clone()
+    };
+
+    // Filter types following the search filter
     let mut filtered_type_list = if search_filter.is_empty() {
         // No need to filter
-        pdb_file.complete_type_list.clone()
+        filtered_type_list
     } else if use_regex {
-        filter_types_regex(
-            &pdb_file.complete_type_list,
-            search_filter,
-            case_insensitive_search,
-        )
+        filter_types_regex(&filtered_type_list, search_filter, case_insensitive_search)
     } else {
-        filter_types_regular(
-            &pdb_file.complete_type_list,
-            search_filter,
-            case_insensitive_search,
-        )
+        filter_types_regular(&filtered_type_list, search_filter, case_insensitive_search)
     };
     if sort_by_index {
         // Order types by type index, so the order is deterministic
@@ -678,6 +709,14 @@ fn filter_types_regular(
             .cloned()
             .collect()
     }
+}
+
+/// Filter type list to remove types in the `std` namespace
+fn filter_std_types(type_list: &[(String, pdb::TypeIndex)]) -> Vec<(String, pdb::TypeIndex)> {
+    par_iter_if_available!(type_list)
+        .filter(|r| !r.0.starts_with("std::"))
+        .cloned()
+        .collect()
 }
 
 fn list_modules_command<'p, T>(

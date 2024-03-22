@@ -482,6 +482,8 @@ pub trait ReconstructibleTypeData {
 /// classes/structs, enums and unions)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Data<'p> {
+    /// Do not reconstruct types in the `std` namespace
+    ignore_std_types: bool,
     /// Forward-declared types which are referenced in this PDB but not defined in it
     forward_references: BTreeMap<pdb::TypeIndex, ForwardReference>,
     /// Forward-declared types which are defined in this PDB
@@ -508,6 +510,10 @@ impl Data<'_> {
             writeln!(output_writer)?;
         }
         for e in self.forward_references.values() {
+            if self.ignore_std_types && e.name.starts_with("std::") {
+                // Type is in the `std` namespace and should be ignored
+                continue;
+            }
             e.reconstruct(fmt_configuration, output_writer)?;
         }
 
@@ -516,6 +522,10 @@ impl Data<'_> {
             writeln!(output_writer)?;
         }
         for e in self.forward_declarations.values() {
+            if self.ignore_std_types && e.name.starts_with("std::") {
+                // Type is in the `std` namespace and should be ignored
+                continue;
+            }
             e.reconstruct(fmt_configuration, output_writer)?;
         }
 
@@ -525,16 +535,28 @@ impl Data<'_> {
                 for type_index in type_indices.iter() {
                     // Enum definitions
                     if let Some(e) = self.enums.get(type_index) {
+                        if self.ignore_std_types && e.name.starts_with("std::") {
+                            // Type is in the `std` namespace and should be ignored
+                            continue;
+                        }
                         writeln!(output_writer)?;
                         e.reconstruct(fmt_configuration, output_writer)?;
                     }
                     // Class definitions
                     else if let Some(c) = self.classes.get(type_index) {
+                        if self.ignore_std_types && c.name.starts_with("std::") {
+                            // Type is in the `std` namespace and should be ignored
+                            continue;
+                        }
                         writeln!(output_writer)?;
                         c.reconstruct(fmt_configuration, output_writer)?;
                     }
                     // Union definitions
                     else if let Some(u) = self.unions.get(type_index) {
+                        if self.ignore_std_types && u.name.starts_with("std::") {
+                            // Type is in the `std` namespace and should be ignored
+                            continue;
+                        }
                         writeln!(output_writer)?;
                         u.reconstruct(fmt_configuration, output_writer)?;
                     }
@@ -545,18 +567,30 @@ impl Data<'_> {
             //
             // Enum definitions
             for e in self.enums.values() {
+                if self.ignore_std_types && e.name.starts_with("std::") {
+                    // Type is in the `std` namespace and should be ignored
+                    continue;
+                }
                 writeln!(output_writer)?;
                 e.reconstruct(fmt_configuration, output_writer)?;
             }
 
             // Class/struct definitions
             for class in self.classes.values() {
+                if self.ignore_std_types && class.name.starts_with("std::") {
+                    // Type is in the `std` namespace and should be ignored
+                    continue;
+                }
                 writeln!(output_writer)?;
                 class.reconstruct(fmt_configuration, output_writer)?;
             }
 
             // Union definitions
             for u in self.unions.values() {
+                if self.ignore_std_types && u.name.starts_with("std::") {
+                    // Type is in the `std` namespace and should be ignored
+                    continue;
+                }
                 writeln!(output_writer)?;
                 u.reconstruct(fmt_configuration, output_writer)?;
             }
@@ -566,15 +600,10 @@ impl Data<'_> {
     }
 }
 
-impl<'p> Default for Data<'p> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl<'p> Data<'p> {
-    pub fn new() -> Self {
+    pub fn new(ignore_std_types: bool) -> Self {
         Self {
+            ignore_std_types,
             forward_references: BTreeMap::new(),
             forward_declarations: BTreeMap::new(),
             classes: BTreeMap::new(),

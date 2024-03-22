@@ -22,13 +22,31 @@ impl FromStr for PrimitiveReconstructionFlavor {
     }
 }
 
-pub fn include_headers_for_flavor(flavor: PrimitiveReconstructionFlavor) -> String {
-    match flavor {
+pub fn include_headers_for_flavor(
+    flavor: PrimitiveReconstructionFlavor,
+    ignore_std_types: bool,
+) -> String {
+    let flavor_header = match flavor {
         PrimitiveReconstructionFlavor::Portable => "#include <cstdint>\n",
         PrimitiveReconstructionFlavor::Microsoft => "#include <Windows.h>\n",
         PrimitiveReconstructionFlavor::Raw => "",
-    }
-    .to_string()
+    };
+
+    let common_std_headers = if ignore_std_types {
+        concat!(
+            "#include <vector>\n",
+            "#include <map>\n",
+            "#include <unordered_map>\n",
+            "#include <list>\n",
+            "#include <array>\n",
+            "#include <utility>\n",
+            "#include <memory>\n",
+        )
+    } else {
+        ""
+    };
+
+    format!("{flavor_header}{common_std_headers}")
 }
 
 pub fn primitive_kind_as_str(

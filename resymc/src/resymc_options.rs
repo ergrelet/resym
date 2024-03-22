@@ -25,6 +25,9 @@ pub enum ResymcOptions {
         /// Use regular expressions
         #[structopt(short = "r", long)]
         use_regex: bool,
+        /// Filter out types in the `std` namespace
+        #[structopt(short = "s", long)]
+        ignore_std_types: bool,
     },
     /// Dump type from a given PDB file
     Dump {
@@ -46,6 +49,9 @@ pub enum ResymcOptions {
         /// Print C++ access specifiers
         #[structopt(short = "a", long)]
         print_access_specifiers: bool,
+        /// Filter out types in the `std` namespace
+        #[structopt(short = "s", long)]
+        ignore_std_types: bool,
         /// Highlight C++ output
         #[structopt(short = "H", long)]
         highlight_syntax: bool,
@@ -65,6 +71,9 @@ pub enum ResymcOptions {
         /// Print C++ access specifiers
         #[structopt(short = "a", long)]
         print_access_specifiers: bool,
+        /// Filter out types in the `std` namespace
+        #[structopt(short = "s", long)]
+        ignore_std_types: bool,
         /// Highlight C++ output
         #[structopt(short = "H", long)]
         highlight_syntax: bool,
@@ -91,6 +100,9 @@ pub enum ResymcOptions {
         /// Print C++ access specifiers
         #[structopt(short = "a", long)]
         print_access_specifiers: bool,
+        /// Filter out types in the `std` namespace
+        #[structopt(short = "s", long)]
+        ignore_std_types: bool,
         /// Highlight C++ output and add/deleted lines
         #[structopt(short = "H", long)]
         highlight_syntax: bool,

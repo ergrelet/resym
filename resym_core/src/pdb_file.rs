@@ -243,6 +243,7 @@ where
         primitives_flavor: PrimitiveReconstructionFlavor,
         reconstruct_dependencies: bool,
         print_access_specifiers: bool,
+        ignore_std_types: bool,
     ) -> Result<String> {
         // Populate our `TypeFinder` and find the right type index
         let mut type_index = pdb::TypeIndex::default();
@@ -331,6 +332,7 @@ where
                 primitives_flavor,
                 reconstruct_dependencies,
                 print_access_specifiers,
+                ignore_std_types,
             )
         }
     }
@@ -341,6 +343,7 @@ where
         primitives_flavor: PrimitiveReconstructionFlavor,
         reconstruct_dependencies: bool,
         print_access_specifiers: bool,
+        ignore_std_types: bool,
     ) -> Result<String> {
         // Populate our `TypeFinder`
         let mut type_finder = self.type_information.finder();
@@ -357,6 +360,7 @@ where
             primitives_flavor,
             reconstruct_dependencies,
             print_access_specifiers,
+            ignore_std_types,
         )
     }
 
@@ -510,11 +514,12 @@ where
         primitives_flavor: PrimitiveReconstructionFlavor,
         reconstruct_dependencies: bool,
         print_access_specifiers: bool,
+        ignore_std_types: bool,
     ) -> Result<String> {
         let fmt_configuration = DataFormatConfiguration {
             print_access_specifiers,
         };
-        let mut type_data = pdb_types::Data::new();
+        let mut type_data = pdb_types::Data::new(ignore_std_types);
 
         // If dependencies aren't needed, only process the given type index and return
         if !reconstruct_dependencies {
@@ -604,8 +609,9 @@ where
         &self,
         primitives_flavor: PrimitiveReconstructionFlavor,
         print_access_specifiers: bool,
+        ignore_std_types: bool,
     ) -> Result<String> {
-        let mut type_data = pdb_types::Data::new();
+        let mut type_data = pdb_types::Data::new(ignore_std_types);
         let mut processed_types = Vec::new();
         let mut type_dependency_map: HashMap<pdb::TypeIndex, Vec<(pdb::TypeIndex, bool)>> =
             HashMap::new();
@@ -711,7 +717,7 @@ where
             while let Some(type_item) = type_iter.next()? {
                 let current_type_index = type_item.index();
                 // Reconstruct type and retrieve referenced types
-                let mut type_data = pdb_types::Data::new();
+                let mut type_data = pdb_types::Data::new(false);
                 let mut needed_types = pdb_types::NeededTypeSet::new();
                 type_data.add(
                     &type_finder,

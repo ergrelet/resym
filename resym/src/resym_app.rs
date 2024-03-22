@@ -228,6 +228,7 @@ impl ResymApp {
                                     search_query.to_string(),
                                     self.settings.app_settings.search_case_insensitive,
                                     self.settings.app_settings.search_use_regex,
+                                    self.settings.app_settings.ignore_std_types,
                                 ))
                             } else {
                                 self.backend.send_command(BackendCommand::ListTypes(
@@ -235,6 +236,7 @@ impl ResymApp {
                                     search_query.to_string(),
                                     self.settings.app_settings.search_case_insensitive,
                                     self.settings.app_settings.search_use_regex,
+                                    self.settings.app_settings.ignore_std_types,
                                 ))
                             };
                             if let Err(err) = result {
@@ -263,6 +265,7 @@ impl ResymApp {
                                             self.settings.app_settings.print_header,
                                             self.settings.app_settings.reconstruct_dependencies,
                                             self.settings.app_settings.print_access_specifiers,
+                                            self.settings.app_settings.ignore_std_types,
                                         ),
                                     ) {
                                         log::error!("Failed to reconstruct type: {}", err);
@@ -278,6 +281,7 @@ impl ResymApp {
                                             self.settings.app_settings.print_header,
                                             self.settings.app_settings.reconstruct_dependencies,
                                             self.settings.app_settings.print_access_specifiers,
+                                            self.settings.app_settings.ignore_std_types,
                                         ))
                                     {
                                         log::error!("Failed to reconstruct type diff: {}", err);
@@ -399,6 +403,7 @@ impl ResymApp {
                                             self.settings.app_settings.print_header,
                                             self.settings.app_settings.reconstruct_dependencies,
                                             self.settings.app_settings.print_access_specifiers,
+                                            self.settings.app_settings.ignore_std_types,
                                         ),
                                     ) {
                                         log::error!("Failed to reconstruct type: {}", err);
@@ -542,6 +547,7 @@ impl ResymApp {
                                 String::default(),
                                 false,
                                 false,
+                                self.settings.app_settings.ignore_std_types,
                             )) {
                                 log::error!("Failed to update type filter value: {}", err);
                             }
@@ -580,6 +586,7 @@ impl ResymApp {
                                     String::default(),
                                     false,
                                     false,
+                                    self.settings.app_settings.ignore_std_types,
                                 ))
                             {
                                 log::error!("Failed to update type filter value: {}", err);

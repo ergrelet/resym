@@ -25,11 +25,13 @@ fn main() -> Result<()> {
             output_file_path,
             case_insensitive,
             use_regex,
+            ignore_std_types,
         } => app.list_types_command(
             pdb_path,
             type_name_filter,
             case_insensitive,
             use_regex,
+            ignore_std_types,
             output_file_path,
         ),
         ResymcOptions::Dump {
@@ -40,6 +42,7 @@ fn main() -> Result<()> {
             print_header,
             print_dependencies,
             print_access_specifiers,
+            ignore_std_types,
             highlight_syntax,
         } => app.dump_types_command(
             pdb_path,
@@ -48,6 +51,7 @@ fn main() -> Result<()> {
             print_header,
             print_dependencies,
             print_access_specifiers,
+            ignore_std_types,
             highlight_syntax,
             output_file_path,
         ),
@@ -57,6 +61,7 @@ fn main() -> Result<()> {
             primitive_types_flavor,
             print_header,
             print_access_specifiers,
+            ignore_std_types,
             highlight_syntax,
         } => app.dump_types_command(
             pdb_path,
@@ -65,6 +70,7 @@ fn main() -> Result<()> {
             print_header,
             false,
             print_access_specifiers,
+            ignore_std_types,
             highlight_syntax,
             output_file_path,
         ),
@@ -77,6 +83,7 @@ fn main() -> Result<()> {
             print_header,
             print_dependencies,
             print_access_specifiers,
+            ignore_std_types,
             highlight_syntax,
         } => app.diff_type_command(
             from_pdb_path,
@@ -86,6 +93,7 @@ fn main() -> Result<()> {
             print_header,
             print_dependencies,
             print_access_specifiers,
+            ignore_std_types,
             highlight_syntax,
             output_file_path,
         ),

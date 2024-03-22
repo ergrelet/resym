@@ -41,6 +41,7 @@ impl ResymcApp {
         type_name_filter: String,
         case_insensitive: bool,
         use_regex: bool,
+        ignore_std_types: bool,
         output_file_path: Option<PathBuf>,
     ) -> Result<()> {
         // Request the backend to load the PDB
@@ -62,6 +63,7 @@ impl ResymcApp {
             type_name_filter,
             case_insensitive,
             use_regex,
+            ignore_std_types,
         ))?;
         // Wait for the backend to finish filtering types
         if let FrontendCommand::ListTypesResult(type_list) =
@@ -93,6 +95,7 @@ impl ResymcApp {
         print_header: bool,
         print_dependencies: bool,
         print_access_specifiers: bool,
+        ignore_std_types: bool,
         highlight_syntax: bool,
         output_file_path: Option<PathBuf>,
     ) -> Result<()> {
@@ -118,6 +121,7 @@ impl ResymcApp {
                     print_header,
                     print_dependencies,
                     print_access_specifiers,
+                    ignore_std_types,
                 ))?;
         } else {
             self.backend
@@ -126,6 +130,7 @@ impl ResymcApp {
                     primitive_types_flavor,
                     print_header,
                     print_access_specifiers,
+                    ignore_std_types,
                 ))?;
         }
         // Wait for the backend to finish filtering types
@@ -164,6 +169,7 @@ impl ResymcApp {
         print_header: bool,
         print_dependencies: bool,
         print_access_specifiers: bool,
+        ignore_std_types: bool,
         highlight_syntax: bool,
         output_file_path: Option<PathBuf>,
     ) -> Result<()> {
@@ -212,6 +218,7 @@ impl ResymcApp {
             print_header,
             print_dependencies,
             print_access_specifiers,
+            ignore_std_types,
         ))?;
         // Wait for the backend to finish
         if let FrontendCommand::DiffResult(reconstructed_type_diff_result) =
@@ -469,6 +476,7 @@ mod tests {
                 "resym_test::StructTest".to_string(),
                 false,
                 false,
+                false,
                 None,
             )
             .is_err());
@@ -483,6 +491,7 @@ mod tests {
             .list_types_command(
                 pdb_path,
                 "resym_test::StructTest".to_string(),
+                true,
                 true,
                 true,
                 None,
@@ -502,6 +511,7 @@ mod tests {
             .list_types_command(
                 pdb_path,
                 "resym_test::ClassWithNestedDeclarationsTest".to_string(),
+                false,
                 false,
                 false,
                 Some(output_path.clone()),
@@ -537,6 +547,7 @@ mod tests {
                 false,
                 false,
                 false,
+                false,
                 None
             )
             .is_err());
@@ -553,6 +564,7 @@ mod tests {
                 pdb_path,
                 None,
                 PrimitiveReconstructionFlavor::Microsoft,
+                true,
                 true,
                 true,
                 true,
@@ -576,6 +588,7 @@ mod tests {
                 pdb_path,
                 Some("resym_test::ClassWithNestedDeclarationsTest".to_string()),
                 PrimitiveReconstructionFlavor::Microsoft,
+                false,
                 false,
                 false,
                 false,
@@ -610,6 +623,7 @@ mod tests {
                 false,
                 false,
                 false,
+                false,
                 None
             )
             .is_err());
@@ -627,6 +641,7 @@ mod tests {
                 pdb_path_to,
                 "UserStructAddAndReplace".to_string(),
                 PrimitiveReconstructionFlavor::Microsoft,
+                true,
                 true,
                 true,
                 true,
@@ -653,6 +668,7 @@ mod tests {
                 pdb_path_to,
                 "UserStructAddAndReplace".to_string(),
                 PrimitiveReconstructionFlavor::Portable,
+                false,
                 false,
                 false,
                 false,
