@@ -7,12 +7,13 @@ use super::{
     fmt_union_fields_recursive, is_unnamed_type,
     primitive_types::PrimitiveReconstructionFlavor,
     resolve_complete_type_index, type_bitfield_info, type_name, type_size, DataFormatConfiguration,
-    Field, Method, TypeForwarder, TypeSet,
+    Field, Method, NeededTypeSet, ReconstructibleTypeData, TypeForwarder,
 };
 use crate::error::{Result, ResymCoreError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Union<'p> {
+    pub index: pdb::TypeIndex,
     pub name: String,
     pub size: u64,
     pub fields: Vec<Field<'p>>,
@@ -31,7 +32,7 @@ impl<'p> Union<'p> {
         type_forwarder: &TypeForwarder,
         type_index: pdb::TypeIndex,
         primitive_flavor: &PrimitiveReconstructionFlavor,
-        needed_types: &mut TypeSet,
+        needed_types: &mut NeededTypeSet,
     ) -> Result<()> {
         // Resolve the complete type's index, if present in the PDB
         let complete_type_index = resolve_complete_type_index(type_forwarder, type_index);
@@ -70,6 +71,7 @@ impl<'p> Union<'p> {
                 };
 
                 let mut class = Class {
+                    index: type_index,
                     kind: data.kind,
                     name,
                     size: data.size,
@@ -110,6 +112,7 @@ impl<'p> Union<'p> {
                 };
 
                 let mut u = Union {
+                    index: type_index,
                     name,
                     size: data.size,
                     fields: Vec::new(),
@@ -142,6 +145,7 @@ impl<'p> Union<'p> {
                 };
 
                 let mut e = Enum {
+                    index: type_index,
                     name,
                     underlying_type_name: type_name(
                         type_finder,
@@ -181,7 +185,7 @@ impl<'p> Union<'p> {
         type_forwarder: &TypeForwarder,
         field: &pdb::TypeData<'p>,
         primitive_flavor: &PrimitiveReconstructionFlavor,
-        needed_types: &mut TypeSet,
+        needed_types: &mut NeededTypeSet,
     ) -> Result<()> {
         match *field {
             pdb::TypeData::Member(ref data) => {
@@ -313,8 +317,10 @@ impl<'p> Union<'p> {
 
         Ok(())
     }
+}
 
-    pub fn reconstruct(
+impl ReconstructibleTypeData for Union<'_> {
+    fn reconstruct(
         &self,
         fmt_configuration: &DataFormatConfiguration,
         f: &mut impl std::fmt::Write,
@@ -337,7 +343,7 @@ impl<'p> Union<'p> {
         if !self.nested_enums.is_empty() {
             writeln!(f, "  ")?;
             for e in &self.nested_enums {
-                e.reconstruct(f)?;
+                e.reconstruct(fmt_configuration, f)?;
             }
         }
 

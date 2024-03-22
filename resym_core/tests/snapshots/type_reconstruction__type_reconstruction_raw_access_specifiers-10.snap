@@ -2,30 +2,28 @@
 source: resym_core/tests/type_reconstruction.rs
 expression: reconstructed_type
 ---
-
 struct resym_test::StructUnnamedUdtTest3 { /* Size=0x40 */
-  /* 0x0000 */ public: unsigned __int64 Before;
+  /* 0x0000 */ public: unsigned long long int Before;
   union {
     struct {
-      /* 0x0008 */ public: unsigned __int64 u1;
-      /* 0x0010 */ public: unsigned __int64 u2;
+      /* 0x0008 */ public: unsigned long long int u1;
+      /* 0x0010 */ public: unsigned long long int u2;
     };
     struct {
-      /* 0x0008 */ public: unsigned __int64* p1;
-      /* 0x0010 */ public: unsigned __int64* p2;
-      /* 0x0018 */ public: unsigned __int64* p3;
-      /* 0x0020 */ public: unsigned __int64* p4;
+      /* 0x0008 */ public: unsigned long long int* p1;
+      /* 0x0010 */ public: unsigned long long int* p2;
+      /* 0x0018 */ public: unsigned long long int* p3;
+      /* 0x0020 */ public: unsigned long long int* p4;
     };
     struct {
-      /* 0x0008 */ public: unsigned __int64* p5;
-      /* 0x0010 */ public: unsigned __int64* p6;
+      /* 0x0008 */ public: unsigned long long int* p5;
+      /* 0x0010 */ public: unsigned long long int* p6;
     };
   };
-  /* 0x0028 */ public: unsigned __int64 Middle;
+  /* 0x0028 */ public: unsigned long long int Middle;
   union {
-    /* 0x0030 */ public: unsigned __int64 u3;
-    /* 0x0030 */ public: unsigned __int64* p7;
+    /* 0x0030 */ public: unsigned long long int u3;
+    /* 0x0030 */ public: unsigned long long int* p7;
   };
-  /* 0x0038 */ public: unsigned __int64 After;
+  /* 0x0038 */ public: unsigned long long int After;
 };
-

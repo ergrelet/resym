@@ -2,10 +2,8 @@
 source: resym_core/tests/type_reconstruction.rs
 expression: reconstructed_type
 ---
-
 union resym_test::BitFieldsTest3 { /* Size=0x4 */
-  /* 0x0000 */ public: unsigned long b1 : 1; /* BitPos=0 */
-  /* 0x0000 */ public: unsigned long b2 : 1; /* BitPos=0 */
-  /* 0x0000 */ public: unsigned long b3 : 30; /* BitPos=0 */
+  /* 0x0000 */ public: unsigned int b1 : 1; /* BitPos=0 */
+  /* 0x0000 */ public: unsigned int b2 : 1; /* BitPos=0 */
+  /* 0x0000 */ public: unsigned int b3 : 30; /* BitPos=0 */
 };
-

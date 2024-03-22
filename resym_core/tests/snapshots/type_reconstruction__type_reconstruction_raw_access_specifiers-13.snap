@@ -2,15 +2,13 @@
 source: resym_core/tests/type_reconstruction.rs
 expression: reconstructed_type
 ---
-
 class resym_test::InterfaceImplClass : public resym_test::PureVirtualClass { /* Size=0x8 */
   /* 0x0000: fields for resym_test::PureVirtualClass */
   
-  private: virtual long InterfaceVirtual();
+  private: virtual int InterfaceVirtual();
   public: InterfaceImplClass(resym_test::InterfaceImplClass&);
   public: InterfaceImplClass(const resym_test::InterfaceImplClass&);
   public: InterfaceImplClass();
   public: resym_test::InterfaceImplClass& operator=(resym_test::InterfaceImplClass&);
   public: resym_test::InterfaceImplClass& operator=(const resym_test::InterfaceImplClass&);
 };
-
