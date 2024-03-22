@@ -719,13 +719,27 @@ where
                 // Reconstruct type and retrieve referenced types
                 let mut type_data = pdb_types::Data::new(false);
                 let mut needed_types = pdb_types::NeededTypeSet::new();
-                type_data.add(
+                let result = type_data.add(
                     &type_finder,
                     &self.forwarder_to_complete_type,
                     current_type_index,
                     &PrimitiveReconstructionFlavor::Raw,
                     &mut needed_types,
-                )?;
+                );
+                // Process result
+                if let Err(err) = result {
+                    // Handle error
+                    match err {
+                        ResymCoreError::PdbError(err) => {
+                            // Ignore this kind of error since some particular PDB features might not be supported.
+                            // This allows the recontruction to go through with the correctly reconstructed types.
+                            log::warn!(
+                                "Failed to reconstruct type with index {current_type_index}: {err}"
+                            )
+                        }
+                        _ => return Err(err),
+                    }
+                }
 
                 par_iter_if_available!(needed_types).for_each(|(t, _)| {
                     if let Some(mut xref_list) = xref_map.get_mut(t) {
