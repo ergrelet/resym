@@ -11,7 +11,7 @@ expression: module_diff.data
  // New PDB file: tests/data/test_diff_to.pdb
  // Image architecture: Amd64
  //
- // Information extracted with resym v0.3.0
+ // Information extracted with resym v0.4.0
  //
  
  using namespace std;

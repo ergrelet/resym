@@ -10,7 +10,7 @@ default = ["rayon"]
 rayon = ["resym_core/rayon"]
 
 [dependencies]
-resym_core = { version = "0.3", path = "../resym_core", default-features = false }
+resym_core = { version = "0.4", path = "../resym_core", default-features = false }
 
 structopt = { version = "0.3", default-features = false }
 syntect = "5.2"

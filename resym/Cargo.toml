@@ -24,7 +24,7 @@ rayon = ["resym_core/rayon"]
 http = ["resym_core/http"]
 
 [dependencies]
-resym_core = { version = "0.3", path = "../resym_core", default-features = false }
+resym_core = { version = "0.4", path = "../resym_core", default-features = false }
 
 eframe = { version = "0.26", features = ["persistence"] }
 serde = "1.0"

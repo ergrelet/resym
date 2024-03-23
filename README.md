@@ -11,9 +11,11 @@ Inspired by [PDBRipper](https://github.com/horsicq/PDBRipper) and
 
 - Cross-platform (native and web)
 - GUI and CLI versions available
+- Decent performance, even on huge PDB files
 - C and C++ types reconstruction
 - C and C++ types diff generation (between two PDBs)
-- Decent performance, even on huge PDB files
+- Compilable output for C types (partial support for C++ types)
+- PDB module browsing
 
 ## Screenshot
 
@@ -24,7 +26,7 @@ Inspired by [PDBRipper](https://github.com/horsicq/PDBRipper) and
 If you have Rust installed, you can easily install resym with `cargo`:
 
 ```
-cargo install --git https://github.com/ergrelet/resym --tag v0.3.0
+cargo install --git https://github.com/ergrelet/resym --tag v0.4.0
 ```
 
 After that, you can invoke `resym` and `resymc` from anywhere, through the
@@ -39,7 +41,7 @@ If you want to use the GUI version, simply run the `resym` executable.
 A CLI version (named `resymc`) is also available:
 
 ```
-resymc 0.3.0
+resymc 0.4.0
 resymc is a utility that allows browsing and extracting types from PDB files.
 
 USAGE:
@@ -50,11 +52,14 @@ FLAGS:
     -V, --version    Prints version information
 
 SUBCOMMANDS:
-    diff        Compute diff for a type between two given PDB files
-    dump        Dump type from a given PDB file
-    dump-all    Dump all types from a given PDB file
-    help        Prints this message or the help of the given subcommand(s)
-    list        List types from a given PDB file
+    diff            Compute diff for a type between two given PDB files
+    diff-module     Compute diff for a module between two given PDB files
+    dump            Dump type from a given PDB file
+    dump-all        Dump all types from a given PDB file
+    dump-module     Dump module from a given PDB file
+    help            Prints this message or the help of the given subcommand(s)
+    list            List types from a given PDB file
+    list-modules    List modules from a given PDB file
 
 ```
 
@@ -71,9 +76,12 @@ cargo build --release
 ## Know limitations
 
 The GUI version might struggle to display huge outputs (>20 MB). Disabling
-syntax highlighting (or dependency reconstruction altogether) will help, but
-generally the CLI version is more suited when dumping types with a huge amount
-of dependencies.
+syntax highlighting (and/or dependency reconstruction altogether) will help but,
+generally speaking, the CLI version is more suited when dumping types with a huge
+amount of dependencies.
+
+C++ namespaces and template types aren't reconstructed at the moment, which
+means the reconstructed output for C++ types isn't necessarily compilable.
 
 The web version cannot handle PDB files larger than ~2.1 GB due to how files
 are accessed and the 32-bit limitations of `wasm32` targets. This might change

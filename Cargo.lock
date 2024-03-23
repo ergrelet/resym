@@ -2964,7 +2964,7 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 
 [[package]]
 name = "resym"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "ahash",
  "anyhow",
@@ -2984,7 +2984,7 @@ dependencies = [
 
 [[package]]
 name = "resym_core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "crossbeam-channel",
  "dashmap",
@@ -3004,7 +3004,7 @@ dependencies = [
 
 [[package]]
 name = "resymc"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "crossbeam-channel",
