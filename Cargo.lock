@@ -2978,6 +2978,7 @@ dependencies = [
  "rfd",
  "serde",
  "syntect",
+ "tinyfiledialogs",
  "wasm-bindgen-futures",
  "winres",
 ]
@@ -3589,6 +3590,16 @@ dependencies = [
  "arrayref",
  "bytemuck",
  "strict-num",
+]
+
+[[package]]
+name = "tinyfiledialogs"
+version = "3.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e25fa0bc43a6566e2cc6d7ac96df3fa5a57beba34445bead1b368ba8fe9ca568"
+dependencies = [
+ "cc",
+ "libc",
 ]
 
 [[package]]

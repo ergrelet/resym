@@ -32,7 +32,6 @@ anyhow = "1.0"
 log = "0.4"
 memory_logger = { version = "0.1", features = ["blocking"] }
 crossbeam-channel = "0.5"
-rfd = "0.11"
 # Note(ergrelet): `fancy-regex` is less performant than `onig` at the moment
 # but is more portable (i.e., compiles to wasm32)
 syntect = { version = "5.2", default-features = false, features=["default-fancy"] }
@@ -41,10 +40,18 @@ ahash = { version = "0.8", default-features = false, features = [
     "std",
 ] }
 
-# Web:
+# Non-Web
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Note(ergrlet): use `tinyfiledialogs` by default as it's quite portable on
+# non-wasm platforms
+tinyfiledialogs = "3.9"
+
+# Web
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1"
 wasm-bindgen-futures = "0.4"
+# Use rfd on wasm platforms, instead of `tinyfiledialogs`
+rfd = "0.11"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1"

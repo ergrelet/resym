@@ -835,13 +835,15 @@ impl ResymApp {
     /// Function invoked on `Open PDB File` or when the Ctrl+O shortcut is used
     #[cfg(not(target_arch = "wasm32"))]
     fn start_open_pdb_file(&mut self, pdb_slot: PDBSlot) {
-        let file_path_opt = rfd::FileDialog::new()
-            .add_filter("PDB files (*.pdb)", &["pdb"])
-            .pick_file();
+        let file_path_opt = tinyfiledialogs::open_file_dialog(
+            "Select a PDB file",
+            "",
+            Some((&["*.pdb"], "PDB files (*.pdb)")),
+        );
         if let Some(file_path) = file_path_opt {
             if let Err(err) = self
                 .backend
-                .send_command(BackendCommand::LoadPDBFromPath(pdb_slot, file_path))
+                .send_command(BackendCommand::LoadPDBFromPath(pdb_slot, file_path.into()))
             {
                 log::error!("Failed to load the PDB file: {err}");
             }
@@ -901,19 +903,16 @@ impl ResymApp {
     #[cfg(not(target_arch = "wasm32"))]
     fn start_save_reconstruted_content(&self) {
         if let ResymAppMode::Browsing(_, _, ref reconstructed_type) = self.current_mode {
-            let file_path_opt = rfd::FileDialog::new()
-                .add_filter(
-                    "C/C++ Source File (*.c;*.cc;*.cpp;*.cxx;*.h;*.hpp;*.hxx)",
-                    &["c", "cc", "cpp", "cxx", "h", "hpp", "hxx"],
-                )
-                .save_file();
+            let file_path_opt = tinyfiledialogs::save_file_dialog_with_filter(
+                "Save content to file",
+                "",
+                &["*.c", "*.cc", "*.cpp", "*.cxx", "*.h", "*.hpp", "*.hxx"],
+                "C/C++ Source File (*.c;*.cc;*.cpp;*.cxx;*.h;*.hpp;*.hxx)",
+            );
             if let Some(file_path) = file_path_opt {
                 let write_result = std::fs::write(&file_path, reconstructed_type);
                 match write_result {
-                    Ok(()) => log::info!(
-                        "Reconstructed content has been saved to '{}'.",
-                        file_path.display()
-                    ),
+                    Ok(()) => log::info!("Reconstructed content has been saved to '{file_path}'."),
                     Err(err) => {
                         log::error!("Failed to write reconstructed content to file: {err}");
                     }

@@ -65,7 +65,8 @@ SUBCOMMANDS:
 
 ## How to Build
 
-On **Ubuntu**, you might need to install: `libxcb-shape0-dev` and `libxcb-xfixes0-dev`.
+On **Ubuntu**, you might need to install: `libxcb-shape0-dev`,
+`libxcb-xfixes0-dev` and `libglib2.0-dev`.
 
 ```
 git clone https://github.com/ergrelet/resym.git && cd resym
