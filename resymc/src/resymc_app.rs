@@ -137,7 +137,7 @@ impl ResymcApp {
         if let FrontendCommand::ReconstructTypeResult(reconstructed_type_result) =
             self.frontend_controller.rx_ui.recv()?
         {
-            let reconstructed_type = reconstructed_type_result?;
+            let (reconstructed_type, _) = reconstructed_type_result?;
             // Dump output
             if let Some(output_file_path) = output_file_path {
                 let mut output_file = File::create(output_file_path)?;

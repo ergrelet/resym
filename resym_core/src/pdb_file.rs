@@ -16,8 +16,7 @@ use std::{fs::File, path::Path, time::Instant};
 
 use crate::{
     error::{Result, ResymCoreError},
-    find_any_if_available,
-    frontend::ModuleList,
+    frontend::{ModuleList, ReconstructedType, TypeList},
     par_iter_if_available,
     pdb_types::{
         self, is_unnamed_type, type_name, DataFormatConfiguration, PrimitiveReconstructionFlavor,
@@ -62,7 +61,7 @@ where
     pub type_information: pdb::TypeInformation<'p>,
     pub debug_information: pdb::DebugInformation<'p>,
     pub file_path: PathBuf,
-    pub xref_map: RwLock<DashMap<pdb::TypeIndex, Vec<pdb::TypeIndex>>>,
+    pub xref_to_map: RwLock<DashMap<pdb::TypeIndex, Vec<pdb::TypeIndex>>>,
     pdb: RwLock<pdb::PDB<'p, T>>,
 }
 
@@ -83,7 +82,7 @@ impl<'p> PdbFile<'p, File> {
             type_information,
             debug_information,
             file_path: pdb_file_path.to_owned(),
-            xref_map: DashMap::default().into(),
+            xref_to_map: DashMap::default().into(),
             pdb: pdb.into(),
         };
         pdb_file.load_symbols()?;
@@ -111,7 +110,7 @@ impl<'p> PdbFile<'p, PDBDataSource> {
             type_information,
             debug_information,
             file_path: pdb_file_name.into(),
-            xref_map: DashMap::default().into(),
+            xref_to_map: DashMap::default().into(),
             pdb: pdb.into(),
         };
         pdb_file.load_symbols()?;
@@ -137,7 +136,7 @@ impl<'p> PdbFile<'p, PDBDataSource> {
             type_information,
             debug_information,
             file_path: pdb_file_name.into(),
-            xref_map: DashMap::default().into(),
+            xref_to_map: DashMap::default().into(),
             pdb: pdb.into(),
         };
         pdb_file.load_symbols()?;
@@ -244,7 +243,7 @@ where
         reconstruct_dependencies: bool,
         print_access_specifiers: bool,
         ignore_std_types: bool,
-    ) -> Result<String> {
+    ) -> Result<ReconstructedType> {
         // Populate our `TypeFinder` and find the right type index
         let mut type_index = pdb::TypeIndex::default();
         let mut type_finder = self.type_information.finder();
@@ -344,7 +343,7 @@ where
         reconstruct_dependencies: bool,
         print_access_specifiers: bool,
         ignore_std_types: bool,
-    ) -> Result<String> {
+    ) -> Result<ReconstructedType> {
         // Populate our `TypeFinder`
         let mut type_finder = self.type_information.finder();
         {
@@ -515,7 +514,7 @@ where
         reconstruct_dependencies: bool,
         print_access_specifiers: bool,
         ignore_std_types: bool,
-    ) -> Result<String> {
+    ) -> Result<ReconstructedType> {
         let fmt_configuration = DataFormatConfiguration {
             print_access_specifiers,
         };
@@ -538,9 +537,13 @@ where
                 &Default::default(),
                 &mut reconstruction_output,
             )?;
-            return Ok(reconstruction_output);
+            let needed_types: Vec<pdb::TypeIndex> = needed_types.into_iter().map(|e| e.0).collect();
+            let xrefs_from = self.type_list_from_type_indices(&needed_types);
+
+            return Ok((reconstruction_output, xrefs_from));
         }
 
+        let mut xrefs_from = vec![];
         // Add all the needed types iteratively until we're done
         let mut type_dependency_map: HashMap<pdb::TypeIndex, Vec<(pdb::TypeIndex, bool)>> =
             HashMap::new();
@@ -566,6 +569,12 @@ where
                     &primitives_flavor,
                     &mut needed_types,
                 )?;
+                // Initialize only once, the first time (i.e., for the requested type)
+                if xrefs_from.is_empty() {
+                    let needed_types: Vec<pdb::TypeIndex> =
+                        needed_types.iter().map(|e| e.0).collect();
+                    xrefs_from = self.type_list_from_type_indices(&needed_types);
+                }
 
                 for pair in &needed_types {
                     // Add forward declaration for types referenced by pointers
@@ -602,7 +611,7 @@ where
             &mut reconstruction_output,
         )?;
 
-        Ok(reconstruction_output)
+        Ok((reconstruction_output, xrefs_from))
     }
 
     pub fn reconstruct_all_types(
@@ -697,7 +706,7 @@ where
     ) -> Result<Vec<(String, pdb::TypeIndex)>> {
         // Generate xref cache if empty
         if self
-            .xref_map
+            .xref_to_map
             .read()
             .expect("lock shouldn't be poisoned")
             .is_empty()
@@ -751,38 +760,38 @@ where
             }
 
             // Update cache
-            if let Ok(mut xref_map_ref) = self.xref_map.write() {
+            if let Ok(mut xref_map_ref) = self.xref_to_map.write() {
                 *xref_map_ref = xref_map;
             }
         }
 
         // Query xref cache
         if let Some(xref_list) = self
-            .xref_map
+            .xref_to_map
             .read()
             .expect("lock shouldn't be poisoned")
             .get(&type_index)
         {
             // Convert the xref list into a proper Name+TypeIndex tuple list
-            let xref_type_list = xref_list
-                .iter()
-                .map(|xref_type_index| {
-                    // Look for the corresponding tuple (in parallel if possible)
-                    let tuple = find_any_if_available!(
-                        self.complete_type_list,
-                        |(_, type_index)| type_index == xref_type_index
-                    )
-                    .expect("`complete_type_list` should contain type index");
-
-                    tuple.clone()
-                })
-                .collect();
+            let xref_type_list = self.type_list_from_type_indices(&xref_list);
 
             Ok(xref_type_list)
         } else {
             // No xrefs found for the given type
             Ok(vec![])
         }
+    }
+
+    fn type_list_from_type_indices(&self, type_indices: &[pdb::TypeIndex]) -> TypeList {
+        par_iter_if_available!(self.complete_type_list)
+            .filter_map(|(type_name, type_index)| {
+                if type_indices.contains(type_index) {
+                    Some((type_name.clone(), *type_index))
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }
 

@@ -53,7 +53,7 @@ where
 
     // Reconstruct types from both PDBs
     {
-        let reconstructed_type_from_tmp = pdb_file_from
+        let (reconstructed_type_from_tmp, _) = pdb_file_from
             .reconstruct_type_by_name(
                 type_name,
                 primitives_flavor,
@@ -62,7 +62,7 @@ where
                 ignore_std_types,
             )
             .unwrap_or_default();
-        let reconstructed_type_to_tmp = pdb_file_to
+        let (reconstructed_type_to_tmp, _) = pdb_file_to
             .reconstruct_type_by_name(
                 type_name,
                 primitives_flavor,

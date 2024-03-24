@@ -51,7 +51,8 @@ enum LeftPanelTab {
 #[derive(PartialEq)]
 enum BottomPanelTab {
     Console,
-    XRefs,
+    XRefsTo,
+    XRefsFrom,
 }
 
 /// Struct that represents our GUI application.
@@ -68,7 +69,8 @@ pub struct ResymApp {
     // Components used in the bottom panel
     bottom_panel_selected_tab: BottomPanelTab,
     console: ConsoleComponent,
-    xref_list: TypeListComponent,
+    xref_to_list: TypeListComponent,
+    xref_from_list: TypeListComponent,
     // Other components
     settings: SettingsComponent,
     selected_type_index: Option<TypeIndex>,
@@ -163,7 +165,8 @@ impl ResymApp {
             code_view: CodeViewComponent::new(),
             bottom_panel_selected_tab: BottomPanelTab::Console,
             console: ConsoleComponent::new(logger),
-            xref_list: TypeListComponent::new(),
+            xref_to_list: TypeListComponent::new(),
+            xref_from_list: TypeListComponent::new(),
             selected_type_index: None,
             settings: SettingsComponent::new(app_settings),
             #[cfg(feature = "http")]
@@ -374,13 +377,45 @@ impl ResymApp {
                             BottomPanelTab::Console,
                             "Console",
                         );
-                        ui.selectable_value(
-                            &mut self.bottom_panel_selected_tab,
-                            BottomPanelTab::XRefs,
-                            "XRefs to",
-                        );
+
+                        if let ResymAppMode::Browsing(..) = self.current_mode {
+                            // Only display those tabs in browsing mode
+                            ui.selectable_value(
+                                &mut self.bottom_panel_selected_tab,
+                                BottomPanelTab::XRefsTo,
+                                "XRefs to",
+                            );
+                            ui.selectable_value(
+                                &mut self.bottom_panel_selected_tab,
+                                BottomPanelTab::XRefsFrom,
+                                "XRefs from",
+                            );
+                        }
                     });
                     ui.separator();
+
+                    let mut on_type_selected = |_: &str, type_index: TypeIndex| {
+                        // Update currently selected type index
+                        self.selected_type_index = Some(type_index);
+
+                        // Note: only support "Browsing" mode
+                        if let ResymAppMode::Browsing(..) = self.current_mode {
+                            if let Err(err) =
+                                self.backend
+                                    .send_command(BackendCommand::ReconstructTypeByIndex(
+                                        ResymPDBSlots::Main as usize,
+                                        type_index,
+                                        self.settings.app_settings.primitive_types_flavor,
+                                        self.settings.app_settings.print_header,
+                                        self.settings.app_settings.reconstruct_dependencies,
+                                        self.settings.app_settings.print_access_specifiers,
+                                        self.settings.app_settings.ignore_std_types,
+                                    ))
+                            {
+                                log::error!("Failed to reconstruct type: {}", err);
+                            }
+                        }
+                    };
 
                     // Tab body
                     match self.bottom_panel_selected_tab {
@@ -388,30 +423,13 @@ impl ResymApp {
                             // Console panel
                             self.console.update(ui);
                         }
-                        BottomPanelTab::XRefs => {
-                            let mut on_type_selected = |_: &str, type_index: TypeIndex| {
-                                // Update currently selected type index
-                                self.selected_type_index = Some(type_index);
-
-                                // Note: only support "Browsing" mode
-                                if let ResymAppMode::Browsing(..) = self.current_mode {
-                                    if let Err(err) = self.backend.send_command(
-                                        BackendCommand::ReconstructTypeByIndex(
-                                            ResymPDBSlots::Main as usize,
-                                            type_index,
-                                            self.settings.app_settings.primitive_types_flavor,
-                                            self.settings.app_settings.print_header,
-                                            self.settings.app_settings.reconstruct_dependencies,
-                                            self.settings.app_settings.print_access_specifiers,
-                                            self.settings.app_settings.ignore_std_types,
-                                        ),
-                                    ) {
-                                        log::error!("Failed to reconstruct type: {}", err);
-                                    }
-                                }
-                            };
+                        BottomPanelTab::XRefsTo => {
                             // Update xref list
-                            self.xref_list.update(ui, &mut on_type_selected);
+                            self.xref_to_list.update(ui, &mut on_type_selected);
+                        }
+                        BottomPanelTab::XRefsFrom => {
+                            // Update xref list
+                            self.xref_from_list.update(ui, &mut on_type_selected);
                         }
                     }
                 });
@@ -538,8 +556,9 @@ impl ResymApp {
                                 ResymAppMode::Browsing(String::default(), 0, String::default());
                             // Reset selected type
                             self.selected_type_index = None;
-                            // Reset xref list
-                            self.xref_list.update_type_list(vec![]);
+                            // Reset xref lists
+                            self.xref_to_list.update_type_list(vec![]);
+                            self.xref_from_list.update_type_list(vec![]);
 
                             // Request a type list update
                             if let Err(err) = self.backend.send_command(BackendCommand::ListTypes(
@@ -573,8 +592,9 @@ impl ResymApp {
                             );
                             // Reset selected type
                             self.selected_type_index = None;
-                            // Reset xref list
-                            self.xref_list.update_type_list(vec![]);
+                            // Reset xref lists
+                            self.xref_to_list.update_type_list(vec![]);
+                            self.xref_from_list.update_type_list(vec![]);
 
                             // Request a type list update
                             if let Err(err) =
@@ -619,7 +639,7 @@ impl ResymApp {
                             self.current_mode =
                                 ResymAppMode::Browsing(Default::default(), 0, error_msg);
                         }
-                        Ok(reconstructed_type) => {
+                        Ok((reconstructed_type, xrefs_from)) => {
                             let last_line_number = 1 + reconstructed_type.lines().count();
                             let line_numbers =
                                 (1..last_line_number).fold(String::default(), |mut acc, e| {
@@ -631,6 +651,12 @@ impl ResymApp {
                                 last_line_number,
                                 reconstructed_type,
                             );
+
+                            // Update xref lists
+                            self.xref_to_list.update_type_list(vec![]);
+                            self.xref_from_list.update_type_list(xrefs_from);
+                            // Switch to the "xref from" tab
+                            self.bottom_panel_selected_tab = BottomPanelTab::XRefsFrom;
                         }
                     }
                 }
@@ -725,6 +751,7 @@ impl ResymApp {
                 },
 
                 FrontendCommand::ListTypesResult(filtered_types) => {
+                    // Update type list component
                     self.type_list.update_type_list(filtered_types);
                 }
 
@@ -738,9 +765,9 @@ impl ResymApp {
                             log::info!("{xref_count} cross-references found!");
 
                             // Update xref list component
-                            self.xref_list.update_type_list(xref_list);
+                            self.xref_to_list.update_type_list(xref_list);
                             // Switch to xref tab
-                            self.bottom_panel_selected_tab = BottomPanelTab::XRefs;
+                            self.bottom_panel_selected_tab = BottomPanelTab::XRefsTo;
                         }
                     }
                 }

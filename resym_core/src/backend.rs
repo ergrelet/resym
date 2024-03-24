@@ -20,7 +20,7 @@ use std::{path::PathBuf, time::Instant};
 #[cfg(all(not(feature = "rayon"), target_arch = "wasm32"))]
 use wasm_thread::{self as thread, JoinHandle};
 
-use crate::{diffing::diff_module_by_path, pdb_file::PDBDataSource};
+use crate::{diffing::diff_module_by_path, frontend::ReconstructedType, pdb_file::PDBDataSource};
 use crate::{
     diffing::diff_type_by_name,
     error::{Result, ResymCoreError},
@@ -342,7 +342,8 @@ fn worker_thread_routine(
                         ignore_std_types,
                     );
                     frontend_controller.send_command(FrontendCommand::ReconstructTypeResult(
-                        reconstructed_type_result,
+                        // Note: do not return any "xrefs from" when reconstructing all types
+                        reconstructed_type_result.map(|data| (data, vec![])),
                     ))?;
                 }
             }
@@ -508,11 +509,11 @@ fn reconstruct_type_by_index_command<'p, T>(
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
     ignore_std_types: bool,
-) -> Result<String>
+) -> Result<ReconstructedType>
 where
     T: io::Seek + io::Read + std::fmt::Debug + 'p,
 {
-    let data = pdb_file.reconstruct_type_by_type_index(
+    let (data, xrefs_from) = pdb_file.reconstruct_type_by_type_index(
         type_index,
         primitives_flavor,
         reconstruct_dependencies,
@@ -521,9 +522,9 @@ where
     )?;
     if print_header {
         let file_header = generate_file_header(pdb_file, primitives_flavor, true, ignore_std_types);
-        Ok(format!("{file_header}{data}"))
+        Ok((format!("{file_header}{data}"), xrefs_from))
     } else {
-        Ok(data)
+        Ok((data, xrefs_from))
     }
 }
 
@@ -535,11 +536,11 @@ fn reconstruct_type_by_name_command<'p, T>(
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
     ignore_std_types: bool,
-) -> Result<String>
+) -> Result<ReconstructedType>
 where
     T: io::Seek + io::Read + std::fmt::Debug + 'p,
 {
-    let data = pdb_file.reconstruct_type_by_name(
+    let (data, xrefs_from) = pdb_file.reconstruct_type_by_name(
         type_name,
         primitives_flavor,
         reconstruct_dependencies,
@@ -548,9 +549,9 @@ where
     )?;
     if print_header {
         let file_header = generate_file_header(pdb_file, primitives_flavor, true, ignore_std_types);
-        Ok(format!("{file_header}{data}"))
+        Ok((format!("{file_header}{data}"), xrefs_from))
     } else {
-        Ok(data)
+        Ok((data, xrefs_from))
     }
 }
 

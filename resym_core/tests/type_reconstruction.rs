@@ -72,7 +72,7 @@ fn test_type_reconstruction_internal(
 ) {
     let pdb_file = PdbFile::load_from_file(Path::new(TEST_PDB_FILE_PATH)).expect("load test.pdb");
     for (i, test_case_type_name) in TEST_CASES.iter().enumerate() {
-        let reconstructed_type = pdb_file
+        let (reconstructed_type, _) = pdb_file
             .reconstruct_type_by_name(
                 test_case_type_name,
                 primitives_flavor,
