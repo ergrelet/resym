@@ -4,19 +4,34 @@ use resym_core::frontend::{TypeIndex, TypeList};
 pub struct TypeListComponent {
     filtered_type_list: TypeList,
     selected_row: usize,
+    list_ordering: TypeListOrdering,
+}
+
+pub enum TypeListOrdering {
+    /// Doesn't respect any particular order
+    None,
+    /// Orders types alphabetically
+    Alphabetical,
 }
 
 impl TypeListComponent {
-    pub fn new() -> Self {
+    pub fn new(ordering: TypeListOrdering) -> Self {
         Self {
             filtered_type_list: vec![],
             selected_row: usize::MAX,
+            list_ordering: ordering,
         }
     }
 
     pub fn update_type_list(&mut self, type_list: TypeList) {
         self.filtered_type_list = type_list;
         self.selected_row = usize::MAX;
+
+        // Reorder list if needed
+        if let TypeListOrdering::Alphabetical = self.list_ordering {
+            self.filtered_type_list
+                .sort_unstable_by(|lhs, rhs| lhs.0.cmp(&rhs.0));
+        }
     }
 
     pub fn update<CB: FnMut(&str, TypeIndex)>(
@@ -53,5 +68,11 @@ impl TypeListComponent {
                     });
             },
         );
+    }
+}
+
+impl Default for TypeListComponent {
+    fn default() -> Self {
+        Self::new(TypeListOrdering::None)
     }
 }

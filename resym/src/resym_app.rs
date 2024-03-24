@@ -19,7 +19,7 @@ use crate::{
     settings::ResymAppSettings,
     ui_components::{
         CodeViewComponent, ConsoleComponent, ModuleTreeComponent, SettingsComponent,
-        TextSearchComponent, TypeListComponent,
+        TextSearchComponent, TypeListComponent, TypeListOrdering,
     },
 };
 
@@ -159,14 +159,14 @@ impl ResymApp {
             current_mode: ResymAppMode::Idle,
             left_panel_selected_tab: LeftPanelTab::TypeSearch,
             type_search: TextSearchComponent::new(),
-            type_list: TypeListComponent::new(),
+            type_list: TypeListComponent::new(TypeListOrdering::Alphabetical),
             module_search: TextSearchComponent::new(),
             module_tree: ModuleTreeComponent::new(),
             code_view: CodeViewComponent::new(),
             bottom_panel_selected_tab: BottomPanelTab::Console,
             console: ConsoleComponent::new(logger),
-            xref_to_list: TypeListComponent::new(),
-            xref_from_list: TypeListComponent::new(),
+            xref_to_list: TypeListComponent::new(TypeListOrdering::Alphabetical),
+            xref_from_list: TypeListComponent::new(TypeListOrdering::Alphabetical),
             selected_type_index: None,
             settings: SettingsComponent::new(app_settings),
             #[cfg(feature = "http")]
