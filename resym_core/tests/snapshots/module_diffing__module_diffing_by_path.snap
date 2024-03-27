@@ -15,21 +15,21 @@ expression: module_diff.data
  //
  
  using namespace std;
- int32_t (* pre_c_initializer)();
- int32_t (* post_pgo_initializer)();
- void (* pre_cpp_initializer)();
+ static int32_t (* pre_c_initializer)(); // RVA=0x19440 
+ static int32_t (* post_pgo_initializer)(); // RVA=0x19550 
+ static void (* pre_cpp_initializer)(); // RVA=0x19110 
  using PUWSTR_C = const wchar_t*;
  using TP_CALLBACK_ENVIRON_V3 = _TP_CALLBACK_ENVIRON_V3;
- int32_t (__scrt_common_main)(); // CodeSize=19
- int32_t (__scrt_common_main_seh)(); // CodeSize=414
- void `__scrt_common_main_seh'::`1'::filt$0(); // CodeSize=48 (missing type information)
- int32_t (__scrt_narrow_argv_policy::__scrt_narrow_argv_policy::configure_argv)(); // CodeSize=21
- int32_t (__scrt_narrow_environment_policy::__scrt_narrow_environment_policy::initialize_environment)(); // CodeSize=14
- int32_t (invoke_main)(); // CodeSize=62
- int32_t (post_pgo_initialization)(); // CodeSize=16
- int32_t (pre_c_initialization)(); // CodeSize=178
- void (pre_cpp_initialization)(); // CodeSize=26
- void (__scrt_main_policy::__scrt_main_policy::set_app_type)(); // CodeSize=19
- void (__scrt_file_policy::__scrt_file_policy::set_commode)(); // CodeSize=29
- void (__scrt_file_policy::__scrt_file_policy::set_fmode)(); // CodeSize=21
- uint32_t (mainCRTStartup)(void*); // CodeSize=19
+ static int32_t (__scrt_common_main)(); // RVA=0x11e80 CodeSize=0x13
+ static int32_t (__scrt_common_main_seh)(); // RVA=0x11ea0 CodeSize=0x19e
+ static void `__scrt_common_main_seh'::`1'::filt$0(); // RVA=0x17bd0 CodeSize=0x30 (missing type information)
+ int32_t (__scrt_narrow_argv_policy::__scrt_narrow_argv_policy::configure_argv)(); // RVA=0x120b0 CodeSize=0x15
+ int32_t (__scrt_narrow_environment_policy::__scrt_narrow_environment_policy::initialize_environment)(); // RVA=0x120d0 CodeSize=0xe
+ static int32_t (invoke_main)(); // RVA=0x120f0 CodeSize=0x3e
+ static int32_t (post_pgo_initialization)(); // RVA=0x11e40 CodeSize=0x10
+ static int32_t (pre_c_initialization)(); // RVA=0x11d60 CodeSize=0xb2
+ static void (pre_cpp_initialization)(); // RVA=0x11e60 CodeSize=0x1a
+ void (__scrt_main_policy::__scrt_main_policy::set_app_type)(); // RVA=0x12140 CodeSize=0x13
+ void (__scrt_file_policy::__scrt_file_policy::set_commode)(); // RVA=0x12160 CodeSize=0x1d
+ void (__scrt_file_policy::__scrt_file_policy::set_fmode)(); // RVA=0x12190 CodeSize=0x15
+ uint32_t (mainCRTStartup)(void*); // RVA=0x121b0 CodeSize=0x13

@@ -5,6 +5,6 @@ expression: module_dump
 using namespace std;
 using PUWSTR_C = const wchar_t*;
 using TP_CALLBACK_ENVIRON_V3 = _TP_CALLBACK_ENVIRON_V3;
-uint64_t* (__local_stdio_scanf_options)(); // CodeSize=8
-uint64_t _OptionsStorage;
-void (__scrt_initialize_default_local_stdio_options)(); // CodeSize=69
+uint64_t* (__local_stdio_scanf_options)(); // RVA=0x14670 CodeSize=0x8
+static uint64_t _OptionsStorage; // RVA=0x1eb28 
+void (__scrt_initialize_default_local_stdio_options)(); // RVA=0x14680 CodeSize=0x45

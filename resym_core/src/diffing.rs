@@ -92,6 +92,7 @@ pub fn diff_module_by_path<'p, T>(
     module_path: &str,
     primitives_flavor: PrimitiveReconstructionFlavor,
     print_header: bool,
+    print_access_specifiers: bool,
 ) -> Result<Diff>
 where
     T: io::Seek + io::Read + std::fmt::Debug + 'p,
@@ -111,10 +112,10 @@ where
     // Reconstruct modules from both PDBs
     {
         let reconstructed_type_from_tmp = pdb_file_from
-            .reconstruct_module_by_path(module_path, primitives_flavor)
+            .reconstruct_module_by_path(module_path, primitives_flavor, print_access_specifiers)
             .unwrap_or_default();
         let reconstructed_type_to_tmp = pdb_file_to
-            .reconstruct_module_by_path(module_path, primitives_flavor)
+            .reconstruct_module_by_path(module_path, primitives_flavor, print_access_specifiers)
             .unwrap_or_default();
         if reconstructed_type_from_tmp.is_empty() && reconstructed_type_to_tmp.is_empty() {
             // Make it obvious an error occured
@@ -128,6 +129,53 @@ where
     let diff = generate_diff(&reconstructed_module_from, &reconstructed_module_to)?;
     log::debug!(
         "Module diffing took {} ms",
+        diff_start.elapsed().as_millis()
+    );
+
+    Ok(diff)
+}
+
+pub fn diff_symbol_by_name<'p, T>(
+    pdb_file_from: &PdbFile<'p, T>,
+    pdb_file_to: &PdbFile<'p, T>,
+    symbol_name: &str,
+    primitives_flavor: PrimitiveReconstructionFlavor,
+    print_header: bool,
+    print_access_specifiers: bool,
+) -> Result<Diff>
+where
+    T: io::Seek + io::Read + std::fmt::Debug + 'p,
+{
+    let diff_start = Instant::now();
+
+    // Prepend header if needed
+    let (mut reconstructed_symbol_from, mut reconstructed_symbol_to) = if print_header {
+        let diff_header = generate_diff_header(pdb_file_from, pdb_file_to);
+        (diff_header.clone(), diff_header)
+    } else {
+        (String::default(), String::default())
+    };
+
+    // Reconstruct modules from both PDBs
+    {
+        let reconstructed_symbol_from_tmp = pdb_file_from
+            .reconstruct_symbol_by_name(symbol_name, primitives_flavor, print_access_specifiers)
+            .unwrap_or_default();
+        let reconstructed_symbol_to_tmp = pdb_file_to
+            .reconstruct_symbol_by_name(symbol_name, primitives_flavor, print_access_specifiers)
+            .unwrap_or_default();
+        if reconstructed_symbol_from_tmp.is_empty() && reconstructed_symbol_to_tmp.is_empty() {
+            // Make it obvious an error occured
+            return Err(ResymCoreError::SymbolNotFoundError(symbol_name.to_owned()));
+        }
+        reconstructed_symbol_from.push_str(&reconstructed_symbol_from_tmp);
+        reconstructed_symbol_to.push_str(&reconstructed_symbol_to_tmp);
+    }
+
+    // Diff reconstructed representations
+    let diff = generate_diff(&reconstructed_symbol_from, &reconstructed_symbol_to)?;
+    log::debug!(
+        "Symbol diffing took {} ms",
         diff_start.elapsed().as_millis()
     );
 

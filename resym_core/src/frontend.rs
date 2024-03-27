@@ -1,8 +1,10 @@
-use crate::{backend::PDBSlot, diffing::Diff, error::Result};
+use crate::{
+    backend::PDBSlot,
+    diffing::Diff,
+    error::Result,
+    pdb_file::{ModuleList, SymbolList, TypeList},
+};
 
-pub type TypeIndex = pdb::TypeIndex;
-pub type TypeList = Vec<(String, TypeIndex)>;
-pub type ModuleList = Vec<(String, usize)>;
 /// Tuple containing the reconstructed type as a `String`
 /// and the list of directly referenced types as a `TypeList`
 pub type ReconstructedType = (String, TypeList);
@@ -12,11 +14,22 @@ pub enum FrontendCommand {
     /// Send result from `LoadURL` backend command.
     /// Contains last path segment (i.e., file name) as a `String` and data as `Vec<u8>`.
     LoadURLResult(Result<(PDBSlot, String, Vec<u8>)>),
+
+    // Types
     ListTypesResult(TypeList),
     ReconstructTypeResult(Result<ReconstructedType>),
+
+    // Symbols
+    ListSymbolsResult(SymbolList),
+    ReconstructSymbolResult(Result<String>),
+
+    // Modules
+    ListModulesResult(Result<ModuleList>),
     ReconstructModuleResult(Result<String>),
-    UpdateModuleList(Result<ModuleList>),
+
+    // Diff
     DiffResult(Result<Diff>),
+    // Xrefs
     ListTypeCrossReferencesResult(Result<TypeList>),
 }
 

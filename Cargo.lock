@@ -2280,6 +2280,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "msvc-demangler"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2588c982e3a7fbfbd73b21f824cacc43fc6392a1103c709ffd6001c0bf33fdb3"
+dependencies = [
+ "bitflags 2.5.0",
+]
+
+[[package]]
 name = "naga"
 version = "0.19.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2993,6 +3002,7 @@ dependencies = [
  "insta",
  "instant",
  "log",
+ "msvc-demangler",
  "num_cpus",
  "pdb",
  "rayon",

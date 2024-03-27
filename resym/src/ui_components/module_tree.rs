@@ -2,7 +2,7 @@ use std::cell::RefCell;
 
 use eframe::egui::{self, ScrollArea};
 
-use resym_core::frontend::ModuleList;
+use resym_core::pdb_file::ModuleList;
 
 use crate::{
     module_tree::{ModuleInfo, ModulePath, ModuleTreeNode},

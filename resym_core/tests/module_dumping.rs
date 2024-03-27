@@ -11,7 +11,11 @@ fn test_module_dumping_by_path_portable() {
     let pdb_file = PdbFile::load_from_file(Path::new(TEST_PDB_FILE_PATH)).expect("load test.pdb");
 
     let module_dump = pdb_file
-        .reconstruct_module_by_path(TEST_MODULE_PATH, PrimitiveReconstructionFlavor::Portable)
+        .reconstruct_module_by_path(
+            TEST_MODULE_PATH,
+            PrimitiveReconstructionFlavor::Portable,
+            true,
+        )
         .unwrap_or_else(|err| panic!("module dumping failed: {err}"));
 
     insta::assert_snapshot!("module_dumping_by_path_portable", module_dump);
@@ -23,6 +27,7 @@ fn test_module_dumping_by_index_portable() {
         "module_dumping_by_index_portable",
         TEST_MODULE_INDEX,
         PrimitiveReconstructionFlavor::Portable,
+        true,
     );
 }
 
@@ -32,6 +37,7 @@ fn test_module_dumping_by_index_microsoft() {
         "module_dumping_by_index_microsoft",
         TEST_MODULE_INDEX,
         PrimitiveReconstructionFlavor::Microsoft,
+        true,
     );
 }
 
@@ -41,6 +47,7 @@ fn test_module_dumping_by_index_raw() {
         "module_dumping_by_index_raw",
         TEST_MODULE_INDEX,
         PrimitiveReconstructionFlavor::Raw,
+        true,
     );
 }
 
@@ -48,11 +55,12 @@ fn test_module_dumping_by_index_internal(
     snapshot_name: &str,
     module_index: usize,
     primitives_flavor: PrimitiveReconstructionFlavor,
+    print_access_specifier: bool,
 ) {
     let pdb_file = PdbFile::load_from_file(Path::new(TEST_PDB_FILE_PATH)).expect("load test.pdb");
 
     let module_dump = pdb_file
-        .reconstruct_module_by_index(module_index, primitives_flavor)
+        .reconstruct_module_by_index(module_index, primitives_flavor, print_access_specifier)
         .unwrap_or_else(|_| panic!("module dumping"));
 
     insta::assert_snapshot!(snapshot_name, module_dump);
