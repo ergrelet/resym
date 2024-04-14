@@ -3,7 +3,8 @@ use eframe::egui;
 use memory_logger::blocking::MemoryLogger;
 use resym_core::{
     backend::{Backend, BackendCommand, PDBSlot},
-    frontend::{FrontendCommand, TypeIndex},
+    frontend::FrontendCommand,
+    pdb_file::{SymbolIndex, TypeIndex},
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -18,8 +19,8 @@ use crate::{
     module_tree::{ModuleInfo, ModulePath},
     settings::ResymAppSettings,
     ui_components::{
-        CodeViewComponent, ConsoleComponent, ModuleTreeComponent, SettingsComponent,
-        TextSearchComponent, TypeListComponent, TypeListOrdering,
+        CodeViewComponent, ConsoleComponent, IndexListComponent, IndexListOrdering,
+        ModuleTreeComponent, SettingsComponent, TextSearchComponent,
     },
 };
 
@@ -44,6 +45,7 @@ impl From<ResymPDBSlots> for PDBSlot {
 #[derive(PartialEq)]
 enum LeftPanelTab {
     TypeSearch,
+    SymbolSearch,
     ModuleBrowsing,
 }
 
@@ -62,18 +64,21 @@ pub struct ResymApp {
     // Components used in the left-side panel
     left_panel_selected_tab: LeftPanelTab,
     type_search: TextSearchComponent,
-    type_list: TypeListComponent,
+    type_list: IndexListComponent<TypeIndex>,
+    selected_type_index: Option<TypeIndex>,
+    symbol_search: TextSearchComponent,
+    symbol_list: IndexListComponent<SymbolIndex>,
+    selected_symbol_index: Option<SymbolIndex>,
     module_search: TextSearchComponent,
     module_tree: ModuleTreeComponent,
     code_view: CodeViewComponent,
     // Components used in the bottom panel
     bottom_panel_selected_tab: BottomPanelTab,
     console: ConsoleComponent,
-    xref_to_list: TypeListComponent,
-    xref_from_list: TypeListComponent,
+    xref_to_list: IndexListComponent<TypeIndex>,
+    xref_from_list: IndexListComponent<TypeIndex>,
     // Other components
     settings: SettingsComponent,
-    selected_type_index: Option<TypeIndex>,
     #[cfg(feature = "http")]
     open_url: OpenURLComponent,
     frontend_controller: Arc<EguiFrontendController>,
@@ -159,15 +164,18 @@ impl ResymApp {
             current_mode: ResymAppMode::Idle,
             left_panel_selected_tab: LeftPanelTab::TypeSearch,
             type_search: TextSearchComponent::new(),
-            type_list: TypeListComponent::new(TypeListOrdering::Alphabetical),
+            type_list: IndexListComponent::new(IndexListOrdering::Alphabetical),
+            selected_type_index: None,
+            symbol_search: TextSearchComponent::new(),
+            symbol_list: IndexListComponent::new(IndexListOrdering::Alphabetical),
+            selected_symbol_index: None,
             module_search: TextSearchComponent::new(),
             module_tree: ModuleTreeComponent::new(),
             code_view: CodeViewComponent::new(),
             bottom_panel_selected_tab: BottomPanelTab::Console,
             console: ConsoleComponent::new(logger),
-            xref_to_list: TypeListComponent::new(TypeListOrdering::Alphabetical),
-            xref_from_list: TypeListComponent::new(TypeListOrdering::Alphabetical),
-            selected_type_index: None,
+            xref_to_list: IndexListComponent::new(IndexListOrdering::Alphabetical),
+            xref_from_list: IndexListComponent::new(IndexListOrdering::Alphabetical),
             settings: SettingsComponent::new(app_settings),
             #[cfg(feature = "http")]
             open_url: OpenURLComponent::new(),
@@ -208,6 +216,11 @@ impl ResymApp {
                         &mut self.left_panel_selected_tab,
                         LeftPanelTab::TypeSearch,
                         "Search types",
+                    );
+                    ui.selectable_value(
+                        &mut self.left_panel_selected_tab,
+                        LeftPanelTab::SymbolSearch,
+                        "Search symbols",
                     );
                     ui.selectable_value(
                         &mut self.left_panel_selected_tab,
@@ -296,6 +309,84 @@ impl ResymApp {
                         // Update the type list
                         self.type_list.update(ui, &mut on_type_selected);
                     }
+
+                    LeftPanelTab::SymbolSearch => {
+                        // Callback run when the search query changes
+                        let on_query_update = |search_query: &str| {
+                            // Update filtered list if filter has changed
+                            let result = if let ResymAppMode::Comparing(..) = self.current_mode {
+                                self.backend.send_command(BackendCommand::ListSymbolsMerged(
+                                    vec![
+                                        ResymPDBSlots::Main as usize,
+                                        ResymPDBSlots::Diff as usize,
+                                    ],
+                                    search_query.to_string(),
+                                    self.settings.app_settings.search_case_insensitive,
+                                    self.settings.app_settings.search_use_regex,
+                                    self.settings.app_settings.ignore_std_types,
+                                ))
+                            } else {
+                                self.backend.send_command(BackendCommand::ListSymbols(
+                                    ResymPDBSlots::Main as usize,
+                                    search_query.to_string(),
+                                    self.settings.app_settings.search_case_insensitive,
+                                    self.settings.app_settings.search_use_regex,
+                                    self.settings.app_settings.ignore_std_types,
+                                ))
+                            };
+                            if let Err(err) = result {
+                                log::error!("Failed to update type filter value: {}", err);
+                            }
+                        };
+
+                        // Update the symbol search bar
+                        ui.label("Search");
+                        self.symbol_search.update(ui, &on_query_update);
+                        ui.separator();
+                        ui.add_space(4.0);
+
+                        // Callback run when a type is selected in the list
+                        let mut on_symbol_selected =
+                            |symbol_name: &str, symbol_index: SymbolIndex| {
+                                // Update currently selected type index
+                                self.selected_symbol_index = Some(symbol_index);
+
+                                match self.current_mode {
+                                    ResymAppMode::Browsing(..) => {
+                                        if let Err(err) = self.backend.send_command(
+                                            BackendCommand::ReconstructSymbolByIndex(
+                                                ResymPDBSlots::Main as usize,
+                                                symbol_index,
+                                                self.settings.app_settings.primitive_types_flavor,
+                                                self.settings.app_settings.print_header,
+                                                self.settings.app_settings.print_access_specifiers,
+                                            ),
+                                        ) {
+                                            log::error!("Failed to reconstruct type: {}", err);
+                                        }
+                                    }
+                                    ResymAppMode::Comparing(..) => {
+                                        if let Err(err) = self.backend.send_command(
+                                            BackendCommand::DiffSymbolByName(
+                                                ResymPDBSlots::Main as usize,
+                                                ResymPDBSlots::Diff as usize,
+                                                symbol_name.to_string(),
+                                                self.settings.app_settings.primitive_types_flavor,
+                                                self.settings.app_settings.print_header,
+                                                self.settings.app_settings.print_access_specifiers,
+                                            ),
+                                        ) {
+                                            log::error!("Failed to reconstruct type diff: {}", err);
+                                        }
+                                    }
+                                    _ => log::error!("Invalid application state"),
+                                }
+                            };
+
+                        // Update the symbol list
+                        self.symbol_list.update(ui, &mut on_symbol_selected);
+                    }
+
                     LeftPanelTab::ModuleBrowsing => {
                         // Callback run when the search query changes
                         let on_query_update = |search_query: &str| match self.current_mode {
@@ -332,6 +423,7 @@ impl ResymApp {
                                             module_info.pdb_index,
                                             self.settings.app_settings.primitive_types_flavor,
                                             self.settings.app_settings.print_header,
+                                            self.settings.app_settings.print_access_specifiers,
                                         ),
                                     ) {
                                         log::error!("Failed to reconstruct module: {}", err);
@@ -346,6 +438,7 @@ impl ResymApp {
                                             module_path.to_string(),
                                             self.settings.app_settings.primitive_types_flavor,
                                             self.settings.app_settings.print_header,
+                                            self.settings.app_settings.print_access_specifiers,
                                         ))
                                     {
                                         log::error!("Failed to reconstruct type diff: {}", err);
@@ -557,8 +650,8 @@ impl ResymApp {
                             // Reset selected type
                             self.selected_type_index = None;
                             // Reset xref lists
-                            self.xref_to_list.update_type_list(vec![]);
-                            self.xref_from_list.update_type_list(vec![]);
+                            self.xref_to_list.update_index_list(vec![]);
+                            self.xref_from_list.update_index_list(vec![]);
 
                             // Request a type list update
                             if let Err(err) = self.backend.send_command(BackendCommand::ListTypes(
@@ -568,6 +661,18 @@ impl ResymApp {
                                 false,
                                 self.settings.app_settings.ignore_std_types,
                             )) {
+                                log::error!("Failed to update type filter value: {}", err);
+                            }
+                            // Request a symbol list update
+                            if let Err(err) =
+                                self.backend.send_command(BackendCommand::ListSymbols(
+                                    ResymPDBSlots::Main as usize,
+                                    String::default(),
+                                    false,
+                                    false,
+                                    self.settings.app_settings.ignore_std_types,
+                                ))
+                            {
                                 log::error!("Failed to update type filter value: {}", err);
                             }
                             // Request a module list update
@@ -593,8 +698,8 @@ impl ResymApp {
                             // Reset selected type
                             self.selected_type_index = None;
                             // Reset xref lists
-                            self.xref_to_list.update_type_list(vec![]);
-                            self.xref_from_list.update_type_list(vec![]);
+                            self.xref_to_list.update_index_list(vec![]);
+                            self.xref_from_list.update_index_list(vec![]);
 
                             // Request a type list update
                             if let Err(err) =
@@ -653,22 +758,50 @@ impl ResymApp {
                             );
 
                             // Update xref lists
-                            self.xref_to_list.update_type_list(vec![]);
-                            self.xref_from_list.update_type_list(xrefs_from);
+                            self.xref_to_list.update_index_list(vec![]);
+                            self.xref_from_list.update_index_list(xrefs_from);
                             // Switch to the "xref from" tab
                             self.bottom_panel_selected_tab = BottomPanelTab::XRefsFrom;
                         }
                     }
                 }
 
-                FrontendCommand::UpdateModuleList(module_list_result) => match module_list_result {
-                    Err(err) => {
-                        log::error!("Failed to retrieve module list: {}", err);
+                FrontendCommand::ListModulesResult(module_list_result) => {
+                    match module_list_result {
+                        Err(err) => {
+                            log::error!("Failed to retrieve module list: {}", err);
+                        }
+                        Ok(module_list) => {
+                            self.module_tree.set_module_list(module_list);
+                        }
                     }
-                    Ok(module_list) => {
-                        self.module_tree.set_module_list(module_list);
+                }
+
+                FrontendCommand::ReconstructSymbolResult(result) => {
+                    match result {
+                        Err(err) => {
+                            let error_msg = format!("Failed to reconstruct symbol: {}", err);
+                            log::error!("{}", &error_msg);
+
+                            // Show an empty "reconstruted" view
+                            self.current_mode =
+                                ResymAppMode::Browsing(Default::default(), 0, error_msg);
+                        }
+                        Ok(reconstructed_symbol) => {
+                            let last_line_number = 1 + reconstructed_symbol.lines().count();
+                            let line_numbers =
+                                (1..last_line_number).fold(String::default(), |mut acc, e| {
+                                    let _r = writeln!(&mut acc, "{e}");
+                                    acc
+                                });
+                            self.current_mode = ResymAppMode::Browsing(
+                                line_numbers,
+                                last_line_number,
+                                reconstructed_symbol,
+                            );
+                        }
                     }
-                },
+                }
 
                 FrontendCommand::ReconstructModuleResult(module_reconstruction_result) => {
                     match module_reconstruction_result {
@@ -752,7 +885,12 @@ impl ResymApp {
 
                 FrontendCommand::ListTypesResult(filtered_types) => {
                     // Update type list component
-                    self.type_list.update_type_list(filtered_types);
+                    self.type_list.update_index_list(filtered_types);
+                }
+
+                FrontendCommand::ListSymbolsResult(filtered_symbols) => {
+                    // Update symbol list component
+                    self.symbol_list.update_index_list(filtered_symbols);
                 }
 
                 FrontendCommand::ListTypeCrossReferencesResult(xref_list_result) => {
@@ -765,7 +903,7 @@ impl ResymApp {
                             log::info!("{xref_count} cross-references found!");
 
                             // Update xref list component
-                            self.xref_to_list.update_type_list(xref_list);
+                            self.xref_to_list.update_index_list(xref_list);
                             // Switch to xref tab
                             self.bottom_panel_selected_tab = BottomPanelTab::XRefsTo;
                         }
@@ -883,7 +1021,7 @@ impl ResymApp {
     fn list_xrefs_for_type(&self, type_index: TypeIndex) {
         log::info!(
             "Looking for cross-references for type #0x{:x}...",
-            type_index.0
+            type_index
         );
         if let Err(err) = self
             .backend
@@ -894,7 +1032,7 @@ impl ResymApp {
         {
             log::error!(
                 "Failed to list cross-references to type #0x{:x}: {err}",
-                type_index.0
+                type_index
             );
         }
     }

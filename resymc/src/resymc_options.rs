@@ -136,6 +136,9 @@ pub enum ResymcOptions {
         /// Print header
         #[structopt(short = "h", long)]
         print_header: bool,
+        /// Print C++ access specifiers
+        #[structopt(short = "a", long)]
+        print_access_specifiers: bool,
         /// Highlight C++ output
         #[structopt(short = "H", long)]
         highlight_syntax: bool,
@@ -156,6 +159,90 @@ pub enum ResymcOptions {
         /// Print header
         #[structopt(short = "h", long)]
         print_header: bool,
+        /// Print C++ access specifiers
+        #[structopt(short = "a", long)]
+        print_access_specifiers: bool,
+        /// Highlight C++ output and add/deleted lines
+        #[structopt(short = "H", long)]
+        highlight_syntax: bool,
+    },
+    /// List symbols from a given PDB file
+    ListSymbols {
+        /// Path to the PDB file
+        pdb_path: PathBuf,
+        /// Search filter
+        symbol_name_filter: String,
+        /// Path of the output file
+        output_file_path: Option<PathBuf>,
+        /// Do not match case
+        #[structopt(short = "i", long)]
+        case_insensitive: bool,
+        /// Use regular expressions
+        #[structopt(short = "r", long)]
+        use_regex: bool,
+        /// Filter out types in the `std` namespace
+        #[structopt(short = "s", long)]
+        ignore_std_types: bool,
+    },
+    /// Dump symbol from a given PDB file
+    DumpSymbol {
+        /// Path to the PDB file
+        pdb_path: PathBuf,
+        /// Name of the symbol to dump
+        symbol_name: String,
+        /// Path of the output file
+        output_file_path: Option<PathBuf>,
+        /// Representation of primitive types
+        #[structopt(short = "f", long)]
+        primitive_types_flavor: Option<PrimitiveReconstructionFlavor>,
+        /// Print header
+        #[structopt(short = "h", long)]
+        print_header: bool,
+        /// Print C++ access specifiers
+        #[structopt(short = "a", long)]
+        print_access_specifiers: bool,
+        /// Highlight C++ output
+        #[structopt(short = "H", long)]
+        highlight_syntax: bool,
+    },
+    /// Dump all symbols from a given PDB file
+    DumpAllSymbols {
+        /// Path to the PDB file
+        pdb_path: PathBuf,
+        /// Path of the output file
+        output_file_path: Option<PathBuf>,
+        /// Representation of primitive types
+        #[structopt(short = "f", long)]
+        primitive_types_flavor: Option<PrimitiveReconstructionFlavor>,
+        /// Print header
+        #[structopt(short = "h", long)]
+        print_header: bool,
+        /// Print C++ access specifiers
+        #[structopt(short = "a", long)]
+        print_access_specifiers: bool,
+        /// Highlight C++ output
+        #[structopt(short = "H", long)]
+        highlight_syntax: bool,
+    },
+    /// Compute diff for a symbol between two given PDB files
+    DiffSymbol {
+        /// Path of the PDB file to compute the diff from
+        from_pdb_path: PathBuf,
+        /// Path of the PDB file to compute the diff to
+        to_pdb_path: PathBuf,
+        /// Name of the module to diff
+        symbol_name: String,
+        /// Path of the output file
+        output_file_path: Option<PathBuf>,
+        /// Representation of primitive types
+        #[structopt(short = "f", long)]
+        primitive_types_flavor: Option<PrimitiveReconstructionFlavor>,
+        /// Print header
+        #[structopt(short = "h", long)]
+        print_header: bool,
+        /// Print C++ access specifiers
+        #[structopt(short = "a", long)]
+        print_access_specifiers: bool,
         /// Highlight C++ output and add/deleted lines
         #[structopt(short = "H", long)]
         highlight_syntax: bool,

@@ -1,45 +1,40 @@
 use eframe::egui::{self, ScrollArea, TextStyle};
-use resym_core::frontend::{TypeIndex, TypeList};
 
-pub struct TypeListComponent {
-    filtered_type_list: TypeList,
+pub struct IndexListComponent<I: Copy> {
+    index_list: Vec<(String, I)>,
     selected_row: usize,
-    list_ordering: TypeListOrdering,
+    list_ordering: IndexListOrdering,
 }
 
-pub enum TypeListOrdering {
+pub enum IndexListOrdering {
     /// Doesn't respect any particular order
     None,
     /// Orders types alphabetically
     Alphabetical,
 }
 
-impl TypeListComponent {
-    pub fn new(ordering: TypeListOrdering) -> Self {
+impl<I: Copy> IndexListComponent<I> {
+    pub fn new(ordering: IndexListOrdering) -> Self {
         Self {
-            filtered_type_list: vec![],
+            index_list: vec![],
             selected_row: usize::MAX,
             list_ordering: ordering,
         }
     }
 
-    pub fn update_type_list(&mut self, type_list: TypeList) {
-        self.filtered_type_list = type_list;
+    pub fn update_index_list(&mut self, index_list: Vec<(String, I)>) {
+        self.index_list = index_list;
         self.selected_row = usize::MAX;
 
         // Reorder list if needed
-        if let TypeListOrdering::Alphabetical = self.list_ordering {
-            self.filtered_type_list
+        if let IndexListOrdering::Alphabetical = self.list_ordering {
+            self.index_list
                 .sort_unstable_by(|lhs, rhs| lhs.0.cmp(&rhs.0));
         }
     }
 
-    pub fn update<CB: FnMut(&str, TypeIndex)>(
-        &mut self,
-        ui: &mut egui::Ui,
-        on_type_selected: &mut CB,
-    ) {
-        let num_rows = self.filtered_type_list.len();
+    pub fn update<CB: FnMut(&str, I)>(&mut self, ui: &mut egui::Ui, on_element_selected: &mut CB) {
+        let num_rows = self.index_list.len();
         const TEXT_STYLE: TextStyle = TextStyle::Body;
         let row_height = ui.text_style_height(&TEXT_STYLE);
         ui.with_layout(
@@ -55,14 +50,14 @@ impl TypeListComponent {
                     .auto_shrink([false, false])
                     .show_rows(ui, row_height, num_rows, |ui, row_range| {
                         for row_index in row_range {
-                            let (type_name, type_index) = &self.filtered_type_list[row_index];
+                            let (type_name, type_index) = &self.index_list[row_index];
 
                             if ui
                                 .selectable_label(self.selected_row == row_index, type_name)
                                 .clicked()
                             {
                                 self.selected_row = row_index;
-                                on_type_selected(type_name, *type_index);
+                                on_element_selected(type_name, *type_index);
                             }
                         }
                     });
@@ -71,8 +66,8 @@ impl TypeListComponent {
     }
 }
 
-impl Default for TypeListComponent {
+impl<I: Copy> Default for IndexListComponent<I> {
     fn default() -> Self {
-        Self::new(TypeListOrdering::None)
+        Self::new(IndexListOrdering::None)
     }
 }

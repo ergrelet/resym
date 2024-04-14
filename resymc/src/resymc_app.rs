@@ -73,7 +73,7 @@ impl ResymcApp {
             if let Some(output_file_path) = output_file_path {
                 let mut output_file = File::create(output_file_path)?;
                 for (type_name, _) in type_list {
-                    writeln!(output_file, "{}", &type_name)?;
+                    writeln!(output_file, "{type_name}")?;
                 }
             } else {
                 for (type_name, _) in type_list {
@@ -284,7 +284,7 @@ impl ResymcApp {
             use_regex,
         ))?;
         // Wait for the backend to finish listing modules
-        if let FrontendCommand::UpdateModuleList(module_list_result) =
+        if let FrontendCommand::ListModulesResult(module_list_result) =
             self.frontend_controller.rx_ui.recv()?
         {
             // Dump output
@@ -306,12 +306,14 @@ impl ResymcApp {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn dump_module_command(
         &self,
         pdb_path: PathBuf,
         module_id: usize,
         primitive_types_flavor: PrimitiveReconstructionFlavor,
         print_header: bool,
+        print_access_specifiers: bool,
         highlight_syntax: bool,
         output_file_path: Option<PathBuf>,
     ) -> Result<()> {
@@ -334,6 +336,7 @@ impl ResymcApp {
                 module_id,
                 primitive_types_flavor,
                 print_header,
+                print_access_specifiers,
             ))?;
         // Wait for the backend to finish filtering types
         if let FrontendCommand::ReconstructModuleResult(reconstructed_module) =
@@ -368,6 +371,7 @@ impl ResymcApp {
         module_path: String,
         primitive_types_flavor: PrimitiveReconstructionFlavor,
         print_header: bool,
+        print_access_specifiers: bool,
         highlight_syntax: bool,
         output_file_path: Option<PathBuf>,
     ) -> Result<()> {
@@ -414,6 +418,7 @@ impl ResymcApp {
             module_path,
             primitive_types_flavor,
             print_header,
+            print_access_specifiers,
         ))?;
         // Wait for the backend to finish
         if let FrontendCommand::DiffResult(reconstructed_module_diff_result) =
@@ -448,6 +453,231 @@ impl ResymcApp {
             Ok(())
         } else {
             Err(anyhow!("Invalid response received from the backend?"))
+        }
+    }
+
+    pub fn list_symbols_command(
+        &self,
+        pdb_path: PathBuf,
+        symbol_name_filter: String,
+        case_insensitive: bool,
+        use_regex: bool,
+        ignore_std_types: bool,
+        output_file_path: Option<PathBuf>,
+    ) -> Result<()> {
+        // Request the backend to load the PDB
+        self.backend
+            .send_command(BackendCommand::LoadPDBFromPath(PDB_MAIN_SLOT, pdb_path))?;
+        // Wait for the backend to finish loading the PDB
+        if let FrontendCommand::LoadPDBResult(result) = self.frontend_controller.rx_ui.recv()? {
+            if let Err(err) = result {
+                return Err(anyhow!("Failed to load PDB: {}", err));
+            }
+        } else {
+            return Err(anyhow!(
+                "LoadPDBResult expected. Invalid response received from the backend?"
+            ));
+        }
+
+        // Queue a request for the backend to return the list of all modules
+        self.backend.send_command(BackendCommand::ListSymbols(
+            PDB_MAIN_SLOT,
+            symbol_name_filter,
+            case_insensitive,
+            use_regex,
+            ignore_std_types,
+        ))?;
+        // Wait for the backend to finish listing modules
+        if let FrontendCommand::ListSymbolsResult(symbol_list) =
+            self.frontend_controller.rx_ui.recv()?
+        {
+            // Dump output
+            if let Some(output_file_path) = output_file_path {
+                let mut output_file = File::create(output_file_path)?;
+                for (symbol_name, _) in symbol_list {
+                    writeln!(output_file, "{symbol_name}")?;
+                }
+            } else {
+                for (symbol_name, _) in symbol_list {
+                    println!("{symbol_name}");
+                }
+            }
+
+            Ok(())
+        } else {
+            Err(anyhow!(
+                "ListSymbolsResult expected. Invalid response received from the backend?"
+            ))
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn dump_symbol_command(
+        &self,
+        pdb_path: PathBuf,
+        symbol_name: Option<String>,
+        primitive_types_flavor: PrimitiveReconstructionFlavor,
+        print_header: bool,
+        print_access_specifiers: bool,
+        highlight_syntax: bool,
+        output_file_path: Option<PathBuf>,
+    ) -> Result<()> {
+        // Request the backend to load the PDB
+        self.backend
+            .send_command(BackendCommand::LoadPDBFromPath(PDB_MAIN_SLOT, pdb_path))?;
+        // Wait for the backend to finish loading the PDB
+        if let FrontendCommand::LoadPDBResult(result) = self.frontend_controller.rx_ui.recv()? {
+            if let Err(err) = result {
+                return Err(anyhow!("Failed to load PDB: {}", err));
+            }
+        } else {
+            return Err(anyhow!(
+                "LoadPDBFromPath expected. Invalid response received from the backend?"
+            ));
+        }
+
+        // Queue a request for the backend to reconstruct the given module
+        if let Some(symbol_name) = symbol_name {
+            self.backend
+                .send_command(BackendCommand::ReconstructSymbolByName(
+                    PDB_MAIN_SLOT,
+                    symbol_name,
+                    primitive_types_flavor,
+                    print_header,
+                    print_access_specifiers,
+                ))?;
+        } else {
+            self.backend
+                .send_command(BackendCommand::ReconstructAllSymbols(
+                    PDB_MAIN_SLOT,
+                    primitive_types_flavor,
+                    print_header,
+                    print_access_specifiers,
+                ))?;
+        }
+        // Wait for the backend to finish filtering types
+        if let FrontendCommand::ReconstructSymbolResult(reconstructed_symbol_result) =
+            self.frontend_controller.rx_ui.recv()?
+        {
+            let reconstructed_symbol = reconstructed_symbol_result?;
+            // Dump output
+            if let Some(output_file_path) = output_file_path {
+                let mut output_file = File::create(output_file_path)?;
+                output_file.write_all(reconstructed_symbol.as_bytes())?;
+            } else if highlight_syntax {
+                let theme = CodeTheme::default();
+                if let Some(colorized_reconstructed_type) =
+                    highlight_code(&theme, &reconstructed_symbol, None)
+                {
+                    println!("{colorized_reconstructed_type}");
+                }
+            } else {
+                println!("{reconstructed_symbol}");
+            }
+            Ok(())
+        } else {
+            Err(anyhow!(
+                "ReconstructSymbolResult expected. Invalid response received from the backend?"
+            ))
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn diff_symbol_command(
+        &self,
+        from_pdb_path: PathBuf,
+        to_pdb_path: PathBuf,
+        symbol_name: String,
+        primitive_types_flavor: PrimitiveReconstructionFlavor,
+        print_header: bool,
+        print_access_specifiers: bool,
+        highlight_syntax: bool,
+        output_file_path: Option<PathBuf>,
+    ) -> Result<()> {
+        // Request the backend to load the first PDB
+        self.backend.send_command(BackendCommand::LoadPDBFromPath(
+            PDB_MAIN_SLOT,
+            from_pdb_path.clone(),
+        ))?;
+        // Wait for the backend to finish loading the PDB
+        if let FrontendCommand::LoadPDBResult(result) = self.frontend_controller.rx_ui.recv()? {
+            if let Err(err) = result {
+                return Err(anyhow!(
+                    "Failed to load PDB '{}': {}",
+                    from_pdb_path.display(),
+                    err
+                ));
+            }
+        } else {
+            return Err(anyhow!(
+                "LoadPDBResult expected. Invalid response received from the backend?"
+            ));
+        }
+
+        // Request the backend to load the second PDB
+        self.backend.send_command(BackendCommand::LoadPDBFromPath(
+            PDB_DIFF_TO_SLOT,
+            to_pdb_path.clone(),
+        ))?;
+        // Wait for the backend to finish loading the PDB
+        if let FrontendCommand::LoadPDBResult(result) = self.frontend_controller.rx_ui.recv()? {
+            if let Err(err) = result {
+                return Err(anyhow!(
+                    "Failed to load PDB '{}': {}",
+                    to_pdb_path.display(),
+                    err
+                ));
+            }
+        } else {
+            return Err(anyhow!(
+                "LoadPDBResult expected. Invalid response received from the backend?"
+            ));
+        }
+
+        // Queue a request for the backend to diff the given module
+        self.backend.send_command(BackendCommand::DiffSymbolByName(
+            PDB_MAIN_SLOT,
+            PDB_DIFF_TO_SLOT,
+            symbol_name,
+            primitive_types_flavor,
+            print_header,
+            print_access_specifiers,
+        ))?;
+        // Wait for the backend to finish
+        if let FrontendCommand::DiffResult(reconstructed_symbol_diff_result) =
+            self.frontend_controller.rx_ui.recv()?
+        {
+            let reconstructed_symbol_diff = reconstructed_symbol_diff_result?;
+            // Dump output
+            if let Some(output_file_path) = output_file_path {
+                let mut output_file = File::create(output_file_path)?;
+                output_file.write_all(reconstructed_symbol_diff.data.as_bytes())?;
+            } else if highlight_syntax {
+                let theme = CodeTheme::default();
+                let line_descriptions =
+                    reconstructed_symbol_diff
+                        .metadata
+                        .iter()
+                        .fold(vec![], |mut acc, e| {
+                            acc.push(e.1);
+                            acc
+                        });
+                if let Some(colorized_reconstructed_module) = highlight_code(
+                    &theme,
+                    &reconstructed_symbol_diff.data,
+                    Some(line_descriptions),
+                ) {
+                    println!("{colorized_reconstructed_module}");
+                }
+            } else {
+                println!("{}", reconstructed_symbol_diff.data);
+            }
+
+            Ok(())
+        } else {
+            Err(anyhow!(
+                "DiffResult expected. Invalid response received from the backend?"
+            ))
         }
     }
 }
@@ -756,6 +986,7 @@ mod tests {
                 PrimitiveReconstructionFlavor::Microsoft,
                 false,
                 false,
+                false,
                 None
             )
             .is_err());
@@ -771,6 +1002,7 @@ mod tests {
                 pdb_path,
                 9, // exe_main.obj
                 PrimitiveReconstructionFlavor::Microsoft,
+                true,
                 true,
                 true,
                 None
@@ -793,6 +1025,7 @@ mod tests {
                 PrimitiveReconstructionFlavor::Portable,
                 false,
                 false,
+                false,
                 Some(output_path.clone()),
             )
             .is_ok());
@@ -805,9 +1038,9 @@ mod tests {
                 "using namespace std;\n",
                 "using PUWSTR_C = const wchar_t*;\n",
                 "using TP_CALLBACK_ENVIRON_V3 = _TP_CALLBACK_ENVIRON_V3;\n",
-                "uint64_t* (__local_stdio_scanf_options)(); // CodeSize=8\n",
-                "uint64_t _OptionsStorage;\n",
-                "void (__scrt_initialize_default_local_stdio_options)(); // CodeSize=69\n",
+                "uint64_t* (__local_stdio_scanf_options)(); // RVA=0x14670 CodeSize=0x8\n",
+                "static uint64_t _OptionsStorage; // RVA=0x1eb28 \n",
+                "void (__scrt_initialize_default_local_stdio_options)(); // RVA=0x14680 CodeSize=0x45\n",
             )
         );
     }
@@ -826,6 +1059,7 @@ mod tests {
                 pdb_path_to,
                 "d:\\a01\\_work\\43\\s\\Intermediate\\vctools\\msvcrt.nativeproj_607447030\\objd\\amd64\\exe_main.obj".to_string(),
                 PrimitiveReconstructionFlavor::Microsoft,
+                false,
                 false,
                 false,
                 None
@@ -847,7 +1081,7 @@ mod tests {
                 "d:\\a01\\_work\\43\\s\\Intermediate\\vctools\\msvcrt.nativeproj_607447030\\objd\\amd64\\exe_main.obj".to_string(),
                 PrimitiveReconstructionFlavor::Microsoft,
                 true,
-                true,
+                true,true,
                 None
             )
             .is_ok());
@@ -872,6 +1106,7 @@ mod tests {
                 PrimitiveReconstructionFlavor::Portable,
                 false,
                 false,
+                false,
                 Some(output_path.clone()),
             )
             .is_ok());
@@ -884,10 +1119,201 @@ mod tests {
                 " using namespace std;\n",
                 " using PUWSTR_C = const wchar_t*;\n",
                 " using TP_CALLBACK_ENVIRON_V3 = _TP_CALLBACK_ENVIRON_V3;\n",
-                " uint64_t* (__local_stdio_scanf_options)(); // CodeSize=8\n",
-                " uint64_t _OptionsStorage;\n",
-                " void (__scrt_initialize_default_local_stdio_options)(); // CodeSize=69\n",
+                " uint64_t* (__local_stdio_scanf_options)(); // RVA=0x13c30 CodeSize=0x8\n",
+                " static uint64_t _OptionsStorage; // RVA=0x1c898 \n",
+                " void (__scrt_initialize_default_local_stdio_options)(); // RVA=0x13c40 CodeSize=0x45\n",
             )
+        );
+    }
+
+    // List symbols
+    #[test]
+    fn list_symbols_command_invalid_pdb_path() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::new();
+        // The command should fail
+        assert!(app
+            .list_symbols_command(pdb_path, "*".to_string(), false, false, false, None)
+            .is_err());
+    }
+
+    #[test]
+    fn list_symbols_command_stdio_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FILE_PATH);
+        // The command should succeed
+        assert!(app
+            .list_symbols_command(pdb_path, "*".to_string(), true, true, true, None)
+            .is_ok());
+    }
+
+    #[test]
+    fn list_symbols_command_file_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FILE_PATH);
+        let tmp_dir =
+            TempDir::new("list_modules_command_file_successful").expect("TempDir creation failed");
+        let output_path = tmp_dir.path().join("output.txt");
+        // The command should succeed
+        assert!(app
+            .list_symbols_command(
+                pdb_path,
+                "resym_test::UnionTest".to_string(),
+                false,
+                false,
+                false,
+                Some(output_path.clone()),
+            )
+            .is_ok());
+
+        // Check output file's content
+        let output = fs::read_to_string(output_path).expect("Failed to read output file");
+        assert_eq!(
+            output,
+            concat!(
+                "resym_test::UnionTest::UnionTest\n",
+                "resym_test::UnionTest::~UnionTest\n"
+            )
+        );
+    }
+
+    // Dump symbol
+    #[test]
+    fn dump_symbol_command_invalid_pdb_path() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::new();
+        // The command should fail
+        assert!(app
+            .dump_symbol_command(
+                pdb_path,
+                Some("??1UnionTest@resym_test@@QEAA@XZ".to_string()),
+                PrimitiveReconstructionFlavor::Microsoft,
+                false,
+                false,
+                false,
+                None
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn dump_symbol_command_stdio_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FILE_PATH);
+        // The command should succeed
+        assert!(app
+            .dump_symbol_command(
+                pdb_path,
+                Some("??1UnionTest@resym_test@@QEAA@XZ".to_string()),
+                PrimitiveReconstructionFlavor::Microsoft,
+                true,
+                true,
+                true,
+                None
+            )
+            .is_ok());
+    }
+
+    #[test]
+    fn dump_symbol_command_file_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FILE_PATH);
+        let tmp_dir =
+            TempDir::new("dump_module_command_file_successful").expect("TempDir creation failed");
+        let output_path = tmp_dir.path().join("output.txt");
+        // The command should succeed
+        assert!(app
+            .dump_symbol_command(
+                pdb_path,
+                Some("??1UnionTest@resym_test@@QEAA@XZ".to_string()),
+                PrimitiveReconstructionFlavor::Portable,
+                false,
+                false,
+                false,
+                Some(output_path.clone()),
+            )
+            .is_ok());
+
+        // Check output file's content
+        let output = fs::read_to_string(output_path).expect("Failed to read output file");
+        assert_eq!(
+            output,
+            "__cdecl resym_test::UnionTest::~UnionTest(void); // RVA=0x11bc0 ",
+        );
+    }
+
+    // Diff symbol
+    #[test]
+    fn diff_symbol_command_invalid_pdb_path() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path_from = PathBuf::new();
+        let pdb_path_to = PathBuf::new();
+
+        // The command should fail
+        assert!(app
+            .diff_symbol_command(
+                pdb_path_from,
+                pdb_path_to,
+                "?_RTC_GetSrcLine@@YAHPEAEPEA_WKPEAH1K@Z".to_string(),
+                PrimitiveReconstructionFlavor::Microsoft,
+                false,
+                false,
+                false,
+                None
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn diff_symbol_command_stdio_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path_from = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FROM_FILE_PATH);
+        let pdb_path_to = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_TO_FILE_PATH);
+
+        // The command should succeed
+        assert!(app
+            .diff_symbol_command(
+                pdb_path_from,
+                pdb_path_to,
+                "?_RTC_GetSrcLine@@YAHPEAEPEA_WKPEAH1K@Z".to_string(),
+                PrimitiveReconstructionFlavor::Microsoft,
+                true,
+                true,
+                true,
+                None
+            )
+            .is_ok());
+    }
+
+    #[test]
+    fn diff_symbol_command_file_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path_from = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FROM_FILE_PATH);
+        let pdb_path_to = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_TO_FILE_PATH);
+
+        let tmp_dir =
+            TempDir::new("diff_module_command_file_successful").expect("TempDir creation failed");
+        let output_path = tmp_dir.path().join("output.txt");
+
+        // The command should succeed
+        assert!(app
+            .diff_symbol_command(
+                pdb_path_from,
+                pdb_path_to,
+                "?_RTC_GetSrcLine@@YAHPEAEPEA_WKPEAH1K@Z".to_string(),
+                PrimitiveReconstructionFlavor::Portable,
+                false,
+                false,
+                false,
+                Some(output_path.clone()),
+            )
+            .is_ok());
+
+        // Check output file's content
+        let output = fs::read_to_string(output_path).expect("Failed to read output file");
+        assert_eq!(
+            output,
+            " int __cdecl _RTC_GetSrcLine(unsigned char *, wchar_t *, unsigned long, int *, wchar_t *, unsigned long); // RVA=0x14c90 \n",
         );
     }
 }

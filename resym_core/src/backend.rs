@@ -4,10 +4,11 @@ use instant::Instant;
 #[cfg(feature = "rayon")]
 use rayon::{
     iter::{IntoParallelRefIterator, ParallelIterator},
-    slice::ParallelSliceMut,
+    prelude::ParallelSliceMut,
     ThreadPool,
 };
 
+use core::fmt;
 #[cfg(all(not(feature = "rayon"), not(target_arch = "wasm32")))]
 use std::thread::{self, JoinHandle};
 use std::{
@@ -20,14 +21,12 @@ use std::{path::PathBuf, time::Instant};
 #[cfg(all(not(feature = "rayon"), target_arch = "wasm32"))]
 use wasm_thread::{self as thread, JoinHandle};
 
-use crate::{diffing::diff_module_by_path, frontend::ReconstructedType, pdb_file::PDBDataSource};
 use crate::{
-    diffing::diff_type_by_name,
+    diffing::{diff_module_by_path, diff_symbol_by_name, diff_type_by_name},
     error::{Result, ResymCoreError},
-    frontend::FrontendCommand,
-    frontend::{FrontendController, ModuleList},
+    frontend::{FrontendCommand, FrontendController, ReconstructedType},
     par_iter_if_available, par_sort_by_if_available,
-    pdb_file::PdbFile,
+    pdb_file::{self, ModuleList, PDBDataSource, PdbFile, SymbolList, TypeList},
     pdb_types::{include_headers_for_flavor, PrimitiveReconstructionFlavor},
     PKG_VERSION,
 };
@@ -50,7 +49,7 @@ pub enum BackendCommand {
     /// Reconstruct a type given its type index for a given PDB.
     ReconstructTypeByIndex(
         PDBSlot,
-        pdb::TypeIndex,
+        pdb_file::TypeIndex,
         PrimitiveReconstructionFlavor,
         bool,
         bool,
@@ -74,10 +73,29 @@ pub enum BackendCommand {
     /// Retrieve a list of types that match the given filter for multiple PDBs
     /// and merge the result.
     ListTypesMerged(Vec<PDBSlot>, String, bool, bool, bool),
-    /// Retrieve the list of all modules in a given PDB.
+    /// Retrieve a list of symbols that match the given filter for multiple PDBs
+    /// and merge the result.
+    ListSymbols(PDBSlot, String, bool, bool, bool),
+    /// Retrieve a list of symbols that match the given filter for multiple PDBs
+    /// and merge the result.
+    ListSymbolsMerged(Vec<PDBSlot>, String, bool, bool, bool),
+    /// Reconstruct a symbol given its index for a given PDB.
+    ReconstructSymbolByIndex(
+        PDBSlot,
+        pdb_file::SymbolIndex,
+        PrimitiveReconstructionFlavor,
+        bool,
+        bool,
+    ),
+    /// Reconstruct a symbol given its name for a given PDB.
+    ReconstructSymbolByName(PDBSlot, String, PrimitiveReconstructionFlavor, bool, bool),
+    /// Reconstruct all symbols found in a given PDB.
+    ReconstructAllSymbols(PDBSlot, PrimitiveReconstructionFlavor, bool, bool),
+    /// Retrieve a list of modules that match the given filter for multiple PDBs
+    /// and merge the result.
     ListModules(PDBSlot, String, bool, bool),
     /// Reconstruct a module given its index for a given PDB.
-    ReconstructModuleByIndex(PDBSlot, usize, PrimitiveReconstructionFlavor, bool),
+    ReconstructModuleByIndex(PDBSlot, usize, PrimitiveReconstructionFlavor, bool, bool),
     /// Reconstruct the diff of a type given its name.
     DiffTypeByName(
         PDBSlot,
@@ -89,6 +107,15 @@ pub enum BackendCommand {
         bool,
         bool,
     ),
+    /// Reconstruct the diff of a symbol given its name.
+    DiffSymbolByName(
+        PDBSlot,
+        PDBSlot,
+        String,
+        PrimitiveReconstructionFlavor,
+        bool,
+        bool,
+    ),
     /// Reconstruct the diff of a module given its path.
     DiffModuleByPath(
         PDBSlot,
@@ -96,9 +123,10 @@ pub enum BackendCommand {
         String,
         PrimitiveReconstructionFlavor,
         bool,
+        bool,
     ),
     /// Retrieve a list of all types that reference the given type
-    ListTypeCrossReferences(PDBSlot, pdb::TypeIndex),
+    ListTypeCrossReferences(PDBSlot, pdb_file::TypeIndex),
 }
 
 /// Struct that represents the backend. The backend is responsible
@@ -391,7 +419,7 @@ fn worker_thread_routine(
                             // Collapse all type indices to `default`. When merging
                             // type lists, we can only count on type names to
                             // represent the types.
-                            (s, pdb::TypeIndex::default())
+                            (s, Default::default())
                         }));
                     }
                 }
@@ -400,11 +428,146 @@ fn worker_thread_routine(
                 ))?;
             }
 
+            BackendCommand::ListSymbols(
+                pdb_slot,
+                search_filter,
+                case_insensitive_search,
+                use_regex,
+                ignore_std_types,
+            ) => {
+                if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
+                    let filtered_symbol_list = update_symbol_filter_command(
+                        pdb_file,
+                        &search_filter,
+                        case_insensitive_search,
+                        use_regex,
+                        ignore_std_types,
+                    );
+                    frontend_controller
+                        .send_command(FrontendCommand::ListSymbolsResult(filtered_symbol_list))?;
+                }
+            }
+
+            BackendCommand::ListSymbolsMerged(
+                pdb_slots,
+                search_filter,
+                case_insensitive_search,
+                use_regex,
+                ignore_std_types,
+            ) => {
+                let mut filtered_symbol_set = BTreeSet::default();
+                for pdb_slot in pdb_slots {
+                    if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
+                        let filtered_symbol_list = update_symbol_filter_command(
+                            pdb_file,
+                            &search_filter,
+                            case_insensitive_search,
+                            use_regex,
+                            ignore_std_types,
+                        );
+                        filtered_symbol_set.extend(filtered_symbol_list.into_iter().map(
+                            |(s, _)| {
+                                // Collapse all type indices to `default`. When merging
+                                // type lists, we can only count on type names to
+                                // represent the types.
+                                (s, Default::default())
+                            },
+                        ));
+                    }
+                }
+                frontend_controller.send_command(FrontendCommand::ListSymbolsResult(
+                    filtered_symbol_set.into_iter().collect(),
+                ))?;
+            }
+
+            BackendCommand::ReconstructSymbolByIndex(
+                pdb_slot,
+                symbol_index,
+                primitives_flavor,
+                print_header,
+                print_access_specifiers,
+            ) => {
+                if let Some(pdb_file) = pdb_files.get_mut(&pdb_slot) {
+                    let result = reconstruct_symbol_by_index_command(
+                        pdb_file,
+                        symbol_index,
+                        primitives_flavor,
+                        print_header,
+                        print_access_specifiers,
+                    );
+                    frontend_controller
+                        .send_command(FrontendCommand::ReconstructSymbolResult(result))?;
+                }
+            }
+
+            BackendCommand::ReconstructSymbolByName(
+                pdb_slot,
+                symbol_name,
+                primitives_flavor,
+                print_header,
+                print_access_specifiers,
+            ) => {
+                if let Some(pdb_file) = pdb_files.get_mut(&pdb_slot) {
+                    let result = reconstruct_symbol_by_name_command(
+                        pdb_file,
+                        symbol_name,
+                        primitives_flavor,
+                        print_header,
+                        print_access_specifiers,
+                    );
+                    frontend_controller
+                        .send_command(FrontendCommand::ReconstructSymbolResult(result))?;
+                }
+            }
+
+            BackendCommand::ReconstructAllSymbols(
+                pdb_slot,
+                primitives_flavor,
+                print_header,
+                print_access_specifiers,
+            ) => {
+                if let Some(pdb_file) = pdb_files.get_mut(&pdb_slot) {
+                    let result = reconstruct_all_symbols_command(
+                        pdb_file,
+                        primitives_flavor,
+                        print_header,
+                        print_access_specifiers,
+                    );
+                    frontend_controller
+                        .send_command(FrontendCommand::ReconstructSymbolResult(result))?;
+                }
+            }
+
+            BackendCommand::DiffSymbolByName(
+                pdb_from_slot,
+                pdb_to_slot,
+                symbol_name,
+                primitives_flavor,
+                print_header,
+                print_access_specifiers,
+            ) => {
+                if let Some(pdb_file_from) = pdb_files.get(&pdb_from_slot) {
+                    if let Some(pdb_file_to) = pdb_files.get(&pdb_to_slot) {
+                        let symbol_diff_result = diff_symbol_by_name(
+                            pdb_file_from,
+                            pdb_file_to,
+                            &symbol_name,
+                            primitives_flavor,
+                            print_header,
+                            print_access_specifiers,
+                        );
+                        frontend_controller
+                            .send_command(FrontendCommand::DiffResult(symbol_diff_result))?;
+                    }
+                }
+            }
+
             BackendCommand::ReconstructModuleByIndex(
                 pdb_slot,
                 module_index,
                 primitives_flavor,
                 print_header,
+                print_access_specifiers,
             ) => {
                 if let Some(pdb_file) = pdb_files.get_mut(&pdb_slot) {
                     let reconstructed_module_result = reconstruct_module_by_index_command(
@@ -413,6 +576,7 @@ fn worker_thread_routine(
                         primitives_flavor,
                         false,
                         print_header,
+                        print_access_specifiers,
                     );
                     frontend_controller.send_command(FrontendCommand::ReconstructModuleResult(
                         reconstructed_module_result,
@@ -434,7 +598,7 @@ fn worker_thread_routine(
                         use_regex,
                     );
                     frontend_controller
-                        .send_command(FrontendCommand::UpdateModuleList(module_list))?;
+                        .send_command(FrontendCommand::ListModulesResult(module_list))?;
                 }
             }
 
@@ -472,6 +636,7 @@ fn worker_thread_routine(
                 module_path,
                 primitives_flavor,
                 print_header,
+                print_access_specifiers,
             ) => {
                 if let Some(pdb_file_from) = pdb_files.get(&pdb_from_slot) {
                     if let Some(pdb_file_to) = pdb_files.get(&pdb_to_slot) {
@@ -481,6 +646,7 @@ fn worker_thread_routine(
                             &module_path,
                             primitives_flavor,
                             print_header,
+                            print_access_specifiers,
                         );
                         frontend_controller
                             .send_command(FrontendCommand::DiffResult(module_diff_result))?;
@@ -503,7 +669,7 @@ fn worker_thread_routine(
 
 fn reconstruct_type_by_index_command<'p, T>(
     pdb_file: &PdbFile<'p, T>,
-    type_index: pdb::TypeIndex,
+    type_index: pdb_file::TypeIndex,
     primitives_flavor: PrimitiveReconstructionFlavor,
     print_header: bool,
     reconstruct_dependencies: bool,
@@ -513,7 +679,7 @@ fn reconstruct_type_by_index_command<'p, T>(
 where
     T: io::Seek + io::Read + std::fmt::Debug + 'p,
 {
-    let (data, xrefs_from) = pdb_file.reconstruct_type_by_type_index(
+    let (data, xrefs_from) = pdb_file.reconstruct_type_by_index(
         type_index,
         primitives_flavor,
         reconstruct_dependencies,
@@ -578,17 +744,86 @@ where
     }
 }
 
-fn reconstruct_module_by_index_command<'p, T>(
+fn reconstruct_symbol_by_index_command<'p, T>(
     pdb_file: &mut PdbFile<'p, T>,
-    module_index: usize,
+    symbol_index: pdb_file::SymbolIndex,
     primitives_flavor: PrimitiveReconstructionFlavor,
-    ignore_std_types: bool,
     print_header: bool,
+    print_access_specifiers: bool,
 ) -> Result<String>
 where
     T: io::Seek + io::Read + std::fmt::Debug + 'p,
 {
-    let data = pdb_file.reconstruct_module_by_index(module_index, primitives_flavor)?;
+    let data = pdb_file.reconstruct_symbol_by_index(
+        symbol_index,
+        primitives_flavor,
+        print_access_specifiers,
+    )?;
+    if print_header {
+        let file_header = generate_file_header(pdb_file, primitives_flavor, true, false);
+        Ok(format!("{file_header}\n{data}"))
+    } else {
+        Ok(data)
+    }
+}
+
+fn reconstruct_symbol_by_name_command<'p, T>(
+    pdb_file: &mut PdbFile<'p, T>,
+    symbol_name: String,
+    primitives_flavor: PrimitiveReconstructionFlavor,
+    print_header: bool,
+    print_access_specifiers: bool,
+) -> Result<String>
+where
+    T: io::Seek + io::Read + std::fmt::Debug + 'p,
+{
+    let data = pdb_file.reconstruct_symbol_by_name(
+        &symbol_name,
+        primitives_flavor,
+        print_access_specifiers,
+    )?;
+    if print_header {
+        let file_header = generate_file_header(pdb_file, primitives_flavor, true, false);
+        Ok(format!("{file_header}\n{data}"))
+    } else {
+        Ok(data)
+    }
+}
+
+fn reconstruct_all_symbols_command<'p, T>(
+    pdb_file: &PdbFile<'p, T>,
+    primitives_flavor: PrimitiveReconstructionFlavor,
+    print_header: bool,
+    print_access_specifiers: bool,
+) -> Result<String>
+where
+    T: io::Seek + io::Read + std::fmt::Debug + 'p,
+{
+    let data = pdb_file.reconstruct_all_symbols(primitives_flavor, print_access_specifiers)?;
+    if print_header {
+        let file_header = generate_file_header(pdb_file, primitives_flavor, true, false);
+        Ok(format!("{file_header}{data}"))
+    } else {
+        Ok(data)
+    }
+}
+
+fn reconstruct_module_by_index_command<'p, T>(
+    pdb_file: &mut PdbFile<'p, T>,
+    module_index: pdb_file::ModuleIndex,
+    primitives_flavor: PrimitiveReconstructionFlavor,
+    ignore_std_types: bool,
+    print_header: bool,
+    print_access_specifiers: bool,
+) -> Result<String>
+where
+    T: io::Seek + io::Read + std::fmt::Debug + 'p,
+{
+    let data = pdb_file.reconstruct_module_by_index(
+        module_index,
+        primitives_flavor,
+        print_access_specifiers,
+    )?;
     if print_header {
         let file_header = generate_file_header(pdb_file, primitives_flavor, true, ignore_std_types);
         Ok(format!("{file_header}\n{data}"))
@@ -637,13 +872,13 @@ fn update_type_filter_command<T>(
     use_regex: bool,
     ignore_std_types: bool,
     sort_by_index: bool,
-) -> Vec<(String, pdb::TypeIndex)>
+) -> TypeList
 where
     T: io::Seek + io::Read,
 {
     let filter_start = Instant::now();
 
-    // Fitler out std types if needed
+    // Filter out std types if needed
     let filtered_type_list = if ignore_std_types {
         filter_std_types(&pdb_file.complete_type_list)
     } else {
@@ -675,10 +910,10 @@ where
 
 /// Filter type list with a regular expression
 fn filter_types_regex(
-    type_list: &[(String, pdb::TypeIndex)],
+    type_list: &[(String, u32)],
     search_filter: &str,
     case_insensitive_search: bool,
-) -> Vec<(String, pdb::TypeIndex)> {
+) -> TypeList {
     match regex::RegexBuilder::new(search_filter)
         .case_insensitive(case_insensitive_search)
         .build()
@@ -694,10 +929,10 @@ fn filter_types_regex(
 
 /// Filter type list with a plain (sub-)string
 fn filter_types_regular(
-    type_list: &[(String, pdb::TypeIndex)],
+    type_list: &[(String, u32)],
     search_filter: &str,
     case_insensitive_search: bool,
-) -> Vec<(String, pdb::TypeIndex)> {
+) -> TypeList {
     if case_insensitive_search {
         let search_filter = search_filter.to_lowercase();
         par_iter_if_available!(type_list)
@@ -713,11 +948,107 @@ fn filter_types_regular(
 }
 
 /// Filter type list to remove types in the `std` namespace
-fn filter_std_types(type_list: &[(String, pdb::TypeIndex)]) -> Vec<(String, pdb::TypeIndex)> {
+fn filter_std_types(type_list: &[(String, pdb_file::TypeIndex)]) -> TypeList {
     par_iter_if_available!(type_list)
         .filter(|r| !r.0.starts_with("std::"))
         .cloned()
         .collect()
+}
+
+fn update_symbol_filter_command<T>(
+    pdb_file: &PdbFile<T>,
+    search_filter: &str,
+    case_insensitive_search: bool,
+    use_regex: bool,
+    ignore_std_symbols: bool,
+) -> SymbolList
+where
+    T: io::Seek + io::Read + fmt::Debug,
+{
+    let filter_start = Instant::now();
+
+    match pdb_file.symbol_list() {
+        Err(_) => SymbolList::default(),
+        Ok(symbol_list) => {
+            // Filter out std types if needed
+            let filtered_symbol_list = if ignore_std_symbols {
+                filter_std_symbols(&symbol_list)
+            } else {
+                symbol_list.clone()
+            };
+
+            let filtered_symbol_list = if search_filter.is_empty() {
+                // No need to filter
+                filtered_symbol_list
+            } else if use_regex {
+                filter_symbols_regex(
+                    &filtered_symbol_list,
+                    search_filter,
+                    case_insensitive_search,
+                )
+            } else {
+                filter_symbols_regular(
+                    &filtered_symbol_list,
+                    search_filter,
+                    case_insensitive_search,
+                )
+            };
+
+            log::debug!(
+                "Symbol filtering took {} ms",
+                filter_start.elapsed().as_millis()
+            );
+
+            filtered_symbol_list
+        }
+    }
+}
+
+/// Filter symbol list to remove types in the `std` namespace
+fn filter_std_symbols(symbol_list: &[(String, pdb_file::SymbolIndex)]) -> SymbolList {
+    par_iter_if_available!(symbol_list)
+        .filter(|r| !r.0.starts_with("std::"))
+        .cloned()
+        .collect()
+}
+
+/// Filter type list with a regular expression
+fn filter_symbols_regex(
+    symbol_list: &[(String, pdb_file::SymbolIndex)],
+    search_filter: &str,
+    case_insensitive_search: bool,
+) -> SymbolList {
+    match regex::RegexBuilder::new(search_filter)
+        .case_insensitive(case_insensitive_search)
+        .build()
+    {
+        // In case of error, return an empty result
+        Err(_) => vec![],
+        Ok(regex) => par_iter_if_available!(symbol_list)
+            .filter(|r| regex.find(&r.0).is_some())
+            .cloned()
+            .collect(),
+    }
+}
+
+/// Filter type list with a plain (sub-)string
+fn filter_symbols_regular(
+    symbol_list: &[(String, pdb_file::SymbolIndex)],
+    search_filter: &str,
+    case_insensitive_search: bool,
+) -> SymbolList {
+    if case_insensitive_search {
+        let search_filter = search_filter.to_lowercase();
+        par_iter_if_available!(symbol_list)
+            .filter(|r| r.0.to_lowercase().contains(&search_filter))
+            .cloned()
+            .collect()
+    } else {
+        par_iter_if_available!(symbol_list)
+            .filter(|r| r.0.contains(search_filter))
+            .cloned()
+            .collect()
+    }
 }
 
 fn list_modules_command<'p, T>(
@@ -797,8 +1128,8 @@ fn filter_modules_regular(
 
 fn list_type_xrefs_command<'p, T>(
     pdb_file: &PdbFile<'p, T>,
-    type_index: pdb::TypeIndex,
-) -> Result<Vec<(String, pdb::TypeIndex)>>
+    type_index: pdb_file::TypeIndex,
+) -> Result<TypeList>
 where
     T: io::Seek + io::Read + std::fmt::Debug + 'p,
 {

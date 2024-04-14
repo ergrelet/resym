@@ -45,6 +45,11 @@ pub enum ResymCoreError {
     #[error("type not found: {0}")]
     TypeNameNotFoundError(String),
 
+    /// Error returned when querying for a symbol, that isn't present in
+    /// the PDB file.
+    #[error("symbol not found: {0}")]
+    SymbolNotFoundError(String),
+
     /// Error returned when querying for a module by path, that isn't present in
     /// the PDB file.
     #[error("module not found: {0}")]

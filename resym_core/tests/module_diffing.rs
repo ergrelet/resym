@@ -23,6 +23,7 @@ fn test_module_diffing_by_path() {
         TEST_MODULE_PATH,
         PrimitiveReconstructionFlavor::Portable,
         true,
+        true,
     )
     .unwrap_or_else(|err| panic!("module diffing failed: {err}"));
 
