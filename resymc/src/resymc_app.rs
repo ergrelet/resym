@@ -1125,4 +1125,195 @@ mod tests {
             )
         );
     }
+
+    // List symbols
+    #[test]
+    fn list_symbols_command_invalid_pdb_path() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::new();
+        // The command should fail
+        assert!(app
+            .list_symbols_command(pdb_path, "*".to_string(), false, false, false, None)
+            .is_err());
+    }
+
+    #[test]
+    fn list_symbols_command_stdio_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FILE_PATH);
+        // The command should succeed
+        assert!(app
+            .list_symbols_command(pdb_path, "*".to_string(), true, true, true, None)
+            .is_ok());
+    }
+
+    #[test]
+    fn list_symbols_command_file_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FILE_PATH);
+        let tmp_dir =
+            TempDir::new("list_modules_command_file_successful").expect("TempDir creation failed");
+        let output_path = tmp_dir.path().join("output.txt");
+        // The command should succeed
+        assert!(app
+            .list_symbols_command(
+                pdb_path,
+                "resym_test::UnionTest".to_string(),
+                false,
+                false,
+                false,
+                Some(output_path.clone()),
+            )
+            .is_ok());
+
+        // Check output file's content
+        let output = fs::read_to_string(output_path).expect("Failed to read output file");
+        assert_eq!(
+            output,
+            concat!(
+                "resym_test::UnionTest::UnionTest\n",
+                "resym_test::UnionTest::~UnionTest\n"
+            )
+        );
+    }
+
+    // Dump symbol
+    #[test]
+    fn dump_symbol_command_invalid_pdb_path() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::new();
+        // The command should fail
+        assert!(app
+            .dump_symbol_command(
+                pdb_path,
+                Some("??1UnionTest@resym_test@@QEAA@XZ".to_string()),
+                PrimitiveReconstructionFlavor::Microsoft,
+                false,
+                false,
+                false,
+                None
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn dump_symbol_command_stdio_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FILE_PATH);
+        // The command should succeed
+        assert!(app
+            .dump_symbol_command(
+                pdb_path,
+                Some("??1UnionTest@resym_test@@QEAA@XZ".to_string()),
+                PrimitiveReconstructionFlavor::Microsoft,
+                true,
+                true,
+                true,
+                None
+            )
+            .is_ok());
+    }
+
+    #[test]
+    fn dump_symbol_command_file_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FILE_PATH);
+        let tmp_dir =
+            TempDir::new("dump_module_command_file_successful").expect("TempDir creation failed");
+        let output_path = tmp_dir.path().join("output.txt");
+        // The command should succeed
+        assert!(app
+            .dump_symbol_command(
+                pdb_path,
+                Some("??1UnionTest@resym_test@@QEAA@XZ".to_string()),
+                PrimitiveReconstructionFlavor::Portable,
+                false,
+                false,
+                false,
+                Some(output_path.clone()),
+            )
+            .is_ok());
+
+        // Check output file's content
+        let output = fs::read_to_string(output_path).expect("Failed to read output file");
+        assert_eq!(
+            output,
+            "__cdecl resym_test::UnionTest::~UnionTest(void); // RVA=0x11bc0 ",
+        );
+    }
+
+    // Diff symbol
+    #[test]
+    fn diff_symbol_command_invalid_pdb_path() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path_from = PathBuf::new();
+        let pdb_path_to = PathBuf::new();
+
+        // The command should fail
+        assert!(app
+            .diff_symbol_command(
+                pdb_path_from,
+                pdb_path_to,
+                "?_RTC_GetSrcLine@@YAHPEAEPEA_WKPEAH1K@Z".to_string(),
+                PrimitiveReconstructionFlavor::Microsoft,
+                false,
+                false,
+                false,
+                None
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn diff_symbol_command_stdio_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path_from = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FROM_FILE_PATH);
+        let pdb_path_to = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_TO_FILE_PATH);
+
+        // The command should succeed
+        assert!(app
+            .diff_symbol_command(
+                pdb_path_from,
+                pdb_path_to,
+                "?_RTC_GetSrcLine@@YAHPEAEPEA_WKPEAH1K@Z".to_string(),
+                PrimitiveReconstructionFlavor::Microsoft,
+                true,
+                true,
+                true,
+                None
+            )
+            .is_ok());
+    }
+
+    #[test]
+    fn diff_symbol_command_file_successful() {
+        let app = ResymcApp::new().expect("ResymcApp creation failed");
+        let pdb_path_from = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_FROM_FILE_PATH);
+        let pdb_path_to = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(TEST_PDB_TO_FILE_PATH);
+
+        let tmp_dir =
+            TempDir::new("diff_module_command_file_successful").expect("TempDir creation failed");
+        let output_path = tmp_dir.path().join("output.txt");
+
+        // The command should succeed
+        assert!(app
+            .diff_symbol_command(
+                pdb_path_from,
+                pdb_path_to,
+                "?_RTC_GetSrcLine@@YAHPEAEPEA_WKPEAH1K@Z".to_string(),
+                PrimitiveReconstructionFlavor::Portable,
+                false,
+                false,
+                false,
+                Some(output_path.clone()),
+            )
+            .is_ok());
+
+        // Check output file's content
+        let output = fs::read_to_string(output_path).expect("Failed to read output file");
+        assert_eq!(
+            output,
+            " int __cdecl _RTC_GetSrcLine(unsigned char *, wchar_t *, unsigned long, int *, wchar_t *, unsigned long); // RVA=0x14c90 \n",
+        );
+    }
 }
