@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- Implement symbol reconstruction and diffing capabilities
+- Add 4 new commands to `resymc`: `list-symbols`, `dump-symbol`, `dump-all-symbols` and `diff-symbol`
+
 ## [0.4.0] - 2024-03-24
 
 ### Added
