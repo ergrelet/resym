@@ -95,6 +95,7 @@ impl ResymcApp {
         print_header: bool,
         print_dependencies: bool,
         print_access_specifiers: bool,
+        use_hexadecimal: bool,
         ignore_std_types: bool,
         highlight_syntax: bool,
         output_file_path: Option<PathBuf>,
@@ -121,6 +122,7 @@ impl ResymcApp {
                     print_header,
                     print_dependencies,
                     print_access_specifiers,
+                    use_hexadecimal,
                     ignore_std_types,
                 ))?;
         } else {
@@ -130,6 +132,7 @@ impl ResymcApp {
                     primitive_types_flavor,
                     print_header,
                     print_access_specifiers,
+                    use_hexadecimal,
                     ignore_std_types,
                 ))?;
         }
@@ -169,6 +172,7 @@ impl ResymcApp {
         print_header: bool,
         print_dependencies: bool,
         print_access_specifiers: bool,
+        use_hexadecimal: bool,
         ignore_std_types: bool,
         highlight_syntax: bool,
         output_file_path: Option<PathBuf>,
@@ -218,6 +222,7 @@ impl ResymcApp {
             print_header,
             print_dependencies,
             print_access_specifiers,
+            use_hexadecimal,
             ignore_std_types,
         ))?;
         // Wait for the backend to finish
@@ -778,6 +783,7 @@ mod tests {
                 false,
                 false,
                 false,
+                false,
                 None
             )
             .is_err());
@@ -794,6 +800,7 @@ mod tests {
                 pdb_path,
                 None,
                 PrimitiveReconstructionFlavor::Microsoft,
+                true,
                 true,
                 true,
                 true,
@@ -818,6 +825,7 @@ mod tests {
                 pdb_path,
                 Some("resym_test::ClassWithNestedDeclarationsTest".to_string()),
                 PrimitiveReconstructionFlavor::Microsoft,
+                false,
                 false,
                 false,
                 false,
@@ -854,6 +862,7 @@ mod tests {
                 false,
                 false,
                 false,
+                false,
                 None
             )
             .is_err());
@@ -874,6 +883,7 @@ mod tests {
                 true,
                 true,
                 true,
+                false,
                 true,
                 true,
                 None
@@ -898,6 +908,7 @@ mod tests {
                 pdb_path_to,
                 "UserStructAddAndReplace".to_string(),
                 PrimitiveReconstructionFlavor::Portable,
+                false,
                 false,
                 false,
                 false,

@@ -31,6 +31,7 @@ fn test_struct_diffing() {
             false,
             false,
             false,
+            false,
         )
         .expect("diff generation");
         insta::assert_snapshot!(diffed_type.data);
@@ -49,6 +50,7 @@ fn test_struct_diffing_inexistent_type() {
         &pdb_file_to,
         INEXISTENT_TYPE_NAME,
         PrimitiveReconstructionFlavor::Portable,
+        false,
         false,
         false,
         false,

@@ -287,6 +287,7 @@ where
         primitives_flavor: PrimitiveReconstructionFlavor,
         reconstruct_dependencies: bool,
         print_access_specifiers: bool,
+        use_hexadecimal: bool,
         ignore_std_types: bool,
     ) -> Result<ReconstructedType> {
         // Populate our `TypeFinder` and find the right type index
@@ -376,6 +377,7 @@ where
                 primitives_flavor,
                 reconstruct_dependencies,
                 print_access_specifiers,
+                use_hexadecimal,
                 ignore_std_types,
             )
         }
@@ -387,6 +389,7 @@ where
         primitives_flavor: PrimitiveReconstructionFlavor,
         reconstruct_dependencies: bool,
         print_access_specifiers: bool,
+        use_hexadecimal: bool,
         ignore_std_types: bool,
     ) -> Result<ReconstructedType> {
         // Populate our `TypeFinder`
@@ -404,6 +407,7 @@ where
             primitives_flavor,
             reconstruct_dependencies,
             print_access_specifiers,
+            use_hexadecimal,
             ignore_std_types,
         )
     }
@@ -731,10 +735,12 @@ where
         primitives_flavor: PrimitiveReconstructionFlavor,
         reconstruct_dependencies: bool,
         print_access_specifiers: bool,
+        use_hexadecimal: bool,
         ignore_std_types: bool,
     ) -> Result<ReconstructedType> {
         let fmt_configuration = DataFormatConfiguration {
             print_access_specifiers,
+            use_hexadecimal,
         };
         let mut type_data = pdb_types::Data::new(ignore_std_types);
 
@@ -836,6 +842,7 @@ where
         &self,
         primitives_flavor: PrimitiveReconstructionFlavor,
         print_access_specifiers: bool,
+        use_hexadecimal: bool,
         ignore_std_types: bool,
     ) -> Result<String> {
         let mut type_data = pdb_types::Data::new(ignore_std_types);
@@ -910,6 +917,7 @@ where
         type_data.reconstruct(
             &DataFormatConfiguration {
                 print_access_specifiers,
+                use_hexadecimal,
             },
             &type_depth_map,
             &mut reconstruction_output,

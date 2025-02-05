@@ -37,6 +37,7 @@ fn test_type_reconstruction_portable_access_specifiers() {
         PrimitiveReconstructionFlavor::Portable,
         false,
         true,
+        true,
         false,
     );
 }
@@ -47,6 +48,7 @@ fn test_type_reconstruction_microsoft_access_specifiers() {
         "type_reconstruction_microsoft_access_specifiers",
         PrimitiveReconstructionFlavor::Microsoft,
         false,
+        true,
         true,
         false,
     );
@@ -59,6 +61,7 @@ fn test_type_reconstruction_raw_access_specifiers() {
         PrimitiveReconstructionFlavor::Raw,
         false,
         true,
+        true,
         false,
     );
 }
@@ -70,6 +73,7 @@ fn test_type_reconstruction_msvc_access_specifiers() {
         PrimitiveReconstructionFlavor::Msvc,
         false,
         true,
+        true,
         false,
     );
 }
@@ -79,6 +83,7 @@ fn test_type_reconstruction_internal(
     primitives_flavor: PrimitiveReconstructionFlavor,
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
+    use_hexadecimal: bool,
     ignore_std_types: bool,
 ) {
     let pdb_file = PdbFile::load_from_file(Path::new(TEST_PDB_FILE_PATH)).expect("load test.pdb");
@@ -89,6 +94,7 @@ fn test_type_reconstruction_internal(
                 primitives_flavor,
                 reconstruct_dependencies,
                 print_access_specifiers,
+                use_hexadecimal,
                 ignore_std_types,
             )
             .unwrap_or_else(|_| panic!("reconstruct type: {test_case_type_name}"));

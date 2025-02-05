@@ -36,6 +36,7 @@ pub fn diff_type_by_name<'p, T>(
     print_header: bool,
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
+    use_hexadecimal: bool,
     ignore_std_types: bool,
 ) -> Result<Diff>
 where
@@ -59,6 +60,7 @@ where
                 primitives_flavor,
                 reconstruct_dependencies,
                 print_access_specifiers,
+                use_hexadecimal,
                 ignore_std_types,
             )
             .unwrap_or_default();
@@ -68,6 +70,7 @@ where
                 primitives_flavor,
                 reconstruct_dependencies,
                 print_access_specifiers,
+                use_hexadecimal,
                 ignore_std_types,
             )
             .unwrap_or_default();

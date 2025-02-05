@@ -9,6 +9,7 @@ pub struct ResymAppSettings {
     pub search_case_insensitive: bool,
     pub search_use_regex: bool,
     pub enable_syntax_hightlighting: bool,
+    pub use_hexadecimal: bool,
     #[serde(with = "PrimitiveReconstructionFlavorDef")]
     pub primitive_types_flavor: PrimitiveReconstructionFlavor,
     pub print_header: bool,
@@ -27,6 +28,7 @@ impl Default for ResymAppSettings {
             search_case_insensitive: true,
             search_use_regex: false,
             enable_syntax_hightlighting: true,
+            use_hexadecimal: true,
             primitive_types_flavor: PrimitiveReconstructionFlavor::Portable,
             print_header: true,
             reconstruct_dependencies: true,

@@ -67,6 +67,10 @@ impl SettingsComponent {
                     &mut self.app_settings.enable_syntax_hightlighting,
                     "Enable C++ syntax highlighting",
                 );
+                ui.checkbox(
+                    &mut self.app_settings.use_hexadecimal,
+                    "Hexadecimal",
+                );
 
                 ui.label(
                     egui::RichText::new("Primitive types style")
