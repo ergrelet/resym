@@ -10,7 +10,7 @@ use structopt::StructOpt;
 use crate::resymc_app::ResymcApp;
 use crate::resymc_options::ResymcOptions;
 
-const DEFAULT_PRIMITIVE_FLAVOR: PrimitiveReconstructionFlavor = PrimitiveReconstructionFlavor::Raw;
+const DEFAULT_PRIMITIVE_FLAVOR: PrimitiveReconstructionFlavor = PrimitiveReconstructionFlavor::Msvc;
 
 fn main() -> Result<()> {
     env_logger::init();

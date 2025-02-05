@@ -44,4 +44,5 @@ enum PrimitiveReconstructionFlavorDef {
     Portable,
     Microsoft,
     Raw,
+    Msvc,
 }

@@ -51,6 +51,16 @@ fn test_module_dumping_by_index_raw() {
     );
 }
 
+#[test]
+fn test_module_dumping_by_index_msvc() {
+    test_module_dumping_by_index_internal(
+        "module_dumping_by_index_msvc",
+        TEST_MODULE_INDEX,
+        PrimitiveReconstructionFlavor::Msvc,
+        true,
+    );
+}
+
 fn test_module_dumping_by_index_internal(
     snapshot_name: &str,
     module_index: usize,

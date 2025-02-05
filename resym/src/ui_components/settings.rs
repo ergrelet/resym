@@ -90,6 +90,11 @@ impl SettingsComponent {
                             PrimitiveReconstructionFlavor::Raw,
                             "Raw",
                         );
+                        ui.selectable_value(
+                            &mut self.app_settings.primitive_types_flavor,
+                            PrimitiveReconstructionFlavor::Msvc,
+                            "MSVC",
+                        );
                     });
 
                 ui.checkbox(&mut self.app_settings.print_header, "Print header");
