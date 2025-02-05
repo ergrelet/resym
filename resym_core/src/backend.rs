@@ -69,7 +69,14 @@ pub enum BackendCommand {
         bool,
     ),
     /// Reconstruct all types found in a given PDB.
-    ReconstructAllTypes(PDBSlot, PrimitiveReconstructionFlavor, bool, bool, bool, bool),
+    ReconstructAllTypes(
+        PDBSlot,
+        PrimitiveReconstructionFlavor,
+        bool,
+        bool,
+        bool,
+        bool,
+    ),
     /// Retrieve a list of types that match the given filter for a given PDB.
     ListTypes(PDBSlot, String, bool, bool, bool),
     /// Retrieve a list of types that match the given filter for multiple PDBs
