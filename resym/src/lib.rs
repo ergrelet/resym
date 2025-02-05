@@ -44,14 +44,21 @@ impl WebHandle {
 
     /// Call this once from JavaScript to start your app.
     #[wasm_bindgen]
-    pub async fn start(&self, canvas: eframe::web_sys::HtmlCanvasElement) -> Result<(), wasm_bindgen::JsValue> {
+    pub async fn start(
+        &self,
+        canvas: eframe::web_sys::HtmlCanvasElement,
+    ) -> Result<(), wasm_bindgen::JsValue> {
         let logger = MemoryLogger::setup(log::Level::Info).expect("application creation");
 
         self.runner
             .start(
                 canvas,
                 eframe::WebOptions::default(),
-                Box::new(|cc| Ok(Box::new(ResymApp::new(cc, logger).expect("application creation")))),
+                Box::new(|cc| {
+                    Ok(Box::new(
+                        ResymApp::new(cc, logger).expect("application creation"),
+                    ))
+                }),
             )
             .await
     }

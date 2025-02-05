@@ -34,7 +34,11 @@ fn main() -> Result<()> {
     eframe::run_native(
         PKG_NAME,
         native_options,
-        Box::new(|cc| Ok(Box::new(ResymApp::new(cc, logger).expect("application creation")))),
+        Box::new(|cc| {
+            Ok(Box::new(
+                ResymApp::new(cc, logger).expect("application creation"),
+            ))
+        }),
     )
     .map_err(|err| anyhow!("eframe::run_native failed: {err}"))
 }
