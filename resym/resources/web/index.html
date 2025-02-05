@@ -96,6 +96,13 @@
 </head>
 
 <body>
+    <script src="coi-serviceworker.min.js"></script>
+    <script>
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("cache-serviceworker.js");
+      }
+    </script>
+    
     <canvas id="resym_canvas_id"></canvas>
 
     <div class="centered" id="center_text">
@@ -193,7 +200,6 @@
         check_for_panic();
 
         let canvas = document.getElementById("resym_canvas_id");
-        console.log("resym_canvas", canvas);
         console.assert(canvas instanceof HTMLCanvasElement);
         handle.start(canvas).then(on_app_started).catch(on_error);
       }
