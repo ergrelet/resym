@@ -1,0 +1,17 @@
+---
+source: resym_core/tests/type_reconstruction.rs
+assertion_line: 103
+expression: reconstructed_type
+---
+union resym_test::UnionUnnamedUdtTest1 { /* Size=0x70 */
+  struct {
+    /* 0x0000 */ public: unsigned int i1;
+    /* 0x0004 */ public: unsigned int i2;
+  };
+  /* 0x0000 */ public: resym_test::PrimitiveTypesTest s1;
+  /* 0x0000 */ public: unsigned long long QuadPart;
+  struct {
+    /* 0x0000 */ public: unsigned int i11;
+    /* 0x0004 */ public: unsigned int i22;
+  };
+};

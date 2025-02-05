@@ -1,0 +1,29 @@
+---
+source: resym_core/tests/type_reconstruction.rs
+assertion_line: 103
+expression: reconstructed_type
+---
+struct resym_test::PrimitiveTypesTest { /* Size=0x70 */
+  /* 0x0000 */ public: bool b1;
+  /* 0x0001 */ public: char c1;
+  /* 0x0002 */ public: unsigned char c2;
+  /* 0x0003 */ public: char8_t c3;
+  /* 0x0004 */ public: char16_t c4;
+  /* 0x0008 */ public: char32_t c5;
+  /* 0x000c */ public: wchar_t w1;
+  /* 0x000e */ public: unsigned short i1;
+  /* 0x0010 */ public: short i2;
+  /* 0x0014 */ public: unsigned int i3;
+  /* 0x0018 */ public: int i4;
+  /* 0x001c */ public: unsigned long i5;
+  /* 0x0020 */ public: long i6;
+  /* 0x0028 */ public: unsigned long long i7;
+  /* 0x0030 */ public: long long i8;
+  /* 0x0038 */ public: unsigned long long i9;
+  /* 0x0040 */ public: long long i10;
+  /* 0x0048 */ public: float f1;
+  /* 0x0050 */ public: double f2;
+  /* 0x0058 */ public: double f3;
+  /* 0x0060 */ public: double f4;
+  /* 0x0068 */ public: long hres;
+};
