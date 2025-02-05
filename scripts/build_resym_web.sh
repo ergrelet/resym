@@ -9,7 +9,7 @@ CRATE_NAME="resym"
 ./scripts/setup_web.sh
 
 # Build resym-web
-RUSTFLAGS='--cfg=web_sys_unstable_apis -C target-feature=+atomics,+bulk-memory,+mutable-globals' rustup run nightly-2024-02-24 wasm-pack build --target web resym --no-default-features -Z build-std=panic_abort,std
+RUSTFLAGS='--cfg=web_sys_unstable_apis -C target-feature=+atomics,+bulk-memory,+mutable-globals' rustup run nightly-2025-02-04 wasm-pack build --target web resym --no-default-features -Z build-std=panic_abort,std
 
 # Copy web resources next to the output
 cp $CRATE_NAME/resources/web/* $CRATE_NAME/pkg/
