@@ -16,6 +16,10 @@ jobs:
           toolchain: stable
           override: true
 
+      - name: Install libssl1.1_1.1.1
+        run: wget http://nz2.archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.23_amd64.deb; sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2.23_amd64.deb
+        if: runner.os == 'linux'
+
       - name: Install libxcb and libgtk
         run: sudo apt-get update; sudo apt-get install --no-install-recommends libxcb-shape0-dev libxcb-xfixes0-dev libgtk-3-dev
         if: runner.os == 'linux'
