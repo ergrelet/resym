@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::{collections::HashMap, fmt::Display, path::Path, sync::Arc};
 
 use anyhow::{anyhow, Result};
 
@@ -236,9 +236,9 @@ impl From<String> for ModulePath {
     }
 }
 
-impl ToString for ModulePath {
-    fn to_string(&self) -> String {
-        self.path.parts.join(MODULE_PATH_SEPARATOR)
+impl Display for ModulePath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.path.parts.join(MODULE_PATH_SEPARATOR))
     }
 }
 
