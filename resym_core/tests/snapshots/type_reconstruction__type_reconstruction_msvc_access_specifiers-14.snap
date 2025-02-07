@@ -1,0 +1,15 @@
+---
+source: resym_core/tests/type_reconstruction.rs
+assertion_line: 103
+expression: reconstructed_type
+---
+class resym_test::SpecializedInterfaceImplClass : public resym_test::PureVirtualClassSpecialized { /* Size=0x8 */
+  /* 0x0000: fields for resym_test::PureVirtualClassSpecialized */
+  
+  private: virtual int InterfaceVirtual();
+  public: SpecializedInterfaceImplClass(resym_test::SpecializedInterfaceImplClass&);
+  public: SpecializedInterfaceImplClass(const resym_test::SpecializedInterfaceImplClass&);
+  public: SpecializedInterfaceImplClass();
+  public: resym_test::SpecializedInterfaceImplClass& operator=(resym_test::SpecializedInterfaceImplClass&);
+  public: resym_test::SpecializedInterfaceImplClass& operator=(const resym_test::SpecializedInterfaceImplClass&);
+};

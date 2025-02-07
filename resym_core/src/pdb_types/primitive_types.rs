@@ -7,6 +7,7 @@ pub enum PrimitiveReconstructionFlavor {
     Portable,
     Microsoft,
     Raw,
+    Msvc,
 }
 
 impl FromStr for PrimitiveReconstructionFlavor {
@@ -17,6 +18,7 @@ impl FromStr for PrimitiveReconstructionFlavor {
             "portable" => Ok(PrimitiveReconstructionFlavor::Portable),
             "ms" | "msft" | "microsoft" => Ok(PrimitiveReconstructionFlavor::Microsoft),
             "raw" => Ok(PrimitiveReconstructionFlavor::Raw),
+            "msvc" => Ok(PrimitiveReconstructionFlavor::Msvc),
             _ => Err(ResymCoreError::ParsePrimitiveFlavorError(s.to_owned())),
         }
     }
@@ -30,6 +32,7 @@ pub fn include_headers_for_flavor(
         PrimitiveReconstructionFlavor::Portable => "#include <cstdint>\n",
         PrimitiveReconstructionFlavor::Microsoft => "#include <Windows.h>\n",
         PrimitiveReconstructionFlavor::Raw => "",
+        PrimitiveReconstructionFlavor::Msvc => "",
     };
 
     let common_std_headers = if ignore_std_types {
@@ -64,6 +67,9 @@ pub fn primitive_kind_as_str(
         }
         PrimitiveReconstructionFlavor::Raw => {
             primitive_kind_as_str_raw(primitive_kind, indirection)
+        }
+        PrimitiveReconstructionFlavor::Msvc => {
+            primitive_kind_as_str_msvc(primitive_kind, indirection)
         }
     }
 }
@@ -194,6 +200,61 @@ fn primitive_kind_as_str_raw(
         pdb::PrimitiveKind::U32 | pdb::PrimitiveKind::ULong => Ok("unsigned int"),
         pdb::PrimitiveKind::I64 | pdb::PrimitiveKind::Quad => Ok("long long int"),
         pdb::PrimitiveKind::U64 | pdb::PrimitiveKind::UQuad => Ok("unsigned long long int"),
+
+        pdb::PrimitiveKind::F32 => Ok("float"),
+        pdb::PrimitiveKind::F64 => Ok("double"),
+
+        pdb::PrimitiveKind::Bool8 => Ok("bool"),
+        pdb::PrimitiveKind::Bool32 => Ok("long"),
+
+        // Microsoft-specific, usually implemented as "long"
+        pdb::PrimitiveKind::HRESULT => Ok("long"),
+
+        // TODO: Seems valid for C++ method parameters. Are there other
+        // cases of legitimate "NoType" occurences?
+        pdb::PrimitiveKind::NoType => Ok("..."),
+
+        _ => Err(ResymCoreError::NotImplementedError(format!(
+            "/* FIXME: Unhandled primitive kind: '{primitive_kind:?}' */ void"
+        ))),
+    };
+
+    let mut string_representation = str_representation?.to_string();
+    if indirection {
+        string_representation.push('*');
+    }
+
+    Ok(string_representation)
+}
+
+fn primitive_kind_as_str_msvc(
+    primitive_kind: pdb::PrimitiveKind,
+    indirection: bool,
+) -> Result<String> {
+    let str_representation = match primitive_kind {
+        pdb::PrimitiveKind::Void => Ok("void"),
+        pdb::PrimitiveKind::Char | pdb::PrimitiveKind::RChar => Ok("char"),
+        pdb::PrimitiveKind::UChar => Ok("unsigned char"),
+        pdb::PrimitiveKind::WChar => Ok("wchar_t"),
+        pdb::PrimitiveKind::RChar16 => Ok("char16_t"),
+        pdb::PrimitiveKind::RChar32 => Ok("char32_t"),
+        pdb::PrimitiveKind::Char8 => Ok("char8_t"),
+
+        pdb::PrimitiveKind::I8 => Ok("__int8"),
+        pdb::PrimitiveKind::U8 => Ok("unsigned __int8"),
+        pdb::PrimitiveKind::I16 => Ok("__int16"),
+        pdb::PrimitiveKind::U16 => Ok("unsigned __int16"),
+        pdb::PrimitiveKind::I32 => Ok("int"),
+        pdb::PrimitiveKind::U32 => Ok("unsigned int"),
+        pdb::PrimitiveKind::I64 => Ok("__int64"),
+        pdb::PrimitiveKind::U64 => Ok("unsigned __int64"),
+
+        pdb::PrimitiveKind::Short => Ok("short"),
+        pdb::PrimitiveKind::UShort => Ok("unsigned short"),
+        pdb::PrimitiveKind::Long => Ok("long"),
+        pdb::PrimitiveKind::ULong => Ok("unsigned long"),
+        pdb::PrimitiveKind::Quad => Ok("long long"),
+        pdb::PrimitiveKind::UQuad => Ok("unsigned long long"),
 
         pdb::PrimitiveKind::F32 => Ok("float"),
         pdb::PrimitiveKind::F64 => Ok("double"),

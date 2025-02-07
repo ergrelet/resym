@@ -1113,12 +1113,14 @@ fn find_unnamed_structs_in_unions(fields: &[Field]) -> Vec<Range<usize>> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DataFormatConfiguration {
     pub print_access_specifiers: bool,
+    pub integers_as_hexadecimal: bool,
 }
 
 impl Default for DataFormatConfiguration {
     fn default() -> Self {
         Self {
             print_access_specifiers: true,
+            integers_as_hexadecimal: true,
         }
     }
 }

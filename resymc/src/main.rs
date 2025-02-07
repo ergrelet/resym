@@ -10,7 +10,7 @@ use structopt::StructOpt;
 use crate::resymc_app::ResymcApp;
 use crate::resymc_options::ResymcOptions;
 
-const DEFAULT_PRIMITIVE_FLAVOR: PrimitiveReconstructionFlavor = PrimitiveReconstructionFlavor::Raw;
+const DEFAULT_PRIMITIVE_FLAVOR: PrimitiveReconstructionFlavor = PrimitiveReconstructionFlavor::Msvc;
 
 fn main() -> Result<()> {
     env_logger::init();
@@ -42,6 +42,7 @@ fn main() -> Result<()> {
             print_header,
             print_dependencies,
             print_access_specifiers,
+            integers_as_hexadecimal,
             ignore_std_types,
             highlight_syntax,
         } => app.dump_types_command(
@@ -51,6 +52,7 @@ fn main() -> Result<()> {
             print_header,
             print_dependencies,
             print_access_specifiers,
+            integers_as_hexadecimal,
             ignore_std_types,
             highlight_syntax,
             output_file_path,
@@ -61,6 +63,7 @@ fn main() -> Result<()> {
             primitive_types_flavor,
             print_header,
             print_access_specifiers,
+            integers_as_hexadecimal,
             ignore_std_types,
             highlight_syntax,
         } => app.dump_types_command(
@@ -70,6 +73,7 @@ fn main() -> Result<()> {
             print_header,
             false,
             print_access_specifiers,
+            integers_as_hexadecimal,
             ignore_std_types,
             highlight_syntax,
             output_file_path,
@@ -83,6 +87,7 @@ fn main() -> Result<()> {
             print_header,
             print_dependencies,
             print_access_specifiers,
+            integers_as_hexadecimal,
             ignore_std_types,
             highlight_syntax,
         } => app.diff_type_command(
@@ -93,6 +98,7 @@ fn main() -> Result<()> {
             print_header,
             print_dependencies,
             print_access_specifiers,
+            integers_as_hexadecimal,
             ignore_std_types,
             highlight_syntax,
             output_file_path,

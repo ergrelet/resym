@@ -1,0 +1,24 @@
+---
+source: resym_core/tests/type_reconstruction.rs
+assertion_line: 103
+expression: reconstructed_type
+---
+struct resym_test::StructUnnamedUdtTest2 { /* Size=0x30 */
+  /* 0x0000 */ public: unsigned long long Before;
+  union {
+    struct {
+      /* 0x0008 */ public: unsigned long long u1;
+      /* 0x0010 */ public: unsigned long long u2;
+    };
+    struct {
+      /* 0x0008 */ public: unsigned long long* p1;
+      /* 0x0010 */ public: unsigned long long* p2;
+    };
+  };
+  /* 0x0018 */ public: unsigned long long Middle;
+  union {
+    /* 0x0020 */ public: unsigned long long u3;
+    /* 0x0020 */ public: unsigned long long* p3;
+  };
+  /* 0x0028 */ public: unsigned long long After;
+};

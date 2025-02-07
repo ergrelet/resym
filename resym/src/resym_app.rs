@@ -281,6 +281,7 @@ impl ResymApp {
                                             self.settings.app_settings.print_header,
                                             self.settings.app_settings.reconstruct_dependencies,
                                             self.settings.app_settings.print_access_specifiers,
+                                            self.settings.app_settings.integers_as_hexadecimal,
                                             self.settings.app_settings.ignore_std_types,
                                         ),
                                     ) {
@@ -297,6 +298,7 @@ impl ResymApp {
                                             self.settings.app_settings.print_header,
                                             self.settings.app_settings.reconstruct_dependencies,
                                             self.settings.app_settings.print_access_specifiers,
+                                            self.settings.app_settings.integers_as_hexadecimal,
                                             self.settings.app_settings.ignore_std_types,
                                         ))
                                     {
@@ -502,6 +504,7 @@ impl ResymApp {
                                         self.settings.app_settings.print_header,
                                         self.settings.app_settings.reconstruct_dependencies,
                                         self.settings.app_settings.print_access_specifiers,
+                                        self.settings.app_settings.integers_as_hexadecimal,
                                         self.settings.app_settings.ignore_std_types,
                                     ))
                             {

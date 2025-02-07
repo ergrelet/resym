@@ -5,7 +5,7 @@ cd "$script_path/.."
 
 # Pre-requisites:
 rustup target add wasm32-unknown-unknown
-rustup component add rust-src --toolchain nightly-2024-02-24
+rustup component add rust-src --toolchain nightly-2025-02-04
 if ! command -v wasm-pack &> /dev/null
 then
     cargo install wasm-pack

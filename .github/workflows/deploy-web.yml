@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-02-24
+          toolchain: nightly-2025-02-04
           profile: minimal
           target: wasm32-unknown-unknown
           override: true
@@ -33,7 +33,11 @@ jobs:
           git init
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add *.html *.js *.wasm snippets\
+          git add *.html *.js *.wasm
+          if ("${{ vars.CNAME }}" -ne "") {
+            "${{ vars.CNAME }}" | Out-File -Encoding utf8 CNAME
+            git add CNAME
+          }
           git commit -m 'Deploy resym-web'
 
       - name: Force push to destination branch
