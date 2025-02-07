@@ -29,6 +29,7 @@ pub type TypeList = Vec<(String, TypeIndex)>;
 /// `SymbolIndex` have two parts: a module index and a symbol index
 pub type SymbolIndex = (ModuleIndex, u32);
 pub type SymbolList = Vec<(String, SymbolIndex)>;
+pub type SymbolListView<'t> = Vec<&'t (String, SymbolIndex)>;
 pub type ModuleIndex = usize;
 pub type ModuleList = Vec<(String, ModuleIndex)>;
 
@@ -416,10 +417,10 @@ where
         )
     }
 
-    pub fn symbol_list(&mut self) -> Result<SymbolList> {
+    pub fn symbol_list(&mut self) -> Result<SymbolListView> {
         // If cache is populated, return the cached list
         if !self.symbol_list.is_empty() {
-            return Ok(self.symbol_list.clone());
+            return Ok(self.symbol_list.iter().collect());
         }
 
         let mut symbol_heap: BinaryHeap<PrioritizedSymbol> = BinaryHeap::new();
@@ -476,7 +477,7 @@ where
             })
             .collect();
 
-        Ok(self.symbol_list.clone())
+        Ok(self.symbol_list.iter().collect())
     }
 
     pub fn module_list(&self) -> Result<ModuleList> {
