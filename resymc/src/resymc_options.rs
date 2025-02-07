@@ -51,7 +51,7 @@ pub enum ResymcOptions {
         print_access_specifiers: bool,
         /// Use hexadecimal formatting
         #[structopt(short = "x", long)]
-        use_hexadecimal: bool,
+        integers_as_hexadecimal: bool,
         /// Filter out types in the `std` namespace
         #[structopt(short = "s", long)]
         ignore_std_types: bool,
@@ -76,7 +76,7 @@ pub enum ResymcOptions {
         print_access_specifiers: bool,
         /// Use hexadecimal formatting
         #[structopt(short = "x", long)]
-        use_hexadecimal: bool,
+        integers_as_hexadecimal: bool,
         /// Filter out types in the `std` namespace
         #[structopt(short = "s", long)]
         ignore_std_types: bool,
@@ -108,7 +108,7 @@ pub enum ResymcOptions {
         print_access_specifiers: bool,
         /// Use hexadecimal formatting
         #[structopt(short = "x", long)]
-        use_hexadecimal: bool,
+        integers_as_hexadecimal: bool,
         /// Filter out types in the `std` namespace
         #[structopt(short = "s", long)]
         ignore_std_types: bool,

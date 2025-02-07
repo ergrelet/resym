@@ -95,7 +95,7 @@ impl ResymcApp {
         print_header: bool,
         print_dependencies: bool,
         print_access_specifiers: bool,
-        use_hexadecimal: bool,
+        integers_as_hexadecimal: bool,
         ignore_std_types: bool,
         highlight_syntax: bool,
         output_file_path: Option<PathBuf>,
@@ -122,7 +122,7 @@ impl ResymcApp {
                     print_header,
                     print_dependencies,
                     print_access_specifiers,
-                    use_hexadecimal,
+                    integers_as_hexadecimal,
                     ignore_std_types,
                 ))?;
         } else {
@@ -132,7 +132,7 @@ impl ResymcApp {
                     primitive_types_flavor,
                     print_header,
                     print_access_specifiers,
-                    use_hexadecimal,
+                    integers_as_hexadecimal,
                     ignore_std_types,
                 ))?;
         }
@@ -172,7 +172,7 @@ impl ResymcApp {
         print_header: bool,
         print_dependencies: bool,
         print_access_specifiers: bool,
-        use_hexadecimal: bool,
+        integers_as_hexadecimal: bool,
         ignore_std_types: bool,
         highlight_syntax: bool,
         output_file_path: Option<PathBuf>,
@@ -222,7 +222,7 @@ impl ResymcApp {
             print_header,
             print_dependencies,
             print_access_specifiers,
-            use_hexadecimal,
+            integers_as_hexadecimal,
             ignore_std_types,
         ))?;
         // Wait for the backend to finish

@@ -60,7 +60,7 @@ impl<'p> Enum<'p> {
 impl ReconstructibleTypeData for Enum<'_> {
     fn reconstruct(
         &self,
-        _fmt_configuration: &DataFormatConfiguration,
+        fmt_configuration: &DataFormatConfiguration,
         f: &mut impl std::fmt::Write,
     ) -> fmt::Result {
         writeln!(f, "enum {} : {} {{", self.name, self.underlying_type_name)?;
@@ -72,28 +72,28 @@ impl ReconstructibleTypeData for Enum<'_> {
                 value.name.to_string(),
                 match value.value {
                     pdb::Variant::U8(v) => {
-                        if _fmt_configuration.use_hexadecimal {
+                        if fmt_configuration.integers_as_hexadecimal {
                             format!("0x{v:02x}")
                         } else {
                             format!("{v}")
                         }
                     }
                     pdb::Variant::U16(v) => {
-                        if _fmt_configuration.use_hexadecimal {
+                        if fmt_configuration.integers_as_hexadecimal {
                             format!("0x{v:04x}")
                         } else {
                             format!("{v}")
                         }
                     }
                     pdb::Variant::U32(v) => {
-                        if _fmt_configuration.use_hexadecimal {
+                        if fmt_configuration.integers_as_hexadecimal {
                             format!("0x{v:08x}")
                         } else {
                             format!("{v}")
                         }
                     }
                     pdb::Variant::U64(v) => {
-                        if _fmt_configuration.use_hexadecimal {
+                        if fmt_configuration.integers_as_hexadecimal {
                             format!("0x{v:16x}")
                         } else {
                             format!("{v}")

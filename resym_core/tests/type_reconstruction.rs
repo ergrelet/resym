@@ -83,7 +83,7 @@ fn test_type_reconstruction_internal(
     primitives_flavor: PrimitiveReconstructionFlavor,
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
-    use_hexadecimal: bool,
+    integers_as_hexadecimal: bool,
     ignore_std_types: bool,
 ) {
     let pdb_file = PdbFile::load_from_file(Path::new(TEST_PDB_FILE_PATH)).expect("load test.pdb");
@@ -94,7 +94,7 @@ fn test_type_reconstruction_internal(
                 primitives_flavor,
                 reconstruct_dependencies,
                 print_access_specifiers,
-                use_hexadecimal,
+                integers_as_hexadecimal,
                 ignore_std_types,
             )
             .unwrap_or_else(|_| panic!("reconstruct type: {test_case_type_name}"));

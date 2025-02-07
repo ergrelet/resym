@@ -321,7 +321,7 @@ fn worker_thread_routine(
                 print_header,
                 reconstruct_dependencies,
                 print_access_specifiers,
-                use_hexadecimal,
+                integers_as_hexadecimal,
                 ignore_std_types,
             ) => {
                 if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
@@ -332,7 +332,7 @@ fn worker_thread_routine(
                         print_header,
                         reconstruct_dependencies,
                         print_access_specifiers,
-                        use_hexadecimal,
+                        integers_as_hexadecimal,
                         ignore_std_types,
                     );
                     frontend_controller.send_command(FrontendCommand::ReconstructTypeResult(
@@ -348,7 +348,7 @@ fn worker_thread_routine(
                 print_header,
                 reconstruct_dependencies,
                 print_access_specifiers,
-                use_hexadecimal,
+                integers_as_hexadecimal,
                 ignore_std_types,
             ) => {
                 if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
@@ -359,7 +359,7 @@ fn worker_thread_routine(
                         print_header,
                         reconstruct_dependencies,
                         print_access_specifiers,
-                        use_hexadecimal,
+                        integers_as_hexadecimal,
                         ignore_std_types,
                     );
                     frontend_controller.send_command(FrontendCommand::ReconstructTypeResult(
@@ -373,7 +373,7 @@ fn worker_thread_routine(
                 primitives_flavor,
                 print_header,
                 print_access_specifiers,
-                use_hexadecimal,
+                integers_as_hexadecimal,
                 ignore_std_types,
             ) => {
                 if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
@@ -382,7 +382,7 @@ fn worker_thread_routine(
                         primitives_flavor,
                         print_header,
                         print_access_specifiers,
-                        use_hexadecimal,
+                        integers_as_hexadecimal,
                         ignore_std_types,
                     );
                     frontend_controller.send_command(FrontendCommand::ReconstructTypeResult(
@@ -626,7 +626,7 @@ fn worker_thread_routine(
                 print_header,
                 reconstruct_dependencies,
                 print_access_specifiers,
-                use_hexadecimal,
+                integers_as_hexadecimal,
                 ignore_std_types,
             ) => {
                 if let Some(pdb_file_from) = pdb_files.get(&pdb_from_slot) {
@@ -639,7 +639,7 @@ fn worker_thread_routine(
                             print_header,
                             reconstruct_dependencies,
                             print_access_specifiers,
-                            use_hexadecimal,
+                            integers_as_hexadecimal,
                             ignore_std_types,
                         );
                         frontend_controller
@@ -692,7 +692,7 @@ fn reconstruct_type_by_index_command<'p, T>(
     print_header: bool,
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
-    use_hexadecimal: bool,
+    integers_as_hexadecimal: bool,
     ignore_std_types: bool,
 ) -> Result<ReconstructedType>
 where
@@ -703,7 +703,7 @@ where
         primitives_flavor,
         reconstruct_dependencies,
         print_access_specifiers,
-        use_hexadecimal,
+        integers_as_hexadecimal,
         ignore_std_types,
     )?;
     if print_header {
@@ -721,7 +721,7 @@ fn reconstruct_type_by_name_command<'p, T>(
     print_header: bool,
     reconstruct_dependencies: bool,
     print_access_specifiers: bool,
-    use_hexadecimal: bool,
+    integers_as_hexadecimal: bool,
     ignore_std_types: bool,
 ) -> Result<ReconstructedType>
 where
@@ -732,7 +732,7 @@ where
         primitives_flavor,
         reconstruct_dependencies,
         print_access_specifiers,
-        use_hexadecimal,
+        integers_as_hexadecimal,
         ignore_std_types,
     )?;
     if print_header {
@@ -748,7 +748,7 @@ fn reconstruct_all_types_command<'p, T>(
     primitives_flavor: PrimitiveReconstructionFlavor,
     print_header: bool,
     print_access_specifiers: bool,
-    use_hexadecimal: bool,
+    integers_as_hexadecimal: bool,
     ignore_std_types: bool,
 ) -> Result<String>
 where
@@ -757,7 +757,7 @@ where
     let data = pdb_file.reconstruct_all_types(
         primitives_flavor,
         print_access_specifiers,
-        use_hexadecimal,
+        integers_as_hexadecimal,
         ignore_std_types,
     )?;
     if print_header {
