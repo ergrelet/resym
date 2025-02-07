@@ -1,6 +1,7 @@
 use dashmap::DashMap;
 #[cfg(target_arch = "wasm32")]
 use instant::Instant;
+use itertools::Itertools;
 use pdb::FallibleIterator;
 #[cfg(feature = "rayon")]
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -482,7 +483,7 @@ where
                         if let Some(symbol_name) = get_symbol_name(&symbol_data) {
                             symbol_heap.push(PrioritizedSymbol {
                                 priority: symbol_priority(&symbol_data),
-                                name: symbol_name.clone(),
+                                name: symbol_name,
                                 index: (module_index, symbol.index().0),
                                 kind: get_symbol_type(&symbol_data),
                             });
@@ -499,7 +500,7 @@ where
                 if let Some(symbol_name) = get_symbol_name(&symbol_data) {
                     symbol_heap.push(PrioritizedSymbol {
                         priority: symbol_priority(&symbol_data),
-                        name: symbol_name.clone(),
+                        name: symbol_name,
                         index: (GLOBAL_MODULE_INDEX, symbol.index().0),
                         kind: get_symbol_type(&symbol_data),
                     });
@@ -560,6 +561,8 @@ where
                     return Ok(self
                         .reconstruct_symbol(
                             &type_finder,
+                            None,
+                            symbol_index,
                             &symbol,
                             primitives_flavor,
                             print_access_specifiers,
@@ -577,6 +580,8 @@ where
                         return Ok(self
                             .reconstruct_symbol(
                                 &type_finder,
+                                Some(&module_info),
+                                symbol_index,
                                 &symbol,
                                 primitives_flavor,
                                 print_access_specifiers,
@@ -617,6 +622,8 @@ where
                         return Ok(self
                             .reconstruct_symbol(
                                 &type_finder,
+                                None,
+                                (GLOBAL_MODULE_INDEX, symbol.index().0),
                                 &symbol,
                                 primitives_flavor,
                                 print_access_specifiers,
@@ -631,6 +638,7 @@ where
         {
             let mut pdb = self.pdb.write().expect("lock shouldn't be poisoned");
             let mut modules = self.debug_information.modules()?;
+            let mut module_id = 0;
             while let Some(module) = modules.next()? {
                 if let Some(module_info) = pdb.module_info(&module)? {
                     let mut module_symbols = module_info.symbols()?;
@@ -641,6 +649,8 @@ where
                                     return Ok(self
                                         .reconstruct_symbol(
                                             &type_finder,
+                                            Some(&module_info),
+                                            (module_id, symbol.index().0),
                                             &symbol,
                                             primitives_flavor,
                                             print_access_specifiers,
@@ -651,6 +661,7 @@ where
                         }
                     }
                 }
+                module_id += 1;
             }
         }
 
@@ -683,6 +694,8 @@ where
                 if get_symbol_name(&symbol_data).is_some() {
                     if let Some(reconstructed_symbol) = self.reconstruct_symbol(
                         &type_finder,
+                        None,
+                        (GLOBAL_MODULE_INDEX, symbol.index().0),
                         &symbol,
                         primitives_flavor,
                         print_access_specifiers,
@@ -697,6 +710,7 @@ where
         {
             let mut pdb = self.pdb.write().expect("lock shouldn't be poisoned");
             let mut modules = self.debug_information.modules()?;
+            let mut module_id = 0;
             while let Some(module) = modules.next()? {
                 if let Some(module_info) = pdb.module_info(&module)? {
                     let mut module_symbols = module_info.symbols()?;
@@ -705,6 +719,8 @@ where
                             if get_symbol_name(&symbol_data).is_some() {
                                 if let Some(reconstructed_symbol) = self.reconstruct_symbol(
                                     &type_finder,
+                                    Some(&module_info),
+                                    (module_id, symbol.index().0),
                                     &symbol,
                                     primitives_flavor,
                                     print_access_specifiers,
@@ -719,6 +735,7 @@ where
                         }
                     }
                 }
+                module_id += 1;
             }
         }
 
@@ -784,6 +801,8 @@ where
         module_info.symbols()?.for_each(|symbol| {
             let reconstructed_symbol = self.reconstruct_symbol(
                 &type_finder,
+                Some(&module_info),
+                (module_index, symbol.index().0),
                 &symbol,
                 primitives_flavor,
                 print_access_specifiers,
@@ -931,7 +950,7 @@ where
             let mut type_iter = self.type_information.iter();
             while let Some(item) = type_iter.next()? {
                 let mut needed_types = pdb_types::NeededTypeSet::new();
-                // Note(ergelet): try to get the complete type's index here.
+                // Note(ergrelet): try to get the complete type's index here.
                 // This avoids adding empty "forward reference" type index which
                 // usually have lower type indices
                 let complete_type_index = self
@@ -1091,6 +1110,8 @@ where
     fn reconstruct_symbol(
         &self,
         type_finder: &pdb::ItemFinder<'_, pdb::TypeIndex>,
+        module_info: Option<&pdb::ModuleInfo>,
+        symbol_index: SymbolIndex,
         symbol: &pdb::Symbol<'_>,
         primitives_flavor: PrimitiveReconstructionFlavor,
         print_access_specifiers: bool,
@@ -1121,6 +1142,56 @@ where
 
             // Functions and methods
             pdb::SymbolData::Procedure(procedure) => {
+                // TODO: fix arg alignment issue
+                // ex: AdtpBuildSecurityDescriptorChangeString
+                let args = if symbol_index.0 == GLOBAL_MODULE_INDEX {
+                    let mut args = vec![];
+
+                    // List parameter names
+                    let mut symbol_iter = self.global_symbols.iter_at(symbol.index());
+                    while let Some(nested_symbol) = symbol_iter.next().unwrap_or_default() {
+                        if nested_symbol.index() == procedure.end {
+                            break;
+                        }
+
+                        if let Ok(sym_data) = nested_symbol.parse() {
+                            if let pdb::SymbolData::Local(data) = sym_data {
+                                if data.flags.isparam {
+                                    args.push(
+                                        sym_data.name().unwrap_or_default().to_string().to_string(),
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    args
+                } else if let Some(module_info) = module_info {
+                    let mut args = vec![];
+
+                    // List parameter names
+                    let mut symbol_iter = module_info.symbols_at(symbol_index.1.into()).unwrap();
+                    while let Some(nested_symbol) = symbol_iter.next().unwrap_or_default() {
+                        if nested_symbol.index() == procedure.end {
+                            break;
+                        }
+
+                        if let Ok(sym_data) = nested_symbol.parse() {
+                            if let pdb::SymbolData::Local(data) = sym_data {
+                                if data.flags.isparam {
+                                    args.push(
+                                        sym_data.name().unwrap_or_default().to_string().to_string(),
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    args
+                } else {
+                    vec![]
+                };
+
                 let symbol_rva = symbol_rva(&procedure.offset, &self.sections)
                     .map(|offset| format!("RVA=0x{:x} ", offset))
                     .unwrap_or_default();
@@ -1139,12 +1210,50 @@ where
                             static_prefix, procedure.name, symbol_rva, procedure.len,
                         ))
                     } else {
+                        // FIXME(ergrelet): this is a dirty hack... Can we do better?
+                        let arg_string = if args.is_empty() {
+                            // Only types, no argument names
+                            type_name.1
+                        } else {
+                            // Inject argument names
+                            //
+                            // Find beginning and end of the argument list
+                            let start_offset = type_name
+                                .1
+                                .find('(')
+                                .expect("type_name.1 should contain '('");
+                            let end_offset = type_name
+                                .1
+                                .rfind(')')
+                                .expect("type_name.1 should contain ')'");
+
+                            // Split at commas
+                            let parts = type_name.1[start_offset..end_offset].split(',');
+                            // Rejoin while adding argument names
+                            let arg_list = parts
+                                .enumerate()
+                                .map(|(i, p)| {
+                                    let arg_name = if let Some(s) = args.get(i) { s } else { "" };
+
+                                    format!("{} {}", p, arg_name)
+                                })
+                                .join(",");
+
+                            // Reconstruct the whole string
+                            format!(
+                                "{}{}{}",
+                                &type_name.1[..start_offset],
+                                arg_list,
+                                &type_name.1[end_offset..]
+                            )
+                        };
+
                         Some(format!(
                             "{}{}{}{}; // {}CodeSize=0x{:x}",
                             static_prefix,
                             type_name.0,
                             procedure.name,
-                            type_name.1,
+                            arg_string,
                             symbol_rva,
                             procedure.len,
                         ))
