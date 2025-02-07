@@ -88,6 +88,7 @@ where
 {
     pub complete_type_list: Vec<(String, TypeIndex)>,
     pub forwarder_to_complete_type: Arc<DashMap<pdb::TypeIndex, pdb::TypeIndex>>,
+    pub symbol_list: SymbolList,
     pub machine_type: pdb::MachineType,
     pub type_information: pdb::TypeInformation<'p>,
     pub debug_information: pdb::DebugInformation<'p>,
@@ -111,8 +112,9 @@ impl<'p> PdbFile<'p, File> {
         let machine_type = pdb.debug_information()?.machine_type()?;
 
         let mut pdb_file = PdbFile {
-            complete_type_list: vec![],
+            complete_type_list: Default::default(),
             forwarder_to_complete_type: Arc::new(DashMap::default()),
+            symbol_list: Default::default(),
             machine_type,
             type_information,
             debug_information,
@@ -143,8 +145,9 @@ impl<'p> PdbFile<'p, PDBDataSource> {
         let machine_type = pdb.debug_information()?.machine_type()?;
 
         let mut pdb_file = PdbFile {
-            complete_type_list: vec![],
+            complete_type_list: Default::default(),
             forwarder_to_complete_type: Arc::new(DashMap::default()),
+            symbol_list: Default::default(),
             machine_type,
             type_information,
             debug_information,
@@ -173,8 +176,9 @@ impl<'p> PdbFile<'p, PDBDataSource> {
         let machine_type = pdb.debug_information()?.machine_type()?;
 
         let mut pdb_file = PdbFile {
-            complete_type_list: vec![],
+            complete_type_list: Default::default(),
             forwarder_to_complete_type: Arc::new(DashMap::default()),
+            symbol_list: Default::default(),
             machine_type,
             type_information,
             debug_information,
@@ -412,7 +416,12 @@ where
         )
     }
 
-    pub fn symbol_list(&self) -> Result<SymbolList> {
+    pub fn symbol_list(&mut self) -> Result<SymbolList> {
+        // If cache is populated, return the cached list
+        if !self.symbol_list.is_empty() {
+            return Ok(self.symbol_list.clone());
+        }
+
         let mut symbol_heap: BinaryHeap<PrioritizedSymbol> = BinaryHeap::new();
 
         // Modules' private symbols
@@ -453,7 +462,8 @@ where
         }
 
         let mut symbol_names = HashSet::new();
-        Ok(symbol_heap
+        // Populate cache with result
+        self.symbol_list = symbol_heap
             .into_sorted_vec()
             .into_iter()
             .filter_map(|s| {
@@ -464,7 +474,9 @@ where
                     None
                 }
             })
-            .collect())
+            .collect();
+
+        Ok(self.symbol_list.clone())
     }
 
     pub fn module_list(&self) -> Result<ModuleList> {

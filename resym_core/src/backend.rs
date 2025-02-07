@@ -451,7 +451,7 @@ fn worker_thread_routine(
                 use_regex,
                 ignore_std_types,
             ) => {
-                if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
+                if let Some(pdb_file) = pdb_files.get_mut(&pdb_slot) {
                     let filtered_symbol_list = update_symbol_filter_command(
                         pdb_file,
                         &search_filter,
@@ -473,7 +473,7 @@ fn worker_thread_routine(
             ) => {
                 let mut filtered_symbol_set = BTreeSet::default();
                 for pdb_slot in pdb_slots {
-                    if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
+                    if let Some(pdb_file) = pdb_files.get_mut(&pdb_slot) {
                         let filtered_symbol_list = update_symbol_filter_command(
                             pdb_file,
                             &search_filter,
@@ -980,7 +980,7 @@ fn filter_std_types(type_list: &[(String, pdb_file::TypeIndex)]) -> TypeList {
 }
 
 fn update_symbol_filter_command<T>(
-    pdb_file: &PdbFile<T>,
+    pdb_file: &mut PdbFile<T>,
     search_filter: &str,
     case_insensitive_search: bool,
     use_regex: bool,
