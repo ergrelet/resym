@@ -38,7 +38,7 @@ impl SettingsComponent {
                     egui::RichText::new("Font size")
                         .color(ui.style().visuals.widgets.inactive.text_color()),
                 );
-                egui::ComboBox::from_id_source("font_size")
+                egui::ComboBox::from_id_salt("font_size")
                     .selected_text(format!("{}", self.app_settings.font_size))
                     .show_ui(ui, |ui| {
                         for font_size in 8..=20 {
@@ -76,7 +76,7 @@ impl SettingsComponent {
                     egui::RichText::new("Primitive types style")
                         .color(ui.style().visuals.widgets.inactive.text_color()),
                 );
-                egui::ComboBox::from_id_source("primitive_types_flavor")
+                egui::ComboBox::from_id_salt("primitive_types_flavor")
                     .selected_text(format!("{:?}", self.app_settings.primitive_types_flavor))
                     .show_ui(ui, |ui| {
                         ui.selectable_value(

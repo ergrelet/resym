@@ -16,25 +16,6 @@ pub fn highlight_code(
     enabled: bool,
     line_descriptions: Option<&LineDescriptions>,
 ) -> LayoutJob {
-    impl
-        egui::util::cache::ComputerMut<
-            (&CodeTheme, &str, bool, Option<&LineDescriptions>),
-            LayoutJob,
-        > for CodeHighlighter
-    {
-        fn compute(
-            &mut self,
-            (theme, code, enabled, line_descriptions): (
-                &CodeTheme,
-                &str,
-                bool,
-                Option<&LineDescriptions>,
-            ),
-        ) -> LayoutJob {
-            self.highlight(theme, code, enabled, line_descriptions)
-        }
-    }
-
     type HighlightCache<'a> = egui::util::cache::FrameCache<LayoutJob, CodeHighlighter>;
 
     ctx.memory_mut(|memory| {
@@ -155,6 +136,22 @@ impl CodeHighlighter {
         }
 
         Some(job)
+    }
+}
+
+impl egui::util::cache::ComputerMut<(&CodeTheme, &str, bool, Option<&LineDescriptions>), LayoutJob>
+    for CodeHighlighter
+{
+    fn compute(
+        &mut self,
+        (theme, code, enabled, line_descriptions): (
+            &CodeTheme,
+            &str,
+            bool,
+            Option<&LineDescriptions>,
+        ),
+    ) -> LayoutJob {
+        self.highlight(theme, code, enabled, line_descriptions)
     }
 }
 

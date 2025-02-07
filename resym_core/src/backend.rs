@@ -26,7 +26,7 @@ use crate::{
     error::{Result, ResymCoreError},
     frontend::{FrontendCommand, FrontendController, ReconstructedType},
     par_iter_if_available, par_sort_by_if_available,
-    pdb_file::{self, ModuleList, PDBDataSource, PdbFile, SymbolList, TypeList},
+    pdb_file::{self, ModuleList, PDBDataSource, PdbFile, SymbolList, SymbolListView, TypeList},
     pdb_types::{include_headers_for_flavor, PrimitiveReconstructionFlavor},
     PKG_VERSION,
 };
@@ -451,7 +451,7 @@ fn worker_thread_routine(
                 use_regex,
                 ignore_std_types,
             ) => {
-                if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
+                if let Some(pdb_file) = pdb_files.get_mut(&pdb_slot) {
                     let filtered_symbol_list = update_symbol_filter_command(
                         pdb_file,
                         &search_filter,
@@ -473,7 +473,7 @@ fn worker_thread_routine(
             ) => {
                 let mut filtered_symbol_set = BTreeSet::default();
                 for pdb_slot in pdb_slots {
-                    if let Some(pdb_file) = pdb_files.get(&pdb_slot) {
+                    if let Some(pdb_file) = pdb_files.get_mut(&pdb_slot) {
                         let filtered_symbol_list = update_symbol_filter_command(
                             pdb_file,
                             &search_filter,
@@ -980,7 +980,7 @@ fn filter_std_types(type_list: &[(String, pdb_file::TypeIndex)]) -> TypeList {
 }
 
 fn update_symbol_filter_command<T>(
-    pdb_file: &PdbFile<T>,
+    pdb_file: &mut PdbFile<T>,
     search_filter: &str,
     case_insensitive_search: bool,
     use_regex: bool,
@@ -998,7 +998,7 @@ where
             let filtered_symbol_list = if ignore_std_symbols {
                 filter_std_symbols(&symbol_list)
             } else {
-                symbol_list.clone()
+                symbol_list
             };
 
             let filtered_symbol_list = if search_filter.is_empty() {
@@ -1023,13 +1023,18 @@ where
                 filter_start.elapsed().as_millis()
             );
 
-            filtered_symbol_list
+            // Convert refs to symbol info into clones and return it
+            par_iter_if_available!(filtered_symbol_list)
+                .map(|e| (e.0.clone(), e.1))
+                .collect()
         }
     }
 }
 
 /// Filter symbol list to remove types in the `std` namespace
-fn filter_std_symbols(symbol_list: &[(String, pdb_file::SymbolIndex)]) -> SymbolList {
+fn filter_std_symbols<'s>(
+    symbol_list: &'s [&(String, pdb_file::SymbolIndex)],
+) -> SymbolListView<'s> {
     par_iter_if_available!(symbol_list)
         .filter(|r| !r.0.starts_with("std::"))
         .cloned()
@@ -1037,11 +1042,11 @@ fn filter_std_symbols(symbol_list: &[(String, pdb_file::SymbolIndex)]) -> Symbol
 }
 
 /// Filter type list with a regular expression
-fn filter_symbols_regex(
-    symbol_list: &[(String, pdb_file::SymbolIndex)],
+fn filter_symbols_regex<'s>(
+    symbol_list: &'s [&(String, pdb_file::SymbolIndex)],
     search_filter: &str,
     case_insensitive_search: bool,
-) -> SymbolList {
+) -> SymbolListView<'s> {
     match regex::RegexBuilder::new(search_filter)
         .case_insensitive(case_insensitive_search)
         .build()
@@ -1056,11 +1061,11 @@ fn filter_symbols_regex(
 }
 
 /// Filter type list with a plain (sub-)string
-fn filter_symbols_regular(
-    symbol_list: &[(String, pdb_file::SymbolIndex)],
+fn filter_symbols_regular<'s>(
+    symbol_list: &'s [&(String, pdb_file::SymbolIndex)],
     search_filter: &str,
     case_insensitive_search: bool,
-) -> SymbolList {
+) -> SymbolListView<'s> {
     if case_insensitive_search {
         let search_filter = search_filter.to_lowercase();
         par_iter_if_available!(symbol_list)

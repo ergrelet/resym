@@ -12,7 +12,7 @@ pub struct ForwardDeclaration {
 impl ReconstructibleTypeData for ForwardDeclaration {
     fn reconstruct(
         &self,
-        fmt_configuration: &DataFormatConfiguration,
+        _fmt_configuration: &DataFormatConfiguration,
         f: &mut impl std::fmt::Write,
     ) -> fmt::Result {
         writeln!(

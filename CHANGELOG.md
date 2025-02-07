@@ -5,7 +5,13 @@
 ### Added
 
 - Implement symbol reconstruction and diffing capabilities
-- Add 4 new commands to `resymc`: `list-symbols`, `dump-symbol`, `dump-all-symbols` and `diff-symbol`
+- Add 4 commands to `resymc`: `list-symbols`, `dump-symbol`, `dump-all-symbols` and `diff-symbol`
+- Add a `MSVC` primitive type representations (@HaydnTrigg)
+- Add a setting to switch display of integer values between decimal and hexadecimal (@HaydnTrigg)
+
+### Changed
+
+- Hexadecimal integer values are now displayed with the appropriate number of digits (@HaydnTrigg)
 
 ## [0.4.0] - 2024-03-24
 
