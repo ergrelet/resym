@@ -27,6 +27,7 @@ similar = "2.4"
 ehttp = { version = "0.5", optional = true }
 url = { version = "2.5", optional = true }
 msvc-demangler = "0.10"
+bevy_reflect = "0.15"
 
 # Web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]

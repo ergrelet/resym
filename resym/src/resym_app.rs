@@ -2,7 +2,7 @@ use anyhow::Result;
 use eframe::egui;
 use memory_logger::blocking::MemoryLogger;
 use resym_core::{
-    backend::{Backend, BackendCommand, PDBSlot},
+    backend::{Backend, BackendCommand, PDBSlot, SymbolFilters},
     frontend::FrontendCommand,
     pdb_file::{SymbolIndex, TypeIndex},
 };
@@ -20,7 +20,7 @@ use crate::{
     settings::ResymAppSettings,
     ui_components::{
         CodeViewComponent, ConsoleComponent, IndexListComponent, IndexListOrdering,
-        ModuleTreeComponent, SettingsComponent, TextSearchComponent,
+        ModuleTreeComponent, SearchFiltersComponent, SettingsComponent, TextSearchComponent,
     },
 };
 
@@ -67,6 +67,7 @@ pub struct ResymApp {
     type_list: IndexListComponent<TypeIndex>,
     selected_type_index: Option<TypeIndex>,
     symbol_search: TextSearchComponent,
+    symbol_filters: SearchFiltersComponent<SymbolFilters>,
     symbol_list: IndexListComponent<SymbolIndex>,
     selected_symbol_index: Option<SymbolIndex>,
     module_search: TextSearchComponent,
@@ -167,6 +168,7 @@ impl ResymApp {
             type_list: IndexListComponent::new(IndexListOrdering::Alphabetical),
             selected_type_index: None,
             symbol_search: TextSearchComponent::new(),
+            symbol_filters: SearchFiltersComponent::new("Search filters"),
             symbol_list: IndexListComponent::new(IndexListOrdering::Alphabetical),
             selected_symbol_index: None,
             module_search: TextSearchComponent::new(),
@@ -313,37 +315,53 @@ impl ResymApp {
                     }
 
                     LeftPanelTab::SymbolSearch => {
-                        // Callback run when the search query changes
-                        let on_query_update = |search_query: &str| {
-                            // Update filtered list if filter has changed
-                            let result = if let ResymAppMode::Comparing(..) = self.current_mode {
-                                self.backend.send_command(BackendCommand::ListSymbolsMerged(
-                                    vec![
+                        let update_symbol_list =
+                            |search_query: &str, search_filters: &SymbolFilters| {
+                                // Update filtered list if filter has changed
+                                let result = if let ResymAppMode::Comparing(..) = self.current_mode
+                                {
+                                    self.backend.send_command(BackendCommand::ListSymbolsMerged(
+                                        vec![
+                                            ResymPDBSlots::Main as usize,
+                                            ResymPDBSlots::Diff as usize,
+                                        ],
+                                        search_query.to_string(),
+                                        self.settings.app_settings.search_case_insensitive,
+                                        self.settings.app_settings.search_use_regex,
+                                        self.settings.app_settings.ignore_std_types,
+                                        search_filters.clone(),
+                                    ))
+                                } else {
+                                    self.backend.send_command(BackendCommand::ListSymbols(
                                         ResymPDBSlots::Main as usize,
-                                        ResymPDBSlots::Diff as usize,
-                                    ],
-                                    search_query.to_string(),
-                                    self.settings.app_settings.search_case_insensitive,
-                                    self.settings.app_settings.search_use_regex,
-                                    self.settings.app_settings.ignore_std_types,
-                                ))
-                            } else {
-                                self.backend.send_command(BackendCommand::ListSymbols(
-                                    ResymPDBSlots::Main as usize,
-                                    search_query.to_string(),
-                                    self.settings.app_settings.search_case_insensitive,
-                                    self.settings.app_settings.search_use_regex,
-                                    self.settings.app_settings.ignore_std_types,
-                                ))
+                                        search_query.to_string(),
+                                        self.settings.app_settings.search_case_insensitive,
+                                        self.settings.app_settings.search_use_regex,
+                                        self.settings.app_settings.ignore_std_types,
+                                        search_filters.clone(),
+                                    ))
+                                };
+                                if let Err(err) = result {
+                                    log::error!("Failed to update type filter value: {}", err);
+                                }
                             };
-                            if let Err(err) = result {
-                                log::error!("Failed to update type filter value: {}", err);
-                            }
+
+                        // Callback run when the search query is updated
+                        let on_query_update = |search_query: &str| {
+                            let search_filters = self.symbol_filters.filters();
+                            update_symbol_list(search_query, search_filters);
                         };
 
                         // Update the symbol search bar
                         ui.label("Search");
                         self.symbol_search.update(ui, &on_query_update);
+
+                        // Callback run when the search filter is updated
+                        let on_filter_update = |search_filters: &SymbolFilters| {
+                            let search_query = self.symbol_search.search_filter();
+                            update_symbol_list(search_query, search_filters);
+                        };
+                        self.symbol_filters.update(ui, &on_filter_update);
                         ui.separator();
                         ui.add_space(4.0);
 
@@ -659,7 +677,7 @@ impl ResymApp {
                             // Request a type list update
                             if let Err(err) = self.backend.send_command(BackendCommand::ListTypes(
                                 ResymPDBSlots::Main as usize,
-                                String::default(),
+                                Default::default(),
                                 false,
                                 false,
                                 self.settings.app_settings.ignore_std_types,
@@ -670,10 +688,11 @@ impl ResymApp {
                             if let Err(err) =
                                 self.backend.send_command(BackendCommand::ListSymbols(
                                     ResymPDBSlots::Main as usize,
-                                    String::default(),
+                                    Default::default(),
                                     false,
                                     false,
                                     self.settings.app_settings.ignore_std_types,
+                                    Default::default(),
                                 ))
                             {
                                 log::error!("Failed to update type filter value: {}", err);
@@ -682,7 +701,7 @@ impl ResymApp {
                             if let Err(err) =
                                 self.backend.send_command(BackendCommand::ListModules(
                                     ResymPDBSlots::Main as usize,
-                                    String::default(),
+                                    Default::default(),
                                     false,
                                     false,
                                 ))
@@ -692,11 +711,11 @@ impl ResymApp {
                         } else if pdb_slot == ResymPDBSlots::Diff as usize {
                             // Reset current mode
                             self.current_mode = ResymAppMode::Comparing(
-                                String::default(),
-                                String::default(),
+                                Default::default(),
+                                Default::default(),
                                 0,
-                                vec![],
-                                String::default(),
+                                Default::default(),
+                                Default::default(),
                             );
                             // Reset selected type
                             self.selected_type_index = None;
@@ -711,7 +730,7 @@ impl ResymApp {
                                         ResymPDBSlots::Main as usize,
                                         ResymPDBSlots::Diff as usize,
                                     ],
-                                    String::default(),
+                                    Default::default(),
                                     false,
                                     false,
                                     self.settings.app_settings.ignore_std_types,

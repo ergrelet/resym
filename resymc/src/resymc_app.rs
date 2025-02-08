@@ -491,6 +491,8 @@ impl ResymcApp {
             case_insensitive,
             use_regex,
             ignore_std_types,
+            // TODO(ergrelet): allow users to control these filters
+            Default::default(),
         ))?;
         // Wait for the backend to finish listing modules
         if let FrontendCommand::ListSymbolsResult(symbol_list) =

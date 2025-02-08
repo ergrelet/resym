@@ -39,6 +39,7 @@ ahash = { version = "0.8", default-features = false, features = [
     "no-rng", # we don't need DOS-protection, so we let users opt-in to it instead
     "std",
 ] }
+bevy_reflect = "0.15"
 
 # Non-Web
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
