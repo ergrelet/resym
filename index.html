@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+<!-- Disable zooming: -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+<head>
+    <title>resym</title>
+    <style>
+        html {
+            /* Remove touch delay: */
+            touch-action: manipulation;
+        }
+
+        body {
+            /* Dark mode background color for what is not covered by the egui canvas,
+            or where the egui canvas is translucent. */
+            background: #404040;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            body {
+                /* Dark mode background color for what is not covered by the egui canvas,
+                or where the egui canvas is translucent. */
+                background: #404040;
+            }
+        }
+
+        /* Allow canvas to fill entire web page: */
+        html,
+        body {
+            overflow: hidden;
+            margin: 0 !important;
+            padding: 0 !important;
+            height: 100%;
+            width: 100%;
+        }
+
+        /* Make canvas fill entire document: */
+        canvas {
+            margin-right: auto;
+            margin-left: auto;
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .centered {
+            margin-right: auto;
+            margin-left: auto;
+            display: block;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #f0f0f0;
+            font-size: 24px;
+            font-family: Ubuntu-Light, Helvetica, sans-serif;
+            text-align: center;
+        }
+
+        /* ---------------------------------------------- */
+        /* Loading animation from https://loading.io/css/ */
+        .lds-dual-ring {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+        }
+
+        .lds-dual-ring:after {
+            content: " ";
+            display: block;
+            width: 24px;
+            height: 24px;
+            margin: 0px;
+            border-radius: 50%;
+            border: 3px solid #fff;
+            border-color: #fff transparent #fff transparent;
+            animation: lds-dual-ring 1.2s linear infinite;
+        }
+
+        @keyframes lds-dual-ring {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <script src="coi-serviceworker.min.js"></script>
+    <script>
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("cache-serviceworker.js");
+      }
+    </script>
+    
+    <canvas id="resym_canvas_id"></canvas>
+
+    <div class="centered" id="center_text">
+        <p style="font-size:16px">
+            Loading…
+        </p>
+        <div class="lds-dual-ring"></div>
+    </div>
+
+    <script>
+        // The `--no-modules`-generated JS from `wasm-bindgen` attempts to use
+        // `WebAssembly.instantiateStreaming` to instantiate the wasm module,
+        // but this doesn't work with `file://` urls. This example is frequently
+        // viewed by simply opening `index.html` in a browser (with a `file://`
+        // url), so it would fail if we were to call this function!
+        //
+        // Work around this for now by deleting the function to ensure that the
+        // `no_modules.js` script doesn't have access to it. You won't need this
+        // hack when deploying over HTTP.
+        delete WebAssembly.instantiateStreaming;
+    </script>
+
+    <!-- Note the usage of `type=module` here as this is an ES6 module -->
+    <script type="module">
+      // Use ES module import syntax to import functionality from the module
+      // that we have compiled.
+      //
+      // Note that the `default` import is an initialization function which
+      // will "boot" the module and make it ready to use. Currently browsers
+      // don't support natively imported WebAssembly as an ES module, but
+      // eventually the manual initialization won't be required!
+      import init, { WebHandle } from "./resym_web.js";
+
+      async function run() {
+        // First up we need to actually load the wasm file, so we use the
+        // default export to inform it where the wasm file is located on the
+        // server, and then we wait on the returned promise to wait for the
+        // wasm to be loaded.
+        //
+        // It may look like this: `await init('./pkg/without_a_bundler_bg.wasm');`,
+        // but there is also a handy default inside `init` function, which uses
+        // `import.meta` to locate the wasm file relatively to js file.
+        //
+        // Note that instead of a string you can also pass in any of the
+        // following things:
+        //
+        // * `WebAssembly.Module`
+        //
+        // * `ArrayBuffer`
+        //
+        // * `Response`
+        //
+        // * `Promise` which returns any of the above, e.g. `fetch("./path/to/wasm")`
+        //
+        // This gives you complete control over how the module is loaded
+        // and compiled.
+        //
+        // Also note that the promise, when resolved, yields the wasm module's
+        // exports which is the same as importing the `*_bg` module in other
+        // modes
+        await init();
+
+        let handle = new WebHandle();
+
+        // Define this function after defining `handle`, to be able to capture it
+        function check_for_panic() {
+          if (handle.has_panicked()) {
+            console.error("Resym has crashed");
+
+            // The demo app already logs the panic message and callstack, but you
+            // can access them like this if you want to show them in the html:
+            // console.error(`${handle.panic_message()}`);
+            // console.error(`${handle.panic_callstack()}`);
+
+            document.getElementById("resym_canvas_id").remove();
+            document.getElementById("center_text").innerHTML = `
+                        <p>
+                            Resym has crashed.
+                        </p>
+                        <p style="font-size:10px" align="left">
+                            ${handle.panic_message()}
+                        </p>
+                        <p style="font-size:14px">
+                            See the console for details.
+                        </p>
+                        <p style="font-size:14px">
+                            Reload the page to try again.
+                        </p>`;
+          } else {
+            let delay_ms = 1000;
+            setTimeout(check_for_panic, delay_ms);
+          }
+        }
+
+        check_for_panic();
+
+        let canvas = document.getElementById("resym_canvas_id");
+        console.assert(canvas instanceof HTMLCanvasElement);
+        handle.start(canvas).then(on_app_started).catch(on_error);
+      }
+
+      function on_app_started(handle) {
+        console.debug("App started.");
+        document.getElementById("center_text").innerHTML = "";
+      }
+
+      function on_error(error) {
+        console.error("Failed to start: " + error);
+        document.getElementById("resym_canvas_id").remove();
+        document.getElementById("center_text").innerHTML = `
+                <p>
+                    An error occurred during loading:
+                </p>
+                <p style="font-family:Courier New">
+                    ${error}
+                </p>
+                <p style="font-size:14px">
+                    Make sure you use a modern browser with WebGL and WASM enabled.
+                </p>`;
+      }
+
+      run();
+    </script>
+</body>
+
+</html>
+
+<!-- Powered by egui: https://github.com/emilk/egui/ -->
