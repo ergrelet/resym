@@ -1,7 +1,7 @@
 use dashmap::DashMap;
 #[cfg(target_arch = "wasm32")]
 use instant::Instant;
-use pdb::FallibleIterator;
+use pdb::{AddressMap, FallibleIterator};
 #[cfg(feature = "rayon")]
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
@@ -127,6 +127,7 @@ where
     pub debug_information: pdb::DebugInformation<'p>,
     pub global_symbols: pdb::SymbolTable<'p>,
     pub sections: Vec<pdb::ImageSectionHeader>,
+    pub address_map: pdb::AddressMap<'p>,
     pub file_path: PathBuf,
     pub xref_to_map: RwLock<DashMap<TypeIndex, Vec<TypeIndex>>>,
     pdb: RwLock<pdb::PDB<'p, T>>,
@@ -142,6 +143,7 @@ impl<'p> PdbFile<'p, File> {
         let debug_information = pdb.debug_information()?;
         let global_symbols = pdb.global_symbols()?;
         let sections = pdb.sections().unwrap_or_default().unwrap_or_default();
+        let address_map = pdb.address_map()?;
         let machine_type = pdb.debug_information()?.machine_type()?;
 
         let mut pdb_file = PdbFile {
@@ -153,6 +155,7 @@ impl<'p> PdbFile<'p, File> {
             debug_information,
             global_symbols,
             sections,
+            address_map,
             file_path: pdb_file_path.to_owned(),
             xref_to_map: DashMap::default().into(),
             pdb: pdb.into(),
@@ -175,6 +178,7 @@ impl<'p> PdbFile<'p, PDBDataSource> {
         let debug_information = pdb.debug_information()?;
         let global_symbols = pdb.global_symbols()?;
         let sections = pdb.sections().unwrap_or_default().unwrap_or_default();
+        let address_map = pdb.address_map()?;
         let machine_type = pdb.debug_information()?.machine_type()?;
 
         let mut pdb_file = PdbFile {
@@ -186,6 +190,7 @@ impl<'p> PdbFile<'p, PDBDataSource> {
             debug_information,
             global_symbols,
             sections,
+            address_map,
             file_path: pdb_file_name.into(),
             xref_to_map: DashMap::default().into(),
             pdb: pdb.into(),
@@ -206,6 +211,7 @@ impl<'p> PdbFile<'p, PDBDataSource> {
         let debug_information = pdb.debug_information()?;
         let global_symbols = pdb.global_symbols()?;
         let sections = pdb.sections().unwrap_or_default().unwrap_or_default();
+        let address_map = pdb.address_map()?;
         let machine_type = pdb.debug_information()?.machine_type()?;
 
         let mut pdb_file = PdbFile {
@@ -217,6 +223,7 @@ impl<'p> PdbFile<'p, PDBDataSource> {
             debug_information,
             global_symbols,
             sections,
+            address_map,
             file_path: pdb_file_name.into(),
             xref_to_map: DashMap::default().into(),
             pdb: pdb.into(),
@@ -1121,7 +1128,7 @@ where
 
             // Functions and methods
             pdb::SymbolData::Procedure(procedure) => {
-                let symbol_rva = symbol_rva(&procedure.offset, &self.sections)
+                let symbol_rva = symbol_rva(&procedure.offset, &self.address_map)
                     .map(|offset| format!("RVA=0x{:x} ", offset))
                     .unwrap_or_default();
                 if let Ok(type_name) = type_name(
@@ -1156,7 +1163,7 @@ where
 
             // Global variables
             pdb::SymbolData::Data(data) => {
-                let symbol_rva = symbol_rva(&data.offset, &self.sections)
+                let symbol_rva = symbol_rva(&data.offset, &self.address_map)
                     .map(|offset| format!("RVA=0x{:x} ", offset))
                     .unwrap_or_default();
                 if let Ok(type_name) = type_name(
@@ -1203,7 +1210,8 @@ where
 
             // Public symbols
             pdb::SymbolData::Public(data) => {
-                let symbol_rva = symbol_rva(&data.offset, &self.sections)
+                println!("{:x} {:x}", data.offset.offset, data.offset.section);
+                let symbol_rva = symbol_rva(&data.offset, &self.address_map)
                     .map(|offset| format!("RVA=0x{:x} ", offset))
                     .unwrap_or_default();
                 Some(
@@ -1369,16 +1377,13 @@ fn get_symbol_type(symbol_data: &pdb::SymbolData) -> SymbolKind {
 
 fn symbol_rva(
     symbol_offset: &pdb::PdbInternalSectionOffset,
-    sections: &[pdb::ImageSectionHeader],
+    translator: &AddressMap<'_>,
 ) -> Option<u32> {
     if symbol_offset.section == 0 {
         None
-    } else {
-        let section_offset = (symbol_offset.section - 1) as usize;
-
-        sections
-            .get(section_offset)
-            .map(|section_header| section_header.virtual_address + symbol_offset.offset)
+    }
+    else {
+        symbol_offset.to_internal_rva(translator)?.to_rva(translator).map(u32::from)
     }
 }
 
